@@ -17,7 +17,11 @@ export interface IMemoryService {
   createMemory(userId: string, data: InsertMemory): Promise<Memory>;
   updateMemory(userId: string, id: string, updates: Partial<Memory>): Promise<Memory>;
   deleteMemory(userId: string, id: string): Promise<void>;
+<<<<<<< HEAD
   getMemoriesWithCache?(userId: string): Promise<Memory[]>;
+=======
+  getMemoiesWithCache?(userId: string): Promise<Memory[]>;
+>>>>>>> 636b3e5 (Create backend setup plan and checklist for VS Code extension integration)
 }
 ```
 
