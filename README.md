@@ -1,4 +1,4 @@
-# Lanonasis Memory 🧠
+# LanOnasis AI Context Asst. 🧠
 
 **Your AI-Powered Development Context Orchestrator**
 
