@@ -75,7 +75,7 @@ export class Storage implements IStorage {
     return allMemories.filter(m => 
       m.title.toLowerCase().includes(queryLower) ||
       m.content.toLowerCase().includes(queryLower) ||
-      m.tags.some(tag => tag.toLowerCase().includes(queryLower))
+      (m.tags?.some(tag => tag.toLowerCase().includes(queryLower)) ?? false)
     );
   }
 
