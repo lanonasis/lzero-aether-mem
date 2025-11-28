@@ -11,7 +11,6 @@ import {
   SendHorizontal,
   Copy,
   Check,
-  Brain,
   Zap,
   Key,
   LogOut,
@@ -27,6 +26,7 @@ import {
   Bot,
   LayoutGrid
 } from "lucide-react";
+import { L0Logo } from "./L0Logo";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -221,7 +221,7 @@ const WelcomeView = ({ onLogin }: { onLogin: () => void }) => {
         <div className="space-y-4">
           <div className="flex gap-3">
             <div className="mt-0.5 bg-[#007ACC]/10 p-1.5 rounded h-fit">
-               <Brain className="h-3.5 w-3.5 text-[#007ACC]" />
+               <L0Logo className="h-3.5 w-3.5 text-[#007ACC]" />
             </div>
             <div className="space-y-1">
               <h4 className="text-xs font-medium text-[#CCCCCC]">Intelligent Memory Management</h4>
@@ -342,12 +342,12 @@ export const RichPanel = () => {
       <div className="flex items-center justify-between p-3 bg-[#1E1E1E] border-b border-[#3C3C3C] select-none shrink-0">
         <div className="flex items-center gap-2">
             <div className="relative">
-              <Brain className="h-5 w-5 text-[#007ACC]" />
+              <L0Logo className="h-5 w-5 text-[#007ACC]" />
               {isAuthenticated && (
                 <span className="absolute -top-0.5 -right-0.5 h-2 w-2 bg-green-500 rounded-full border border-[#1E1E1E]" />
               )}
             </div>
-            <h1 className="text-sm font-bold tracking-tight text-white">Lanonasis Memory</h1>
+            <h1 className="text-sm font-bold tracking-tight text-white">LanOnasis Memory</h1>
         </div>
         
         <div className="flex items-center gap-1">
