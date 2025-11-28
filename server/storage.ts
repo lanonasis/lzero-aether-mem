@@ -1,4 +1,16 @@
-import { db } from "../shared/db";
+// Lazy import to avoid crashing on startup without DATABASE_URL
+let dbModule: typeof import("../shared/db") | null = null;
+
+async function getDb() {
+  if (!dbModule) {
+    dbModule = await import("../shared/db");
+  }
+  if (!dbModule.db) {
+    throw new Error("Database not configured. Please set DATABASE_URL environment variable.");
+  }
+  return dbModule.db;
+}
+
 import { users, memories, apiKeys } from "../shared/schema";
 import type { InsertUser, User, InsertMemory, Memory, InsertApiKey, ApiKey } from "../shared/schema";
 import { eq } from "drizzle-orm";
@@ -27,35 +39,42 @@ export interface IStorage {
 
 export class Storage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
+    const db = await getDb();
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
     return result[0];
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
+    const db = await getDb();
     const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
     return result[0];
   }
 
   async createUser(user: InsertUser): Promise<User> {
+    const db = await getDb();
     const result = await db.insert(users).values(user).returning();
     return result[0];
   }
 
   async getMemories(userId: string): Promise<Memory[]> {
+    const db = await getDb();
     return db.select().from(memories).where(eq(memories.userId, userId));
   }
 
   async getMemory(id: string): Promise<Memory | undefined> {
+    const db = await getDb();
     const result = await db.select().from(memories).where(eq(memories.id, id)).limit(1);
     return result[0];
   }
 
   async createMemory(memory: InsertMemory & { userId: string }): Promise<Memory> {
+    const db = await getDb();
     const result = await db.insert(memories).values(memory).returning();
     return result[0];
   }
 
   async updateMemory(id: string, updates: Partial<InsertMemory>): Promise<Memory | undefined> {
+    const db = await getDb();
     const result = await db.update(memories).set({
       ...updates,
       updatedAt: new Date(),
@@ -64,6 +83,7 @@ export class Storage implements IStorage {
   }
 
   async deleteMemory(id: string): Promise<boolean> {
+    const db = await getDb();
     const result = await db.delete(memories).where(eq(memories.id, id));
     return (result.rowCount ?? 0) > 0;
   }
@@ -80,20 +100,24 @@ export class Storage implements IStorage {
   }
 
   async createApiKey(key: InsertApiKey & { userId: string }): Promise<ApiKey> {
+    const db = await getDb();
     const result = await db.insert(apiKeys).values(key).returning();
     return result[0];
   }
 
   async getApiKeys(userId: string): Promise<ApiKey[]> {
+    const db = await getDb();
     return db.select().from(apiKeys).where(eq(apiKeys.userId, userId));
   }
 
   async getApiKeyByToken(token: string): Promise<ApiKey | undefined> {
+    const db = await getDb();
     const result = await db.select().from(apiKeys).where(eq(apiKeys.token, token)).limit(1);
     return result[0];
   }
 
   async rotateApiKey(keyId: string): Promise<ApiKey | undefined> {
+    const db = await getDb();
     const result = await db.update(apiKeys).set({
       lastRotated: new Date(),
     }).where(eq(apiKeys.id, keyId)).returning();
@@ -101,6 +125,7 @@ export class Storage implements IStorage {
   }
 
   async revokeApiKey(keyId: string): Promise<boolean> {
+    const db = await getDb();
     const result = await db.delete(apiKeys).where(eq(apiKeys.id, keyId));
     return (result.rowCount ?? 0) > 0;
   }

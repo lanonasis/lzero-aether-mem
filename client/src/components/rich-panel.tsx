@@ -149,8 +149,7 @@ const MemoryCard = ({ memory }: { memory: typeof MOCK_MEMORIES[0] }) => {
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      data-testid={`memory-card-${memory.id}`}
-    >
+      data-testid={`memory-card-${memory.id}`}>
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-sm font-medium text-[#CCCCCC] leading-tight line-clamp-2">
           {memory.title}
@@ -160,20 +159,20 @@ const MemoryCard = ({ memory }: { memory: typeof MOCK_MEMORIES[0] }) => {
             variant="ghost"
             size="icon"
             className="h-6 w-6 text-[#CCCCCC] hover:text-white hover:bg-[#3C3C3C] -mt-1 -mr-1 shrink-0"
-            onClick={handleCopy}
-          >
+            onClick={handleCopy}>
             {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
           </Button>
         )}
       </div>
-
       <div className="flex items-center gap-3 text-[10px] text-[#888888]">
         <div className="flex items-center gap-1">
           <Calendar className="h-3 w-3" />
           <span>{format(memory.date, "dd/MM/yyyy")}</span>
         </div>
         {memory.tags.map((tag) => (
-          <div key={tag} className="flex items-center gap-1 bg-[#1E1E1E] px-1.5 py-0.5 rounded text-[#CCCCCC]">
+          <div
+            key={tag}
+            className="flex items-center gap-1 bg-[#1E1E1E] px-1.5 py-0.5 rounded text-[#CCCCCC]">
             <Hash className="h-2.5 w-2.5" />
             <span>{tag}</span>
           </div>
@@ -195,26 +194,22 @@ const WelcomeView = ({ onLogin }: { onLogin: () => void }) => {
         </p>
         
         <div className="space-y-2">
-          <Button 
+          <Button
             className="w-full bg-[#007ACC] hover:bg-[#0063A5] text-white h-8 text-xs font-medium"
             onClick={onLogin}
-            data-testid="btn-connect-browser"
-          >
+            data-testid="btn-connect-browser">
             Connect in Browser
           </Button>
-          <Button 
-            variant="secondary" 
+          <Button
+            variant="secondary"
             className="w-full bg-[#3C3C3C] hover:bg-[#4D4D4D] text-white h-8 text-xs font-medium border border-white/5"
             onClick={onLogin}
-            data-testid="btn-enter-key"
-          >
+            data-testid="btn-enter-key">
             Enter API Key
           </Button>
         </div>
       </div>
-
       <Separator className="bg-[#3C3C3C]" />
-
       <div className="space-y-4">
         <h3 className="text-xs font-bold text-[#CCCCCC]">**What is Lanonasis Memory?**</h3>
         
@@ -278,10 +273,9 @@ const ApiKeyManager = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
           <div className="space-y-2">
             <label className="text-xs font-medium text-[#CCCCCC]">Create New Key</label>
             <div className="flex gap-2">
-              <Input 
-                placeholder="Key Name (e.g., CI/CD Pipeline)" 
-                className="bg-[#1E1E1E] border-[#3C3C3C] text-[#CCCCCC] text-xs h-8 focus-visible:ring-[#007ACC]"
-              />
+              <Input
+                placeholder="Key Name (e.g., CI/CD Pipeline)"
+                className="bg-[#1E1E1E] border-[#3C3C3C] text-[#CCCCCC] text-xs h-8 focus-visible:ring-[#007ACC]" />
               <Button size="sm" className="bg-[#007ACC] hover:bg-[#0063A5] h-8">
                 Generate
               </Button>
@@ -293,17 +287,24 @@ const ApiKeyManager = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
           <div className="space-y-3">
             <label className="text-xs font-medium text-[#CCCCCC]">Active Keys</label>
             {MOCK_API_KEYS.map(key => (
-              <div key={key.id} className="flex items-center justify-between p-2 rounded border border-[#3C3C3C] bg-[#1E1E1E]">
+              <div
+                key={key.id}
+                className="flex items-center justify-between p-2 rounded border border-[#3C3C3C] bg-[#1E1E1E]">
                 <div className="space-y-0.5">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium text-[#CCCCCC]">{key.name}</span>
-                    <Badge variant="outline" className="text-[9px] border-[#3C3C3C] text-[#888888] h-4 px-1">
+                    <Badge
+                      variant="outline"
+                      className="text-[9px] border-[#3C3C3C] text-[#888888] h-4 px-1">
                       {key.scope}
                     </Badge>
                   </div>
                   <p className="text-[9px] text-[#666666]">Last used: {key.lastUsed}</p>
                 </div>
-                <Button variant="ghost" size="icon" className="h-6 w-6 text-[#666666] hover:text-red-400">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 text-[#666666] hover:text-red-400">
                    <Briefcase className="h-3 w-3" />
                 </Button>
               </div>
@@ -311,7 +312,11 @@ const ApiKeyManager = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => vo
           </div>
         </div>
         <DialogFooter>
-          <Button variant="secondary" size="sm" onClick={onClose} className="bg-[#3C3C3C] hover:bg-[#4D4D4D] text-[#CCCCCC]">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onClose}
+            className="bg-[#3C3C3C] hover:bg-[#4D4D4D] text-[#CCCCCC]">
             Close
           </Button>
         </DialogFooter>
@@ -336,15 +341,17 @@ export const RichPanel = () => {
   );
 
   return (
-    <div className="flex h-full w-full bg-[#1E1E1E] text-[#CCCCCC] font-mono overflow-hidden relative flex-col">
-      
+    <div
+      className="flex h-full w-full bg-[#1E1E1E] text-[#CCCCCC] font-mono overflow-hidden relative flex-col">
       {/* Top Header / User Bar */}
-      <div className="flex items-center justify-between p-3 bg-[#1E1E1E] border-b border-[#3C3C3C] select-none shrink-0">
+      <div
+        className="flex items-center justify-between p-3 bg-[#1E1E1E] border-b border-[#3C3C3C] select-none shrink-0">
         <div className="flex items-center gap-2">
             <div className="relative">
-              <Brain className="h-5 w-5 text-[#007ACC]" />
+
               {isAuthenticated && (
-                <span className="absolute -top-0.5 -right-0.5 h-2 w-2 bg-green-500 rounded-full border border-[#1E1E1E]" />
+                <span
+                  className="absolute -top-0.5 -right-0.5 h-2 w-2 bg-green-500 rounded-full border border-[#1E1E1E]" />
               )}
             </div>
             <h1 className="text-sm font-bold tracking-tight text-white">Lanonasis Memory</h1>
@@ -354,14 +361,19 @@ export const RichPanel = () => {
             {isAuthenticated ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-[#3C3C3C] rounded-sm">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 hover:bg-[#3C3C3C] rounded-sm">
                     <Settings className="h-4 w-4 text-[#888888]" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="bg-[#252526] border-[#3C3C3C] text-[#CCCCCC]">
                   <DropdownMenuLabel className="text-xs">My Account</DropdownMenuLabel>
                   <DropdownMenuSeparator className="bg-[#3C3C3C]" />
-                  <DropdownMenuItem className="text-xs focus:bg-[#007ACC] focus:text-white cursor-pointer" onClick={() => setShowApiKeys(true)}>
+                  <DropdownMenuItem
+                    className="text-xs focus:bg-[#007ACC] focus:text-white cursor-pointer"
+                    onClick={() => setShowApiKeys(true)}>
                     <Key className="mr-2 h-3.5 w-3.5" />
                     <span>API Keys</span>
                   </DropdownMenuItem>
@@ -370,39 +382,51 @@ export const RichPanel = () => {
                     <span>Profile</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-[#3C3C3C]" />
-                  <DropdownMenuItem className="text-xs focus:bg-[#007ACC] focus:text-white cursor-pointer" onClick={() => setIsAuthenticated(false)}>
+                  <DropdownMenuItem
+                    className="text-xs focus:bg-[#007ACC] focus:text-white cursor-pointer"
+                    onClick={() => setIsAuthenticated(false)}>
                     <LogOut className="mr-2 h-3.5 w-3.5" />
                     <span>Log out</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button size="sm" variant="ghost" className="h-7 px-2 text-xs hover:bg-[#3C3C3C]" onClick={() => setIsAuthenticated(true)}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2 text-xs hover:bg-[#3C3C3C]"
+                onClick={() => setIsAuthenticated(true)}>
                   Log in
               </Button>
             )}
         </div>
       </div>
-
       {/* Main Content Area */}
       <ScrollArea className="flex-1 bg-[#252526]">
         <div className="flex flex-col min-h-full">
           
           {/* Memory Assistant Section */}
-          <Collapsible open={isAssistantOpen} onOpenChange={setIsAssistantOpen} className="border-b border-[#3C3C3C]">
-            <div className="flex items-center justify-between px-3 py-2 bg-[#1E1E1E] hover:bg-[#2A2D2E] cursor-pointer group" onClick={() => setIsAssistantOpen(!isAssistantOpen)}>
+          <Collapsible
+            open={isAssistantOpen}
+            onOpenChange={setIsAssistantOpen}
+            className="border-b border-[#3C3C3C]">
+            <div
+              className="flex items-center justify-between px-3 py-2 bg-[#1E1E1E] hover:bg-[#2A2D2E] cursor-pointer group"
+              onClick={() => setIsAssistantOpen(!isAssistantOpen)}>
               <div className="flex items-center gap-2">
                 <Bot className="h-4 w-4 text-[#007ACC]" />
                 <span className="text-[11px] font-bold text-[#CCCCCC] uppercase tracking-wider">AI Orchestrator</span>
               </div>
-              <ChevronRight className={cn("h-3.5 w-3.5 text-[#CCCCCC] transition-transform", isAssistantOpen && "rotate-90")} />
+              <ChevronRight
+                className={cn("h-3.5 w-3.5 text-[#CCCCCC] transition-transform", isAssistantOpen && "rotate-90")} />
             </div>
             <CollapsibleContent>
                 <div className="bg-[#1E1E1E] p-4 border-b border-[#3C3C3C]">
                   {isAuthenticated ? (
                     <div className="space-y-3">
                         <div className="flex items-start gap-3">
-                            <div className="h-6 w-6 rounded-full bg-[#007ACC]/20 flex items-center justify-center shrink-0">
+                            <div
+                              className="h-6 w-6 rounded-full bg-[#007ACC]/20 flex items-center justify-center shrink-0">
                                 <Sparkles className="h-3.5 w-3.5 text-[#007ACC]" />
                             </div>
                             <div className="space-y-1">
@@ -425,15 +449,21 @@ export const RichPanel = () => {
           </Collapsible>
 
           {/* Memories Section */}
-          <Collapsible open={isMemoriesOpen} onOpenChange={setIsMemoriesOpen} className="flex-1 flex flex-col">
-            <div className="flex items-center justify-between px-3 py-2 bg-[#1E1E1E] hover:bg-[#2A2D2E] cursor-pointer group" onClick={() => setIsMemoriesOpen(!isMemoriesOpen)}>
+          <Collapsible
+            open={isMemoriesOpen}
+            onOpenChange={setIsMemoriesOpen}
+            className="flex-1 flex flex-col">
+            <div
+              className="flex items-center justify-between px-3 py-2 bg-[#1E1E1E] hover:bg-[#2A2D2E] cursor-pointer group"
+              onClick={() => setIsMemoriesOpen(!isMemoriesOpen)}>
               <div className="flex items-center gap-2">
                   <LayoutGrid className="h-4 w-4 text-[#888888]" />
                   <span className="text-[11px] font-bold text-[#CCCCCC] uppercase tracking-wider">Memory Bank</span>
               </div>
               <div className="flex items-center gap-2">
                   <span className="text-[10px] text-[#666666]">{filteredMemories.length} items</span>
-                  <ChevronRight className={cn("h-3.5 w-3.5 text-[#CCCCCC] transition-transform", isMemoriesOpen && "rotate-90")} />
+                  <ChevronRight
+                    className={cn("h-3.5 w-3.5 text-[#CCCCCC] transition-transform", isMemoriesOpen && "rotate-90")} />
               </div>
             </div>
             
@@ -447,16 +477,18 @@ export const RichPanel = () => {
                       placeholder="Search semantic memories..."
                       className="bg-[#3C3C3C]/50 border-none pl-8 h-8 text-xs focus-visible:ring-1 focus-visible:ring-[#007ACC] placeholder:text-[#666666]"
                       value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                    />
+                      onChange={(e) => setSearchQuery(e.target.value)} />
                   </div>
 
                   <div className="flex gap-2">
-                    <Button className="flex-1 bg-[#0E639C] hover:bg-[#1177BB] text-white h-7 text-xs border border-white/5">
+                    <Button
+                      className="flex-1 bg-[#0E639C] hover:bg-[#1177BB] text-white h-7 text-xs border border-white/5">
                       <Plus className="h-3 w-3 mr-1.5" />
                       Add Entry
                     </Button>
-                    <Button variant="secondary" className="flex-1 bg-[#3C3C3C] hover:bg-[#4D4D4D] text-[#CCCCCC] h-7 text-xs border border-white/5">
+                    <Button
+                      variant="secondary"
+                      className="flex-1 bg-[#3C3C3C] hover:bg-[#4D4D4D] text-[#CCCCCC] h-7 text-xs border border-white/5">
                       <RefreshCw className="h-3 w-3 mr-1.5" />
                       Sync
                     </Button>
@@ -477,7 +509,6 @@ export const RichPanel = () => {
 
         </div>
       </ScrollArea>
-
       {/* Bottom Chat Interface */}
       <div className="p-3 bg-[#1E1E1E] border-t border-[#3C3C3C] shrink-0">
         <div className="relative group">
@@ -489,22 +520,19 @@ export const RichPanel = () => {
             onChange={(e) => setChatInput(e.target.value)}
             placeholder={isAuthenticated ? "Paste context to remember or ask AI..." : "Connect to access orchestrator..."}
             disabled={!isAuthenticated}
-            className="w-full min-h-[80px] bg-[#252526] border border-[#3C3C3C] rounded-md pl-9 pr-10 py-2.5 text-sm text-[#CCCCCC] placeholder:text-[#666666] resize-none focus:outline-none focus:border-[#007ACC] focus:ring-1 focus:ring-[#007ACC] disabled:opacity-50 disabled:cursor-not-allowed transition-all group-focus-within:h-[120px]"
-          />
+            className="w-full min-h-[80px] bg-[#252526] border border-[#3C3C3C] rounded-md pl-9 pr-10 py-2.5 text-sm text-[#CCCCCC] placeholder:text-[#666666] resize-none focus:outline-none focus:border-[#007ACC] focus:ring-1 focus:ring-[#007ACC] disabled:opacity-50 disabled:cursor-not-allowed transition-all group-focus-within:h-[120px]" />
           <div className="absolute right-2 bottom-2 flex gap-1">
             <Button
               size="icon"
               variant="ghost"
               className="h-7 w-7 text-[#888888] hover:text-[#CCCCCC] hover:bg-[#3C3C3C]"
-              disabled={!isAuthenticated}
-            >
+              disabled={!isAuthenticated}>
               <Paperclip className="h-4 w-4" />
             </Button>
             <Button
               size="icon"
               className="h-7 w-7 bg-[#0E639C] hover:bg-[#1177BB] text-white rounded-sm disabled:opacity-50"
-              disabled={!isAuthenticated}
-            >
+              disabled={!isAuthenticated}>
               <SendHorizontal className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -516,9 +544,7 @@ export const RichPanel = () => {
             </div>
         )}
       </div>
-
       <ApiKeyManager isOpen={showApiKeys} onClose={() => setShowApiKeys(false)} />
-
     </div>
   );
 };

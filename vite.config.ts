@@ -9,17 +9,6 @@ export default defineConfig({
     react(),
     runtimeErrorOverlay(),
     tailwindcss(),
-    ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
-      ? [
-          await import("@replit/vite-plugin-cartographer").then((m) =>
-            m.cartographer(),
-          ),
-          await import("@replit/vite-plugin-dev-banner").then((m) =>
-            m.devBanner(),
-          ),
-        ]
-      : []),
   ],
   resolve: {
     alias: {
@@ -40,7 +29,8 @@ export default defineConfig({
   },
   server: {
     host: "0.0.0.0",
-    allowedHosts: true,
+    // @ts-ignore
+    allowedHosts: process.env.TEMPO === "true" ? true : true,
     fs: {
       strict: true,
       deny: ["**/.*"],
