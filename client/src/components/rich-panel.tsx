@@ -354,9 +354,9 @@ export const RichPanel = () => {
                   className="absolute -top-0.5 -right-0.5 h-2 w-2 bg-green-500 rounded-full border border-[#1E1E1E]" />
               )}
             </div>
-            <h1 className="text-sm font-bold tracking-tight text-white">Lanonasis Memory</h1>
+            <h1
+              className="text-sm font-bold tracking-tight text-white w-[142px] h-[21px] w-[149px] h-[41px] w-[150px]">Lanonasis Memory<div className="h-[40px]  text-white">Text</div></h1>
         </div>
-        
         <div className="flex items-center gap-1">
             {isAuthenticated ? (
               <DropdownMenu>
@@ -400,7 +400,13 @@ export const RichPanel = () => {
               </Button>
             )}
         </div>
-      </div>
+        <svg
+          viewBox={"0 0 24 24"}
+          fill={"none"}
+          xmlns={"http://www.w3.org/2000/svg"}
+          width={20}
+          height={20}
+          className={"text-white"} /></div>
       {/* Main Content Area */}
       <ScrollArea className="flex-1 bg-[#252526]">
         <div className="flex flex-col min-h-full">
@@ -414,7 +420,7 @@ export const RichPanel = () => {
               className="flex items-center justify-between px-3 py-2 bg-[#1E1E1E] hover:bg-[#2A2D2E] cursor-pointer group"
               onClick={() => setIsAssistantOpen(!isAssistantOpen)}>
               <div className="flex items-center gap-2">
-                <Bot className="h-4 w-4 text-[#007ACC]" />
+
                 <span className="text-[11px] font-bold text-[#CCCCCC] uppercase tracking-wider">AI Orchestrator</span>
               </div>
               <ChevronRight
