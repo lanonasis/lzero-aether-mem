@@ -1,0 +1,68 @@
+{
+  "name": "memory-intelligence-mcp-server",
+  "version": "1.0.0",
+  "description": "AI-powered analytics and insights for LanOnasis Memory-as-a-Service",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "private": false,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "dev:watch": "tsx watch src/index.ts",
+    "dev:http": "TRANSPORT=http tsx src/index.ts",
+    "start:http": "TRANSPORT=http node dist/index.js",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "type-check": "tsc --noEmit",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "memory",
+    "intelligence",
+    "analytics",
+    "ai",
+    "lanonasis",
+    "maas",
+    "memory-as-a-service",
+    "vector-search",
+    "embeddings"
+  ],
+  "author": "Lanonasis (Seye Derick)",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.17.0",
+    "@supabase/supabase-js": "^2.53.0",
+    "dotenv": "^17.2.1",
+    "express": "^4.21.2",
+    "openai": "^4.76.1",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.10.2",
+    "@typescript-eslint/eslint-plugin": "^8.18.1",
+    "@typescript-eslint/parser": "^8.18.1",
+    "@vitest/coverage-v8": "^2.1.8",
+    "eslint": "^9.17.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  },
+  "bin": {
+    "memory-intelligence-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
+}

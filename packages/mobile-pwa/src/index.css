@@ -1,0 +1,183 @@
+@import "tailwindcss";
+
+/* Safe area padding for iOS devices */
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom);
+  --safe-area-inset-left: env(safe-area-inset-left);
+  --safe-area-inset-right: env(safe-area-inset-right);
+}
+
+/* Base styles */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background-color: #0D0D0D;
+  color: #FFFFFF;
+}
+
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Safe area utilities */
+.safe-area-top {
+  padding-top: var(--safe-area-inset-top);
+}
+
+.safe-area-bottom {
+  padding-bottom: var(--safe-area-inset-bottom);
+}
+
+/* Standalone mode (PWA) */
+html.standalone {
+  --safe-area-inset-top: max(env(safe-area-inset-top), 20px);
+}
+
+/* Custom scrollbar for WebKit */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Selection color */
+::selection {
+  background-color: rgba(0, 122, 204, 0.3);
+  color: #FFFFFF;
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid rgba(0, 122, 204, 0.5);
+  outline-offset: 2px;
+}
+
+/* Smooth touch scrolling */
+.scroll-smooth {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Disable text selection on interactive elements */
+button, 
+[role="button"],
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Input styles for dark mode */
+input,
+textarea {
+  color-scheme: dark;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #666666;
+}
+
+/* Animation utilities */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(0, 122, 204, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 20px 10px rgba(0, 122, 204, 0.1);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+/* Glass morphism effect */
+.glass {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Loading skeleton */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 25%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(255, 255, 255, 0.05) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Haptic feedback indicator */
+.haptic-active {
+  transform: scale(0.98);
+  transition: transform 0.1s ease-out;
+}
+
+/* iOS-style spring animation */
+@keyframes spring-bounce {
+  0% {
+    transform: scale(0.95);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-spring {
+  animation: spring-bounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}

@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<evaluation>
+  <!-- Memory Intelligence MCP Server Evaluation -->
+  <!-- 10 questions to test tool effectiveness for LanOnasis platform -->
+  
+  <qa_pair>
+    <question>
+      I have a user with ID 00000000-0000-0000-0000-000000000001. 
+      Use the memory health check tool to analyze their memory organization.
+      What is the overall health score reported?
+    </question>
+    <answer>The answer will be a number between 0 and 100 representing the health score</answer>
+  </qa_pair>
+  
+  <qa_pair>
+    <question>
+      Analyze memory patterns for user 00000000-0000-0000-0000-000000000001 over the last 7 days.
+      What is the daily average number of memories created according to the analysis?
+    </question>
+    <answer>A decimal number representing daily_average from creation_velocity</answer>
+  </qa_pair>
+  
+  <qa_pair>
+    <question>
+      For memory ID abc12345-1234-1234-1234-123456789abc owned by user 00000000-0000-0000-0000-000000000001,
+      get tag suggestions with a maximum of 3 suggestions.
+      How many suggestions were returned?
+    </question>
+    <answer>A number between 0 and 3</answer>
+  </qa_pair>
+  
+  <qa_pair>
+    <question>
+      Find related memories for memory ID abc12345-1234-1234-1234-123456789abc 
+      with user ID 00000000-0000-0000-0000-000000000001
+      using a similarity threshold of 0.8 and limit of 5.
+      What is the title of the source memory?
+    </question>
+    <answer>The title string from source_title field</answer>
+  </qa_pair>
+  
+  <qa_pair>
+    <question>
+      Detect duplicate memories for user 00000000-0000-0000-0000-000000000001
+      with a similarity threshold of 0.95.
+      How many memories were scanned in total?
+    </question>
+    <answer>A number representing total_memories_scanned</answer>
+  </qa_pair>
+  
+  <qa_pair>
+    <question>
+      Extract insights from user 00000000-0000-0000-0000-000000000001's memories
+      focusing on the topic "machine learning" with max 10 memories.
+      What category is the first insight classified as?
+    </question>
+    <answer>One of: pattern, learning, opportunity, risk, action_item</answer>
+  </qa_pair>
+  
+  <qa_pair>
+    <question>
+      Run memory health check for user 00000000-0000-0000-0000-000000000001.
+      How many memories lack tags (memories_without_tags)?
+    </question>
+    <answer>A non-negative integer</answer>
+  </qa_pair>
+  
+  <qa_pair>
+    <question>
+      Analyze memory patterns for user 00000000-0000-0000-0000-000000000001 
+      over 30 days in JSON format.
+      What is the creation velocity trend (increasing, stable, or decreasing)?
+    </question>
+    <answer>One of: increasing, stable, decreasing</answer>
+  </qa_pair>
+  
+  <qa_pair>
+    <question>
+      Get tag suggestions for memory xyz98765-9876-9876-9876-987654321xyz
+      owned by user 00000000-0000-0000-0000-000000000001.
+      Include existing tags analysis.
+      What is the confidence score (0-1) of the first suggested tag?
+    </question>
+    <answer>A decimal number between 0 and 1</answer>
+  </qa_pair>
+  
+  <qa_pair>
+    <question>
+      Extract insights from user 00000000-0000-0000-0000-000000000001's memories
+      filtered by memory_type "project" with max 15 memories.
+      What is the executive summary text from the response?
+    </question>
+    <answer>A string containing the AI-generated summary</answer>
+  </qa_pair>
+</evaluation>
