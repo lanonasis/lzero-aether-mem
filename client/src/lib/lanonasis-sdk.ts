@@ -72,8 +72,8 @@ const DEMO_MEMORIES: Memory[] = [
     title: "Context Intelligence Engine Architecture",
     type: "docs",
     date: new Date(2025, 10, 27),
-    tags: ["aether", "cortex", "architecture"],
-    content: "Aether Cortex provides: Pattern recognition, semantic tag suggestions, duplicate detection, insight extraction. Microservice architecture for independent scaling.",
+    tags: ["aether", "vortex", "architecture"],
+    content: "Aether Vortex provides: Pattern recognition, semantic tag suggestions, duplicate detection, insight extraction. Microservice architecture for independent scaling.",
     icon: BookOpen
   }
 ];

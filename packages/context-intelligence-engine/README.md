@@ -1,4 +1,4 @@
-# 🧬 Aether Cortex — Context Intelligence Engine
+# 🧬 Aether Vortex — Context Intelligence Engine
 
 <div align="center">
 
@@ -13,11 +13,11 @@
 
 ---
 
-## 🎯 What is Aether Cortex?
+## 🎯 What is Aether Vortex?
 
-**Aether Cortex** is the proprietary **Context Intelligence Engine** that transforms raw developer memories into actionable, personalized intelligence. While traditional memory systems simply store and retrieve data, Cortex *understands* your context:
+**Aether Vortex** is the proprietary **Context Intelligence Engine** that transforms raw developer memories into actionable, personalized intelligence. While traditional memory systems simply store and retrieve data, Vortex *understands* your context:
 
-> 💡 **"Your AI coding assistant remembers what you worked on. Aether Cortex understands *why* it matters and *how* it connects to everything else."**
+> 💡 **"Your AI coding assistant remembers what you worked on. Aether Vortex understands *why* it matters and *how* it connects to everything else."**
 
 ### The Intelligence Gap We Solve
 
@@ -25,7 +25,7 @@
 ❌ Traditional Memory Systems:
    Store → Retrieve → Done
    
-✅ Aether Cortex:
+✅ Aether Vortex:
    Store → Analyze → Connect → Learn → Predict → Evolve
          ↑                                        ↓
          └────── Continuous Intelligence Loop ────┘
@@ -39,9 +39,9 @@
 
 Most AI coding assistants suffer from **context amnesia** — they forget everything between sessions. Even those with memory capabilities treat memories as flat data stores.
 
-**Aether Cortex introduces a new paradigm: Persistent Personalized Context (PPC)**
+**Aether Vortex introduces a new paradigm: Persistent Personalized Context (PPC)**
 
-| Capability | Standard Memory | Aether Cortex |
+| Capability | Standard Memory | Aether Vortex |
 |-----------|----------------|---------------|
 | **Storage** | ✅ Key-value pairs | ✅ Semantic embeddings |
 | **Retrieval** | ✅ Keyword search | ✅ Vector similarity |
@@ -92,7 +92,7 @@ Continuously evaluates your knowledge base for:
 
 ## 🔧 Architecture: The Orchestrator Model
 
-Aether Cortex is designed as a **specialized intelligence microservice** within the larger Aether Memory ecosystem:
+Aether Vortex is designed as a **specialized intelligence microservice** within the larger Aether Memory ecosystem:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -103,7 +103,7 @@ Aether Cortex is designed as a **specialized intelligence microservice** within 
                 ┌───────────────┴───────────────┐
                 ▼                               ▼
 ┌───────────────────────────┐   ┌───────────────────────────────────┐
-│   📦 Aether Memory Core   │   │     🧬 AETHER CORTEX              │
+│   📦 Aether Memory Core   │   │     🧬 AETHER VORTEX              │
 │   (@lanonasis/mcp-core)   │   │   Context Intelligence Engine     │
 │                           │   │                                   │
 │   ✅ Memory CRUD          │◄──│   🔬 Pattern Analysis             │
@@ -161,9 +161,9 @@ PORT=3010        # HTTP port (default: 3010)
 
 ## 🔬 Intelligence Tools API
 
-Aether Cortex exposes 6 specialized MCP tools that bring intelligence to any AI coding assistant:
+Aether Vortex exposes 6 specialized MCP tools that bring intelligence to any AI coding assistant:
 
-### `cortex_analyze_patterns` 
+### `vortex_analyze_patterns` 
 **Behavioral Intelligence** — Learns your development patterns over time
 
 ```typescript
@@ -179,11 +179,11 @@ Aether Cortex exposes 6 specialized MCP tools that bring intelligence to any AI 
 
 ---
 
-### `cortex_suggest_tags`
+### `vortex_suggest_tags`
 **Semantic Classification** — AI understands your content and suggests consistent taxonomy
 
 ```typescript
-// Never manually tag again - Cortex learns your vocabulary and applies it intelligently
+// Never manually tag again - Vortex learns your vocabulary and applies it intelligently
 {
   memory_id: "uuid",
   user_id: "uuid",
@@ -195,7 +195,7 @@ Aether Cortex exposes 6 specialized MCP tools that bring intelligence to any AI 
 
 ---
 
-### `cortex_find_related`
+### `vortex_find_related`
 **Knowledge Graph Traversal** — Discovers hidden connections in your memory vault
 
 ```typescript
@@ -211,7 +211,7 @@ Aether Cortex exposes 6 specialized MCP tools that bring intelligence to any AI 
 
 ---
 
-### `cortex_detect_duplicates`
+### `vortex_detect_duplicates`
 **Memory Deduplication** — Keeps your knowledge base clean and efficient
 
 ```typescript
@@ -227,7 +227,7 @@ Aether Cortex exposes 6 specialized MCP tools that bring intelligence to any AI 
 
 ---
 
-### `cortex_extract_insights`
+### `vortex_extract_insights`
 **AI-Powered Synthesis** — Transforms memories into actionable intelligence
 
 ```typescript
@@ -243,7 +243,7 @@ Aether Cortex exposes 6 specialized MCP tools that bring intelligence to any AI 
 
 ---
 
-### `cortex_health_check`
+### `vortex_health_check`
 **Self-Monitoring** — Ensures your context stays healthy and organized
 
 ```typescript
@@ -266,9 +266,9 @@ Add to your MCP configuration:
 ```json
 {
   "mcpServers": {
-    "aether-cortex": {
+    "aether-vortex": {
       "command": "node",
-      "args": ["/path/to/aether-cortex/dist/index.js"],
+      "args": ["/path/to/aether-vortex/dist/index.js"],
       "env": {
         "ONASIS_SUPABASE_URL": "your_url",
         "ONASIS_SUPABASE_SERVICE_KEY": "your_key",
@@ -283,7 +283,7 @@ Add to your MCP configuration:
 
 ```bash
 TRANSPORT=http PORT=3010 npm start
-# Cortex now accessible at http://localhost:3010/mcp
+# Vortex now accessible at http://localhost:3010/mcp
 ```
 
 ---
@@ -292,9 +292,9 @@ TRANSPORT=http PORT=3010 npm start
 
 ```mermaid
 graph LR
-    A[Developer creates memory] --> B[Cortex auto-suggests tags]
+    A[Developer creates memory] --> B[Vortex auto-suggests tags]
     B --> C[Memory stored with embeddings]
-    C --> D[Cortex builds semantic graph]
+    C --> D[Vortex builds semantic graph]
     D --> E[Related memories surface automatically]
     E --> F[Weekly insight extraction]
     F --> G[Proactive recommendations]
@@ -304,10 +304,10 @@ graph LR
 **Example Session:**
 
 1. **You save**: *"Fixed auth bug by adding PKCE flow"*
-2. **Cortex suggests**: `#authentication`, `#security`, `#oauth` (95% confidence)
-3. **Cortex connects**: Links to 3 related memories from past OAuth work
-4. **Cortex alerts**: *"You've fixed 4 auth issues this month - consider documenting your auth patterns"*
-5. **Cortex recommends**: Creates an insight about your OAuth expertise
+2. **Vortex suggests**: `#authentication`, `#security`, `#oauth` (95% confidence)
+3. **Vortex connects**: Links to 3 related memories from past OAuth work
+4. **Vortex alerts**: *"You've fixed 4 auth issues this month - consider documenting your auth patterns"*
+5. **Vortex recommends**: Creates an insight about your OAuth expertise
 
 ---
 
@@ -364,7 +364,7 @@ RETURNS TABLE(...);
 - [ ] **Cross-User Intelligence** — Team insights (privacy-preserving)
 - [ ] **Predictive Context** — "You'll need this next"
 
-### Phase 4: Autonomous Cortex (Q3 2025)
+### Phase 4: Autonomous Vortex (Q3 2025)
 - [ ] **Self-Organizing Memory** — Zero-config intelligence
 - [ ] **Multi-Modal Understanding** — Images, diagrams, voice
 - [ ] **Local LLM Support** — Fully offline intelligence with Ollama
@@ -394,7 +394,7 @@ RETURNS TABLE(...);
 
 > *"We're not building another note-taking app. We're building the persistent memory layer that makes AI coding assistants truly personal."*
 
-**Aether Cortex** is the missing piece between "AI that forgets" and "AI that understands you." By combining semantic intelligence, proactive insights, and self-organizing knowledge, we're creating the foundation for a new generation of developer tools.
+**Aether Vortex** is the missing piece between "AI that forgets" and "AI that understands you." By combining semantic intelligence, proactive insights, and self-organizing knowledge, we're creating the foundation for a new generation of developer tools.
 
 ---
 
