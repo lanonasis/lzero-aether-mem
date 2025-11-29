@@ -663,7 +663,7 @@ const AIChatSheet = ({
             <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
-                  <Bot className="h-5 w-5 text-white" />
+                  <LanoLogo size={20} className="text-white" />
                 </div>
                 <div>
                   <h2 className="font-semibold text-white">AI Orchestrator</h2>
@@ -700,7 +700,7 @@ const AIChatSheet = ({
                 >
                   {message.role === 'assistant' && (
                     <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center shrink-0">
-                      <Sparkles className="h-4 w-4 text-blue-400" />
+                      <LanoLogo size={16} className="text-blue-400" />
                     </div>
                   )}
                   <div className={cn(
@@ -724,7 +724,7 @@ const AIChatSheet = ({
                   className="flex gap-3"
                 >
                   <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                    <Sparkles className="h-4 w-4 text-blue-400 animate-pulse" />
+                    <LanoLogo size={16} className="text-blue-400 animate-pulse" />
                   </div>
                   <div className="bg-[#1A1A1A] rounded-2xl rounded-bl-md px-4 py-3 border border-white/5">
                     <div className="flex gap-1">
