@@ -67,7 +67,16 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ['@xenova/transformers'], // Pre-bundle transformers.js for faster loading
+    include: [
+      '@xenova/transformers',
+      '@xenova/transformers/dist/transformers.min.js',
+    ],
+    esbuildOptions: {
+      target: 'esnext',
+    },
+  },
+  esbuild: {
+    target: 'esnext',
   },
   build: {
     target: 'esnext',

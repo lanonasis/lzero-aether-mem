@@ -16,23 +16,38 @@ let env: any = null;
 async function loadTransformers() {
   if (pipeline) return;
   
+  // Check if we're in a browser context
+  if (typeof window === 'undefined') {
+    console.info('ℹ️ On-device AI not available (server-side context)');
+    throw new Error('Transformers.js requires browser context');
+  }
+  
   try {
-    const transformers = await import('@xenova/transformers');
-    pipeline = transformers.pipeline;
-    env = transformers.env;
+    // Dynamic import - Vite will handle bundling
+    console.log('📦 Loading transformers.js...');
+    const transformersModule = await import(
+      /* @vite-ignore */ 
+      '@xenova/transformers'
+    );
+    
+    pipeline = transformersModule.pipeline;
+    env = transformersModule.env;
     
     // Configure for browser/mobile use
     env.allowLocalModels = false;
     env.useBrowserCache = true;
+    env.backends.onnx.wasm.numThreads = 1; // Better for mobile ARM
     
     // Prefer WebGPU on compatible devices (ARM acceleration)
     if (typeof navigator !== 'undefined' && 'gpu' in navigator) {
       console.log('🚀 WebGPU available - enabling ARM GPU acceleration');
+      // WebGPU will be used automatically if available
     }
-  } catch (e) {
-    // Graceful degradation - AI features will be disabled
-    console.info('ℹ️ On-device AI not available (requires browser context)');
-    throw new Error('Transformers.js not available');
+    
+    console.log('✅ Transformers.js loaded successfully');
+  } catch (e: any) {
+    console.error('❌ Failed to load transformers.js:', e?.message || e);
+    throw new Error(`Transformers.js not available: ${e?.message || 'Unknown error'}`);
   }
 }
 
