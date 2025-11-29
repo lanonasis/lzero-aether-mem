@@ -26,11 +26,12 @@ async function loadTransformers() {
     env.useBrowserCache = true;
     
     // Prefer WebGPU on compatible devices (ARM acceleration)
-    if ('gpu' in navigator) {
+    if (typeof navigator !== 'undefined' && 'gpu' in navigator) {
       console.log('🚀 WebGPU available - enabling ARM GPU acceleration');
     }
   } catch (e) {
-    console.error('Failed to load transformers:', e);
+    // Graceful degradation - AI features will be disabled
+    console.info('ℹ️ On-device AI not available (requires browser context)');
     throw new Error('Transformers.js not available');
   }
 }

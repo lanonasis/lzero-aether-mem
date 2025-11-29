@@ -22,8 +22,8 @@ const queryClient = new QueryClient({
   },
 });
 
-// Register service worker
-if ('serviceWorker' in navigator) {
+// Register service worker (production only)
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', async () => {
     try {
       const registration = await navigator.serviceWorker.register('/sw.js', {
@@ -37,17 +37,20 @@ if ('serviceWorker' in navigator) {
         if (newWorker) {
           newWorker.addEventListener('statechange', () => {
             if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // New version available
               console.log('🔄 New version available! Refresh to update.');
-              // Optionally show a toast notification here
             }
           });
         }
       });
     } catch (error) {
-      console.error('❌ Service Worker registration failed:', error);
+      // Silent fail in dev, log in prod
+      if (import.meta.env.PROD) {
+        console.warn('Service Worker registration failed:', error);
+      }
     }
   });
+} else if (import.meta.env.DEV) {
+  console.log('📱 PWA: Service Worker disabled in development mode');
 }
 
 // Handle iOS standalone mode

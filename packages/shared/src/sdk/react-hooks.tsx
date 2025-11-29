@@ -268,7 +268,11 @@ export function useLocalAI() {
       setLoadProgress(100);
       setDeviceInfo(engine.getDeviceInfo());
     } catch (e) {
-      setError(e as Error);
+      // Graceful degradation - AI features disabled but app works
+      console.info('ℹ️ Local AI disabled - app will use cloud fallback');
+      setError(null); // Don't show error to user
+      setIsLoading(false);
+      setLoadProgress(0);
     } finally {
       setIsLoading(false);
     }
