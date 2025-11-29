@@ -14,6 +14,7 @@ const isMobile = !isNode && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent
 export interface LanonasisConfig {
   baseUrl?: string;
   apiKey?: string;
+  organizationId?: string;
   enableOffline?: boolean;
   enableLocalAI?: boolean;
   onAuthChange?: (authenticated: boolean) => void;
@@ -157,9 +158,10 @@ class MemoryClient {
 
     try {
       const endpoint = query
-        ? `/memories?q=${encodeURIComponent(query)}`
-        : '/memories';
-      const memories = await this.request<Memory[]>(endpoint);
+        ? `/memory?q=${encodeURIComponent(query)}`
+        : '/memory';
+      const response = await this.request<{ data: Memory[] }>(endpoint);
+      const memories = response.data || [];
       
       // Update cache
       this.cache.set(cacheKey, { data: memories, timestamp: Date.now() });
@@ -197,10 +199,11 @@ class MemoryClient {
       payload.embedding = localEmbedding;
     }
 
-    return this.request<Memory[]>('/memories/search', {
+    const response = await this.request<{ data: Memory[] }>('/memory/search', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+    return response.data || [];
   }
 
   /**
@@ -215,7 +218,12 @@ class MemoryClient {
       embedding = await this.embeddingEngine.embed(text);
     }
 
-    const payload = { ...input, embedding };
+    const payload = { 
+      ...input, 
+      embedding,
+      // Include organization_id if configured (required by MaaS API)
+      ...(this.config.organizationId && { organization_id: this.config.organizationId }),
+    };
 
     // Handle offline mode
     if (!navigator.onLine && this.config.enableOffline) {
@@ -242,10 +250,11 @@ class MemoryClient {
       return tempMemory;
     }
 
-    return this.request<Memory>('/memories', {
+    const response = await this.request<{ data: Memory }>('/memory', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+    return response.data;
   }
 
   /**
@@ -267,10 +276,11 @@ class MemoryClient {
       return cached?.data.find(m => m.id === id) as Memory;
     }
 
-    return this.request<Memory>(`/memories/${id}`, {
-      method: 'PATCH',
+    const response = await this.request<{ data: Memory }>(`/memory/${id}`, {
+      method: 'PUT',
       body: JSON.stringify(input),
     });
+    return response.data;
   }
 
   /**
@@ -289,7 +299,7 @@ class MemoryClient {
       return;
     }
 
-    await this.request(`/memories/${id}`, { method: 'DELETE' });
+    await this.request(`/memory/${id}`, { method: 'DELETE' });
   }
 
   /**
@@ -441,13 +451,13 @@ export class LanonasisClient {
       ...config,
     };
 
-    // Initialize with API key if provided
+    // Load persisted session first
+    this.loadSession();
+    
+    // API key takes precedence over persisted session
     if (config.apiKey) {
       this.token = config.apiKey;
     }
-
-    // Load persisted session
-    this.loadSession();
 
     this.memory = new MemoryClient(
       this.config.baseUrl!,

@@ -67,7 +67,16 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    exclude: ['@xenova/transformers'], // Don't pre-bundle transformers.js
+    include: [
+      '@xenova/transformers',
+      '@xenova/transformers/dist/transformers.min.js',
+    ],
+    esbuildOptions: {
+      target: 'esnext',
+    },
+  },
+  esbuild: {
+    target: 'esnext',
   },
   build: {
     target: 'esnext',
@@ -90,9 +99,10 @@ export default defineConfig({
     // Enable CORS for testing on mobile devices
     cors: true,
     headers: {
-      // Required headers for SharedArrayBuffer (needed by some WASM)
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp',
+      // Note: COEP/COOP disabled for dev to allow Hugging Face model downloads
+      // For production with SharedArrayBuffer, use 'credentialless' COEP
+      // 'Cross-Origin-Opener-Policy': 'same-origin',
+      // 'Cross-Origin-Embedder-Policy': 'credentialless',
     },
   },
 });

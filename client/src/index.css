@@ -103,10 +103,6 @@
   --radius: 2px; /* VS Code uses sharp corners mostly, 2px is standard for inputs */
 }
 
-.dark {
-  /* Same as root for this mockup */
-}
-
 @layer base {
   * {
     border-color: var(--vscode-panel-border);

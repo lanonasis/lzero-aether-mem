@@ -118,15 +118,61 @@ export default function LandingPage() {
             {/* IDE Preview Mockup */}
             <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#1E1E1E] aspect-[4/3] lg:aspect-auto lg:h-[600px] hover:border-[#007ACC]/30 transition-colors group">
                 <div className="absolute inset-0 flex">
-                    {/* Fake Code Area */}
-                    <div className="flex-1 p-6 space-y-4 opacity-50 hidden sm:block">
-                        <div className="h-4 w-32 bg-white/10 rounded animate-pulse" />
-                        <div className="space-y-2">
-                            <div className="h-4 w-full bg-white/5 rounded" />
-                            <div className="h-4 w-2/3 bg-white/5 rounded" />
-                            <div className="h-4 w-4/5 bg-white/5 rounded" />
+                    {/* ARM Features Showcase */}
+                    <div className="flex-1 p-6 space-y-5 hidden sm:block overflow-hidden">
+                        <div className="flex items-center gap-2 text-[#007ACC]">
+                          <Zap className="h-4 w-4" />
+                          <span className="text-xs font-semibold uppercase tracking-wider">ARM Optimized</span>
                         </div>
-                        <div className="h-32 w-full bg-white/5 rounded border border-white/5 mt-8" />
+                        
+                        <div className="space-y-4">
+                          {/* On-Device AI */}
+                          <div className="p-4 rounded-xl bg-gradient-to-r from-purple-500/10 to-blue-500/10 border border-purple-500/20">
+                            <div className="flex items-center gap-3 mb-2">
+                              <div className="h-8 w-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
+                                <Sparkles className="h-4 w-4 text-purple-400" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-white">On-Device AI</p>
+                                <p className="text-xs text-gray-400">WebGPU + WASM acceleration</p>
+                              </div>
+                            </div>
+                            <div className="h-1.5 bg-purple-900/30 rounded-full overflow-hidden">
+                              <div className="h-full w-3/4 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full animate-pulse" />
+                            </div>
+                          </div>
+                          
+                          {/* Offline First */}
+                          <div className="p-4 rounded-xl bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20">
+                            <div className="flex items-center gap-3">
+                              <div className="h-8 w-8 rounded-lg bg-green-500/20 flex items-center justify-center">
+                                <Globe className="h-4 w-4 text-green-400" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-white">Offline First</p>
+                                <p className="text-xs text-gray-400">Works without internet</p>
+                              </div>
+                              <CheckCircle2 className="h-4 w-4 text-green-400 ml-auto" />
+                            </div>
+                          </div>
+                          
+                          {/* ARM Performance */}
+                          <div className="p-4 rounded-xl bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border border-orange-500/20">
+                            <div className="flex items-center gap-3 mb-2">
+                              <div className="h-8 w-8 rounded-lg bg-orange-500/20 flex items-center justify-center">
+                                <Zap className="h-4 w-4 text-orange-400" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-white">ARM Native</p>
+                                <p className="text-xs text-gray-400">Apple M1/M2/M3 • Snapdragon</p>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 mt-2">
+                              <span className="px-2 py-0.5 text-[10px] bg-orange-500/20 text-orange-300 rounded-full">~50ms embeddings</span>
+                              <span className="px-2 py-0.5 text-[10px] bg-yellow-500/20 text-yellow-300 rounded-full">2x faster</span>
+                            </div>
+                          </div>
+                        </div>
                     </div>
                     
                     {/* The Panel Component */}
