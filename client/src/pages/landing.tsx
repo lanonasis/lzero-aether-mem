@@ -1,4 +1,5 @@
 import React from "react";
+import { useLocation } from "wouter";
 import { RichPanel } from "@/components/rich-panel";
 import { Shield, Zap, Globe, Code2, CheckCircle2, Briefcase, Terminal, Copy, Check, Sparkles, Lock, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,8 +7,9 @@ import { LanoLogo } from "@/components/lano-logo";
 import { useState } from "react";
 
 export default function LandingPage() {
+  const [, navigate] = useLocation();
   const [copied, setCopied] = useState(false);
-  const installCommand = "npm install @lanonasis/memory-client @LanOnasis/sdk @lanonasis/security-sdk";
+  const installCommand = "npm install @lanonasis/memory-sdk @lanonasis/security-sdk";
 
   const handleCopy = () => {
     navigator.clipboard.writeText(installCommand);
@@ -31,10 +33,10 @@ export default function LandingPage() {
             <a href="#features" className="hover:text-white transition-colors">Features</a>
             <a href="#sdk" className="hover:text-white transition-colors">SDK</a>
             <a href="#security" className="hover:text-white transition-colors">Security</a>
-            <Button variant="secondary" className="bg-white/10 hover:bg-white/20 text-white border-none h-8 rounded-lg">
+            <Button variant="secondary" className="bg-white/10 hover:bg-white/20 text-white border-none h-8 rounded-lg" onClick={() => navigate("/dashboard")}>
               Sign In
             </Button>
-            <Button className="bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-lg hover:shadow-[#007ACC]/50 text-white h-8 rounded-lg group">
+            <Button className="bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-lg hover:shadow-[#007ACC]/50 text-white h-8 rounded-lg group" onClick={() => navigate("/dashboard")}>
               Get Started
               <ArrowRight className="ml-2 h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
             </Button>
@@ -83,15 +85,15 @@ export default function LandingPage() {
                         {copied ? <Check className="h-4 w-4 text-green-500 animate-pulse" /> : <Copy className="h-4 w-4" />}
                     </Button>
                 </div>
-                <p className="text-xs text-gray-500">Includes @lanonasis/memory-client, @LanOnasis/sdk, and @lanonasis/security-sdk</p>
+                <p className="text-xs text-gray-500">Memory SDK + Security SDK — Full-stack persistent context</p>
             </div>
 
             <div className="flex flex-wrap gap-4 pt-6">
-              <Button className="h-12 px-8 bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-lg hover:shadow-[#007ACC]/40 text-white text-base rounded-lg font-medium group">
-                Install Now
+              <Button className="h-12 px-8 bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-lg hover:shadow-[#007ACC]/40 text-white text-base rounded-lg font-medium group" onClick={() => navigate("/dashboard")}>
+                Try Live Demo
                 <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </Button>
-              <Button variant="outline" className="h-12 px-8 border-white/10 bg-transparent hover:bg-white/5 text-white text-base rounded-lg font-medium">
+              <Button variant="outline" className="h-12 px-8 border-white/10 bg-transparent hover:bg-white/5 text-white text-base rounded-lg font-medium" onClick={() => window.open("https://docs.lanonasis.com", "_blank")}>
                 View Docs
               </Button>
             </div>
@@ -200,18 +202,18 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-3 gap-6">
             <SDKCard 
               icon={Sparkles}
-              title="@lanonasis/memory-client"
-              description="Access your vector memory store with semantic search, filtering, and analytics."
-            />
-            <SDKCard 
-              icon={Zap}
-              title="@LanOnasis/sdk"
-              description="Core orchestrator API. Authentication, context management, and task execution."
+              title="@lanonasis/memory-sdk"
+              description="Full-featured memory operations with multi-modal support and vector search."
             />
             <SDKCard 
               icon={Lock}
               title="@lanonasis/security-sdk"
-              description="Generate, rotate, and manage scoped API keys with audit trails."
+              description="Enterprise-grade encryption and secure key management for all services."
+            />
+            <SDKCard 
+              icon={Zap}
+              title="@lanonasis/cli"
+              description="Command-line interface for memory operations, deployments, and diagnostics."
             />
           </div>
         </div>
