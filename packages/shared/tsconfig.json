@@ -6,6 +6,7 @@
     "jsx": "react-jsx",
     "declaration": true,
     "declarationMap": true,
+    "composite": true,
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,
@@ -17,9 +18,11 @@
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
