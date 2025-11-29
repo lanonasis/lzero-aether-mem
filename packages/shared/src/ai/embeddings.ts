@@ -124,8 +124,9 @@ export class LocalEmbeddingEngine {
       console.log(`✅ Local AI Engine ready in ${elapsed.toFixed(0)}ms`);
       console.log(`📱 Running on: ${this.getDeviceInfo()}`);
       
-    } catch (error) {
-      console.error('❌ Failed to initialize Local AI:', error);
+    } catch (error: any) {
+      console.error('❌ Failed to initialize Local AI:', error?.message || error?.toString() || 'Unknown error');
+      console.error('Full error:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
       throw error;
     }
   }
