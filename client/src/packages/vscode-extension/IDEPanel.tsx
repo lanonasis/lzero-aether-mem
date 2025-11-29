@@ -28,9 +28,9 @@ import {
   CollapsibleContent,
 } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { MOCK_MEMORIES } from '../shared/mock-data';
 import { useAuth } from './hooks/useAuth';
 import { useMemories } from './hooks/useMemories';
+import { useApiKeys } from './hooks/useApiKeys';
 import { MemoryCard } from './components/MemoryCard';
 import { SearchBar } from './components/SearchBar';
 import { ChatInterface } from './components/ChatInterface';
@@ -104,9 +104,10 @@ const WelcomeView = ({ onLogin }: { onLogin: () => void }) => {
 };
 
 export const IDEPanel = () => {
-  const { isAuthenticated, login, logout } = useAuth();
-  const { searchQuery, setSearchQuery, filteredMemories } =
-    useMemories(MOCK_MEMORIES);
+  const { isAuthenticated, login, logout, isLoading: authLoading } = useAuth();
+  const { searchQuery, setSearchQuery, filteredMemories, isLoading: memoriesLoading } =
+    useMemories(isAuthenticated);
+  const { apiKeys, isLoading: keysLoading } = useApiKeys(isAuthenticated);
   const [chatInput, setChatInput] = useState('');
   const [showApiKeys, setShowApiKeys] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(true);

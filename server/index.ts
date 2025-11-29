@@ -16,6 +16,23 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false }));
 
+// Authentication middleware - for development/testing
+app.use((req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const apiKey = req.headers['x-api-key'];
+
+  if (authHeader?.startsWith('Bearer ')) {
+    req.user = { id: 'dev-user-1' };
+  } else if (apiKey) {
+    req.user = { id: 'dev-user-1' };
+  } else {
+    // Default dev user for testing
+    req.user = { id: 'dev-user-1' };
+  }
+
+  next();
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;

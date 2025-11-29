@@ -347,7 +347,7 @@ export const RichPanel = () => {
                 <span className="absolute -top-0.5 -right-0.5 h-2 w-2 bg-green-500 rounded-full border border-[#1E1E1E]" />
               )}
             </div>
-            <h1 className="text-sm font-bold tracking-tight text-white">Lanonasis Memory</h1>
+            <h1 className="text-sm font-bold tracking-tight text-white">LanOnasis Memory</h1>
         </div>
         
         <div className="flex items-center gap-1">
