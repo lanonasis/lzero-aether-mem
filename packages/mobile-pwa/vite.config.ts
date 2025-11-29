@@ -91,8 +91,9 @@ export default defineConfig({
     cors: true,
     headers: {
       // Required headers for SharedArrayBuffer (needed by some WASM)
+      // Using 'credentialless' to allow external resources
       'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'require-corp',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
     },
   },
 });

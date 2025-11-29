@@ -24,6 +24,11 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    target: 'esnext',
+  },
+  // Required for @xenova/transformers WASM support
+  optimizeDeps: {
+    exclude: ['@xenova/transformers'],
   },
   server: {
     host: "0.0.0.0",
@@ -32,5 +37,14 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
+    // Headers required for SharedArrayBuffer (WASM threading)
+    // Using 'credentialless' to allow external resources like Google Fonts
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'credentialless',
+    },
+  },
+  worker: {
+    format: 'es',
   },
 });
