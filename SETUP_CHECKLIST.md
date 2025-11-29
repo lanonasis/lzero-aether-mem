@@ -17,7 +17,7 @@ export interface IMemoryService {
   createMemory(userId: string, data: InsertMemory): Promise<Memory>;
   updateMemory(userId: string, id: string, updates: Partial<Memory>): Promise<Memory>;
   deleteMemory(userId: string, id: string): Promise<void>;
-  getMemoiesWithCache?(userId: string): Promise<Memory[]>;
+  getMemoriesWithCache?(userId: string): Promise<Memory[]>;
 }
 ```
 
