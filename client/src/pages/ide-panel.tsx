@@ -11,7 +11,6 @@ import {
   SendHorizontal,
   Copy,
   Check,
-  Brain,
   Zap,
   Key,
   LogOut,
@@ -23,6 +22,7 @@ import {
   Globe,
   Shield
 } from "lucide-react";
+import { LanoLogo } from "@/components/lano-logo";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -217,7 +217,7 @@ const WelcomeView = ({ onLogin }: { onLogin: () => void }) => {
         <div className="space-y-3">
           <div className="flex gap-3">
             <div className="mt-0.5">
-               <Brain className="h-4 w-4 text-[var(--vscode-button-background)]" />
+               <LanoLogo size={16} className="text-[var(--vscode-button-background)]" />
             </div>
             <div className="space-y-1">
               <h4 className="text-[12px] font-medium text-[var(--vscode-editor-foreground)]">Intelligent Memory</h4>
