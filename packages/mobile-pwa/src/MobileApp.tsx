@@ -510,22 +510,25 @@ const AIChatSheet = ({
   isOpen,
   onClose,
   memories,
+  onSearch,
 }: {
   isOpen: boolean;
   onClose: () => void;
   memories: Memory[];
+  onSearch: (query: string) => Promise<Memory[]>;
 }) => {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
       role: 'assistant',
-      content: "I'm your AI Memory Assistant. I can help you search and explore your memories semantically. Try asking me something like:\n\n• \"Find notes about API authentication\"\n• \"What did I save about React patterns?\"\n• \"Show me recent code snippets\"",
+      content: "I'm your AI Memory Assistant powered by semantic search. I can help you find memories using natural language.\n\n**Try asking:**\n• \"Find notes about API authentication\"\n• \"What did I save about React?\"\n• \"Show me recent code snippets\"\n\n*Using on-device AI when available, cloud AI as fallback.*",
       timestamp: new Date(),
     }
   ]);
   const [isThinking, setIsThinking] = useState(false);
-  const { embed, isReady: aiReady, findSimilar } = useLocalAI();
+  const [searchMode, setSearchMode] = useState<'local' | 'cloud' | 'text'>('local');
+  const { embed, isReady: aiReady } = useLocalAI();
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom
@@ -550,35 +553,63 @@ const AIChatSheet = ({
     setIsThinking(true);
 
     try {
-      // Use local AI to find similar memories
       let relevantMemories: Memory[] = [];
+      let usedMode: 'local' | 'cloud' | 'text' = 'text';
       
+      // Strategy 1: Try local AI first (ARM on-device)
       if (aiReady && embed) {
-        // Generate embedding for the query
-        const queryEmbedding = await embed(userMessage.content);
-        
-        // Find similar memories (simple text search as fallback)
-        relevantMemories = memories.filter(m => 
-          m.title.toLowerCase().includes(userMessage.content.toLowerCase()) ||
-          m.content.toLowerCase().includes(userMessage.content.toLowerCase())
-        ).slice(0, 5);
-      } else {
-        // Fallback to text search
-        relevantMemories = memories.filter(m => 
-          m.title.toLowerCase().includes(userMessage.content.toLowerCase()) ||
-          m.content.toLowerCase().includes(userMessage.content.toLowerCase())
-        ).slice(0, 5);
+        try {
+          console.log('🔍 Using LOCAL AI for semantic search...');
+          const startTime = performance.now();
+          
+          // Generate local embedding
+          const queryEmbedding = await embed(userMessage.content);
+          console.log(`⚡ Local embedding: ${(performance.now() - startTime).toFixed(0)}ms`);
+          
+          // Use remote search with local embedding (hybrid approach)
+          relevantMemories = await onSearch(userMessage.content);
+          usedMode = 'local';
+        } catch (localError) {
+          console.warn('⚠️ Local AI failed, trying cloud...', localError);
+        }
       }
+      
+      // Strategy 2: Fall back to remote API (OpenAI embeddings on server)
+      if (relevantMemories.length === 0 && !aiReady) {
+        try {
+          console.log('☁️ Using CLOUD AI for semantic search...');
+          relevantMemories = await onSearch(userMessage.content);
+          usedMode = 'cloud';
+        } catch (cloudError) {
+          console.warn('⚠️ Cloud search failed, using text search...', cloudError);
+        }
+      }
+      
+      // Strategy 3: Final fallback to simple text search
+      if (relevantMemories.length === 0) {
+        console.log('📝 Using TEXT search fallback...');
+        const query = userMessage.content.toLowerCase();
+        relevantMemories = memories.filter(m => 
+          m.title.toLowerCase().includes(query) ||
+          m.content.toLowerCase().includes(query)
+        ).slice(0, 5);
+        usedMode = 'text';
+      }
+      
+      setSearchMode(usedMode);
 
-      // Generate response
+      // Generate response with search mode indicator
       let responseContent = '';
+      const modeEmoji = usedMode === 'local' ? '🚀' : usedMode === 'cloud' ? '☁️' : '📝';
+      const modeLabel = usedMode === 'local' ? 'On-device AI' : usedMode === 'cloud' ? 'Cloud AI (OpenAI)' : 'Text search';
+      
       if (relevantMemories.length > 0) {
-        responseContent = `Found ${relevantMemories.length} relevant ${relevantMemories.length === 1 ? 'memory' : 'memories'}:\n\n`;
+        responseContent = `${modeEmoji} *${modeLabel}* found ${relevantMemories.length} ${relevantMemories.length === 1 ? 'memory' : 'memories'}:\n\n`;
         relevantMemories.forEach((m, i) => {
           responseContent += `**${i + 1}. ${m.title}**\n${m.content.slice(0, 150)}${m.content.length > 150 ? '...' : ''}\n\n`;
         });
       } else {
-        responseContent = "I couldn't find any memories matching your query. Try:\n\n• Using different keywords\n• Asking about a specific topic\n• Creating a new memory with the + button";
+        responseContent = `${modeEmoji} *${modeLabel}* - No matches found.\n\nTry:\n• Different keywords\n• More specific topics\n• Creating a new memory`;
       }
 
       const assistantMessage: ChatMessage = {
@@ -591,6 +622,7 @@ const AIChatSheet = ({
 
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
+      console.error('❌ Search error:', error);
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -737,7 +769,7 @@ const AIChatSheet = ({
 // ============================================
 export const MobileApp = () => {
   const { isAuthenticated, isConnecting, login, logout, user } = useLanonasis();
-  const { memories, isLoading, searchQuery, setSearchQuery, create } = useMemories();
+  const { memories, isLoading, searchQuery, setSearchQuery, create, search } = useMemories();
   const { initialize: initAI, isReady: aiReady } = useLocalAI();
   const [showCapture, setShowCapture] = useState(false);
   const [showChat, setShowChat] = useState(false);
@@ -977,6 +1009,7 @@ export const MobileApp = () => {
         isOpen={showChat}
         onClose={() => setShowChat(false)}
         memories={memories}
+        onSearch={search}
       />
     </div>
   );
