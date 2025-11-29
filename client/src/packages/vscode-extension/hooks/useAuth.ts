@@ -4,7 +4,6 @@ export const useAuth = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<{ id: string; name?: string } | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
 
   // Check stored auth on mount
   useEffect(() => {
@@ -88,7 +87,6 @@ export const useAuth = () => {
     isAuthenticated,
     isLoading,
     user,
-    isLoading,
     login,
     logout,
   };
