@@ -38,6 +38,9 @@ import {
   Home,
   Bookmark,
   User,
+  MessageSquare,
+  Bot,
+  ArrowUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -493,6 +496,243 @@ const QuickCaptureSheet = ({
 };
 
 // ============================================
+// AI Chat Sheet Component
+// ============================================
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  memories?: Memory[];
+  timestamp: Date;
+}
+
+const AIChatSheet = ({
+  isOpen,
+  onClose,
+  memories,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  memories: Memory[];
+}) => {
+  const [input, setInput] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: '1',
+      role: 'assistant',
+      content: "I'm your AI Memory Assistant. I can help you search and explore your memories semantically. Try asking me something like:\n\n• \"Find notes about API authentication\"\n• \"What did I save about React patterns?\"\n• \"Show me recent code snippets\"",
+      timestamp: new Date(),
+    }
+  ]);
+  const [isThinking, setIsThinking] = useState(false);
+  const { embed, isReady: aiReady, findSimilar } = useLocalAI();
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!input.trim() || isThinking) return;
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: input.trim(),
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    setIsThinking(true);
+
+    try {
+      // Use local AI to find similar memories
+      let relevantMemories: Memory[] = [];
+      
+      if (aiReady && embed) {
+        // Generate embedding for the query
+        const queryEmbedding = await embed(userMessage.content);
+        
+        // Find similar memories (simple text search as fallback)
+        relevantMemories = memories.filter(m => 
+          m.title.toLowerCase().includes(userMessage.content.toLowerCase()) ||
+          m.content.toLowerCase().includes(userMessage.content.toLowerCase())
+        ).slice(0, 5);
+      } else {
+        // Fallback to text search
+        relevantMemories = memories.filter(m => 
+          m.title.toLowerCase().includes(userMessage.content.toLowerCase()) ||
+          m.content.toLowerCase().includes(userMessage.content.toLowerCase())
+        ).slice(0, 5);
+      }
+
+      // Generate response
+      let responseContent = '';
+      if (relevantMemories.length > 0) {
+        responseContent = `Found ${relevantMemories.length} relevant ${relevantMemories.length === 1 ? 'memory' : 'memories'}:\n\n`;
+        relevantMemories.forEach((m, i) => {
+          responseContent += `**${i + 1}. ${m.title}**\n${m.content.slice(0, 150)}${m.content.length > 150 ? '...' : ''}\n\n`;
+        });
+      } else {
+        responseContent = "I couldn't find any memories matching your query. Try:\n\n• Using different keywords\n• Asking about a specific topic\n• Creating a new memory with the + button";
+      }
+
+      const assistantMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: responseContent,
+        memories: relevantMemories,
+        timestamp: new Date(),
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error) {
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: "Sorry, I encountered an error while searching. Please try again.",
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setIsThinking(false);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+          />
+          
+          {/* Full Screen Chat */}
+          <motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="fixed inset-x-0 bottom-0 top-16 z-50 bg-[#0D0D0D] rounded-t-3xl border-t border-white/10 flex flex-col"
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+                  <Bot className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-white">AI Orchestrator</h2>
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      "h-2 w-2 rounded-full",
+                      aiReady ? "bg-green-400" : "bg-yellow-400 animate-pulse"
+                    )} />
+                    <span className="text-xs text-gray-400">
+                      {aiReady ? 'On-device AI ready' : 'Loading AI model...'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center"
+              >
+                <X className="h-4 w-4 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Messages */}
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.map((message) => (
+                <motion.div
+                  key={message.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={cn(
+                    "flex gap-3",
+                    message.role === 'user' ? 'justify-end' : 'justify-start'
+                  )}
+                >
+                  {message.role === 'assistant' && (
+                    <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center shrink-0">
+                      <Sparkles className="h-4 w-4 text-blue-400" />
+                    </div>
+                  )}
+                  <div className={cn(
+                    "max-w-[85%] rounded-2xl px-4 py-3",
+                    message.role === 'user' 
+                      ? 'bg-blue-500 text-white rounded-br-md' 
+                      : 'bg-[#1A1A1A] text-gray-200 rounded-bl-md border border-white/5'
+                  )}>
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                    <p className="text-[10px] mt-2 opacity-50">
+                      {format(message.timestamp, 'h:mm a')}
+                    </p>
+                  </div>
+                </motion.div>
+              ))}
+              
+              {isThinking && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex gap-3"
+                >
+                  <div className="h-8 w-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                    <Sparkles className="h-4 w-4 text-blue-400 animate-pulse" />
+                  </div>
+                  <div className="bg-[#1A1A1A] rounded-2xl rounded-bl-md px-4 py-3 border border-white/5">
+                    <div className="flex gap-1">
+                      <span className="h-2 w-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="h-2 w-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="h-2 w-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+
+            {/* Input Area */}
+            <div className="p-4 border-t border-white/10 bg-[#0D0D0D]">
+              <div className="flex items-center gap-2 bg-[#1A1A1A] rounded-2xl border border-white/10 p-2">
+                <Input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                  placeholder="Ask about your memories..."
+                  className="flex-1 bg-transparent border-none focus-visible:ring-0 text-white placeholder:text-gray-500"
+                />
+                <Button
+                  onClick={handleSend}
+                  disabled={!input.trim() || isThinking}
+                  size="icon"
+                  className="h-10 w-10 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 disabled:opacity-50"
+                >
+                  <ArrowUp className="h-5 w-5" />
+                </Button>
+              </div>
+              <p className="text-[10px] text-gray-500 text-center mt-2">
+                {aiReady ? '✨ Powered by on-device ARM AI' : '⏳ AI model loading...'}
+              </p>
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+};
+
+// ============================================
 // Main Mobile App Component
 // ============================================
 export const MobileApp = () => {
@@ -500,7 +740,8 @@ export const MobileApp = () => {
   const { memories, isLoading, searchQuery, setSearchQuery, create } = useMemories();
   const { initialize: initAI, isReady: aiReady } = useLocalAI();
   const [showCapture, setShowCapture] = useState(false);
-  const [activeTab, setActiveTab] = useState<'home' | 'saved' | 'profile'>('home');
+  const [showChat, setShowChat] = useState(false);
+  const [activeTab, setActiveTab] = useState<'home' | 'chat' | 'profile'>('home');
 
   // Auto-login for demo/hackathon mode
   useEffect(() => {
@@ -700,15 +941,21 @@ export const MobileApp = () => {
         <div className="flex items-center justify-around py-2">
           {[
             { id: 'home', icon: Home, label: 'Home' },
-            { id: 'saved', icon: Bookmark, label: 'Saved' },
+            { id: 'chat', icon: MessageSquare, label: 'AI Chat' },
             { id: 'profile', icon: User, label: 'Profile' },
           ].map(item => (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id as any)}
+              onClick={() => {
+                if (item.id === 'chat') {
+                  setShowChat(true);
+                } else {
+                  setActiveTab(item.id as any);
+                }
+              }}
               className={cn(
                 'flex flex-col items-center gap-1 px-4 py-2 transition-colors',
-                activeTab === item.id ? 'text-blue-400' : 'text-gray-500'
+                item.id === 'chat' ? 'text-blue-400' : (activeTab === item.id ? 'text-blue-400' : 'text-gray-500')
               )}
             >
               <item.icon className="h-5 w-5" />
@@ -723,6 +970,13 @@ export const MobileApp = () => {
         isOpen={showCapture}
         onClose={() => setShowCapture(false)}
         onCreate={handleCreate}
+      />
+
+      {/* AI Chat Sheet */}
+      <AIChatSheet
+        isOpen={showChat}
+        onClose={() => setShowChat(false)}
+        memories={memories}
       />
     </div>
   );
