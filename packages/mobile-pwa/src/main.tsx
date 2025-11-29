@@ -69,6 +69,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         config={{
           baseUrl: import.meta.env.VITE_API_URL || 'https://api.lanonasis.com/api/v1',
           apiKey: import.meta.env.VITE_API_KEY,
+          organizationId: import.meta.env.VITE_ORGANIZATION_ID || 'ba2c1b22-3c4d-4a5b-aca3-881995d863d5',
           enableOffline: true,
           enableLocalAI: true,
         }}
