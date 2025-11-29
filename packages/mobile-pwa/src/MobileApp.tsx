@@ -511,11 +511,15 @@ const AIChatSheet = ({
   onClose,
   memories,
   onSearch,
+  aiReady,
+  embed,
 }: {
   isOpen: boolean;
   onClose: () => void;
   memories: Memory[];
   onSearch: (query: string) => Promise<Memory[]>;
+  aiReady: boolean;
+  embed: ((text: string) => Promise<number[]>) | null;
 }) => {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -528,7 +532,6 @@ const AIChatSheet = ({
   ]);
   const [isThinking, setIsThinking] = useState(false);
   const [searchMode, setSearchMode] = useState<'local' | 'cloud' | 'text'>('local');
-  const { embed, isReady: aiReady } = useLocalAI();
   const scrollRef = React.useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom
@@ -770,7 +773,7 @@ const AIChatSheet = ({
 export const MobileApp = () => {
   const { isAuthenticated, isConnecting, login, logout, user } = useLanonasis();
   const { memories, isLoading, searchQuery, setSearchQuery, create, search } = useMemories();
-  const { initialize: initAI, isReady: aiReady } = useLocalAI();
+  const { initialize: initAI, isReady: aiReady, embed } = useLocalAI();
   const [showCapture, setShowCapture] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [activeTab, setActiveTab] = useState<'home' | 'chat' | 'profile'>('home');
@@ -1010,6 +1013,8 @@ export const MobileApp = () => {
         onClose={() => setShowChat(false)}
         memories={memories}
         onSearch={search}
+        aiReady={aiReady}
+        embed={embed}
       />
     </div>
   );
