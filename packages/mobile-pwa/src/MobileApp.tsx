@@ -558,45 +558,58 @@ const AIChatSheet = ({
     try {
       let relevantMemories: Memory[] = [];
       let usedMode: 'local' | 'cloud' | 'text' = 'text';
+      let searchAttempted = false;
       
-      // Strategy 1: Try local AI first (ARM on-device)
+      // Strategy 1: Try semantic search (local AI + remote API)
       if (aiReady && embed) {
         try {
           console.log('🔍 Using LOCAL AI for semantic search...');
           const startTime = performance.now();
           
           // Generate local embedding
-          const queryEmbedding = await embed(userMessage.content);
+          await embed(userMessage.content);
           console.log(`⚡ Local embedding: ${(performance.now() - startTime).toFixed(0)}ms`);
           
-          // Use remote search with local embedding (hybrid approach)
+          // Use remote search (API uses OpenAI embeddings for comparison)
           relevantMemories = await onSearch(userMessage.content);
           usedMode = 'local';
+          searchAttempted = true;
+          console.log(`🔍 Semantic search returned ${relevantMemories.length} results`);
         } catch (localError) {
-          console.warn('⚠️ Local AI failed, trying cloud...', localError);
+          console.warn('⚠️ Local AI search failed:', localError);
         }
       }
       
-      // Strategy 2: Fall back to remote API (OpenAI embeddings on server)
-      if (relevantMemories.length === 0 && !aiReady) {
+      // Strategy 2: Fall back to cloud-only search if local AI not ready
+      if (!searchAttempted) {
         try {
           console.log('☁️ Using CLOUD AI for semantic search...');
           relevantMemories = await onSearch(userMessage.content);
           usedMode = 'cloud';
+          searchAttempted = true;
+          console.log(`☁️ Cloud search returned ${relevantMemories.length} results`);
         } catch (cloudError) {
-          console.warn('⚠️ Cloud search failed, using text search...', cloudError);
+          console.warn('⚠️ Cloud search failed:', cloudError);
         }
       }
       
-      // Strategy 3: Final fallback to simple text search
+      // Strategy 3: Text search fallback (if semantic search found nothing)
       if (relevantMemories.length === 0) {
-        console.log('📝 Using TEXT search fallback...');
+        console.log('📝 Using TEXT search as supplement...');
         const query = userMessage.content.toLowerCase();
-        relevantMemories = memories.filter(m => 
-          m.title.toLowerCase().includes(query) ||
-          m.content.toLowerCase().includes(query)
-        ).slice(0, 5);
-        usedMode = 'text';
+        const words = query.split(/\s+/).filter(w => w.length > 2);
+        
+        // More flexible text matching
+        relevantMemories = memories.filter(m => {
+          const text = `${m.title} ${m.content}`.toLowerCase();
+          return words.some(word => text.includes(word));
+        }).slice(0, 5);
+        
+        // Keep original mode if we tried semantic search
+        if (!searchAttempted) {
+          usedMode = 'text';
+        }
+        console.log(`📝 Text search found ${relevantMemories.length} results`);
       }
       
       setSearchMode(usedMode);
