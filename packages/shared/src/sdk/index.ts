@@ -221,7 +221,10 @@ class MemoryClient {
     if (!navigator.onLine && this.config.enableOffline) {
       const tempMemory: Memory = {
         id: `temp_${Date.now()}`,
-        ...input,
+        title: input.title,
+        content: input.content,
+        type: input.type || 'note',
+        tags: input.tags || [],
         createdAt: new Date(),
         updatedAt: new Date(),
         synced: false,
@@ -525,7 +528,7 @@ export class LanonasisClient {
     this.persistSession();
     this.config.onAuthChange?.(true);
 
-    return this.user;
+    return data.user;
   }
 
   /**
