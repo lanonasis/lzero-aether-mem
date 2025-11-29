@@ -72,6 +72,28 @@ class OfflineQueue {
   }
 }
 
+/**
+ * Normalize API response from snake_case to camelCase
+ * Handles the mismatch between MaaS API (snake_case) and SDK types (camelCase)
+ */
+function normalizeMemory(raw: any): Memory {
+  return {
+    id: raw.id,
+    title: raw.title || '',
+    content: raw.content || '',
+    type: raw.type || raw.memory_type || 'note',
+    tags: raw.tags || [],
+    createdAt: raw.created_at ? new Date(raw.created_at) : new Date(),
+    updatedAt: raw.updated_at ? new Date(raw.updated_at) : new Date(),
+    synced: raw.synced !== false, // Default to true unless explicitly false
+    embedding: raw.embedding,
+  };
+}
+
+function normalizeMemories(raw: any[]): Memory[] {
+  return (raw || []).map(normalizeMemory);
+}
+
 class MemoryClient {
   private baseUrl: string;
   private getToken: () => string | null;
@@ -160,8 +182,8 @@ class MemoryClient {
       const endpoint = query
         ? `/memory?q=${encodeURIComponent(query)}`
         : '/memory';
-      const response = await this.request<{ data: Memory[] }>(endpoint);
-      const memories = response.data || [];
+      const response = await this.request<{ data: any[] }>(endpoint);
+      const memories = normalizeMemories(response.data);
       
       // Update cache
       this.cache.set(cacheKey, { data: memories, timestamp: Date.now() });
@@ -199,11 +221,11 @@ class MemoryClient {
       payload.embedding = localEmbedding;
     }
 
-    const response = await this.request<{ data: Memory[] }>('/memory/search', {
+    const response = await this.request<{ data: any[] }>('/memory/search', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    return response.data || [];
+    return normalizeMemories(response.data);
   }
 
   /**
@@ -250,11 +272,11 @@ class MemoryClient {
       return tempMemory;
     }
 
-    const response = await this.request<{ data: Memory }>('/memory', {
+    const response = await this.request<{ data: any }>('/memory', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    return response.data;
+    return normalizeMemory(response.data);
   }
 
   /**
@@ -276,11 +298,11 @@ class MemoryClient {
       return cached?.data.find(m => m.id === id) as Memory;
     }
 
-    const response = await this.request<{ data: Memory }>(`/memory/${id}`, {
+    const response = await this.request<{ data: any }>(`/memory/${id}`, {
       method: 'PUT',
       body: JSON.stringify(input),
     });
-    return response.data;
+    return normalizeMemory(response.data);
   }
 
   /**
