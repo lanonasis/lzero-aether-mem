@@ -36,6 +36,13 @@ async function loadTransformers() {
     // Configure for browser/mobile use
     env.allowLocalModels = false;
     env.useBrowserCache = true;
+    
+    // Use CDN mirror for better reliability
+    // Options: 'https://huggingface.co' (default) or 'https://cdn-lfs.huggingface.co'
+    env.remoteHost = 'https://huggingface.co';
+    env.remotePathTemplate = '{model}/resolve/{revision}/';
+    
+    // WASM config for ARM devices
     env.backends.onnx.wasm.numThreads = 1; // Better for mobile ARM
     
     // Prefer WebGPU on compatible devices (ARM acceleration)

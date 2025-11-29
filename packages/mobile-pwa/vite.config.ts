@@ -99,10 +99,10 @@ export default defineConfig({
     // Enable CORS for testing on mobile devices
     cors: true,
     headers: {
-      // Required headers for SharedArrayBuffer (needed by some WASM)
-      // Using 'credentialless' to allow external resources
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'credentialless',
+      // Note: COEP/COOP disabled for dev to allow Hugging Face model downloads
+      // For production with SharedArrayBuffer, use 'credentialless' COEP
+      // 'Cross-Origin-Opener-Policy': 'same-origin',
+      // 'Cross-Origin-Embedder-Policy': 'credentialless',
     },
   },
 });
