@@ -502,6 +502,17 @@ export const MobileApp = () => {
   const [showCapture, setShowCapture] = useState(false);
   const [activeTab, setActiveTab] = useState<'home' | 'saved' | 'profile'>('home');
 
+  // Auto-login for demo/hackathon mode
+  useEffect(() => {
+    if (!isAuthenticated && !isConnecting) {
+      // Auto-login after a brief delay to show the splash
+      const timer = setTimeout(() => {
+        login().catch(console.error);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, isConnecting, login]);
+
   // Initialize AI on mount
   useEffect(() => {
     initAI().catch(console.error);
