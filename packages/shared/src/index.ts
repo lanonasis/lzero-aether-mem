@@ -1,6 +1,12 @@
 /**
  * LanOnasis Shared Package
- * Cross-platform SDK, AI Engine, and Types
+ * Cross-platform SDK, AI Engine, Types, and Theme
+ * 
+ * Used by:
+ * - Web Landing Page (client/)
+ * - Mobile PWA (packages/mobile-pwa/)
+ * - VS Code Extension
+ * - CLI
  */
 
 // SDK exports
@@ -22,6 +28,21 @@ export {
   type SummarizationResult,
   type ClassificationResult,
 } from './ai/embeddings';
+
+// Theme exports (design tokens for cross-platform consistency)
+export {
+  theme,
+  colors,
+  spacing,
+  typography,
+  borderRadius,
+  shadows,
+  animation,
+  breakpoints,
+  zIndex,
+  generateCssVariables,
+  tailwindTheme,
+} from './theme/index';
 
 // Type exports
 export type {
