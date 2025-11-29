@@ -14,6 +14,7 @@ const isMobile = !isNode && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent
 export interface LanonasisConfig {
   baseUrl?: string;
   apiKey?: string;
+  organizationId?: string;
   enableOffline?: boolean;
   enableLocalAI?: boolean;
   onAuthChange?: (authenticated: boolean) => void;
@@ -217,7 +218,12 @@ class MemoryClient {
       embedding = await this.embeddingEngine.embed(text);
     }
 
-    const payload = { ...input, embedding };
+    const payload = { 
+      ...input, 
+      embedding,
+      // Include organization_id if configured (required by MaaS API)
+      ...(this.config.organizationId && { organization_id: this.config.organizationId }),
+    };
 
     // Handle offline mode
     if (!navigator.onLine && this.config.enableOffline) {
