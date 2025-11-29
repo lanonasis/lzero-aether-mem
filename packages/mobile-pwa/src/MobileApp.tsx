@@ -17,7 +17,6 @@ import {
   Plus,
   Mic,
   Send,
-  Brain,
   Cpu,
   Wifi,
   WifiOff,
@@ -52,6 +51,7 @@ import {
   useSyncStatus 
 } from '@lanonasis/shared/sdk/react-hooks';
 import { Memory, MemoryType } from '@lanonasis/shared/types';
+import { LanoLogo } from './components/LanoLogo';
 
 // ============================================
 // Color Palette (matches VS Code extension)
@@ -101,7 +101,7 @@ const AIStatusBanner = () => {
       >
         <div className="flex items-center gap-3">
           <div className="relative">
-            <Brain className="h-5 w-5 text-purple-400 animate-pulse" />
+            <LanoLogo size={20} className="text-purple-400 animate-pulse" />
             <motion.div
               className="absolute inset-0 rounded-full border-2 border-purple-400"
               animate={{ scale: [1, 1.5, 1], opacity: [1, 0, 1] }}
@@ -451,7 +451,7 @@ const QuickCaptureSheet = ({
                     animate={{ opacity: 1, scale: 1 }}
                     className="absolute bottom-3 right-3 flex items-center gap-1 text-[10px] text-green-400"
                   >
-                    <Brain className="h-3 w-3" />
+                    <LanoLogo size={12} />
                     <span>AI will generate embedding</span>
                   </motion.div>
                 )}
@@ -534,7 +534,7 @@ export const MobileApp = () => {
             transition={{ duration: 2, repeat: Infinity }}
             className="h-20 w-20 mx-auto rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center"
           >
-            <Brain className="h-10 w-10 text-white" />
+            <LanoLogo size={40} className="text-white" />
           </motion.div>
           
           <div className="space-y-2">
@@ -547,7 +547,7 @@ export const MobileApp = () => {
           {/* Features */}
           <div className="grid grid-cols-2 gap-3 pt-4">
             <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-              <Brain className="h-5 w-5 text-blue-400 mb-2" />
+              <LanoLogo size={20} className="text-blue-400 mb-2" />
               <p className="text-xs text-gray-300">On-Device AI</p>
             </div>
             <div className="p-3 rounded-xl bg-white/5 border border-white/10">
@@ -599,7 +599,7 @@ export const MobileApp = () => {
         <div className="px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
-              <Brain className="h-4 w-4 text-white" />
+              <LanoLogo size={16} className="text-white" />
             </div>
             <span className="font-bold text-white">LanOnasis</span>
           </div>
@@ -636,7 +636,7 @@ export const MobileApp = () => {
                 variant="outline" 
                 className="text-[9px] bg-green-500/10 border-green-500/30 text-green-400"
               >
-                <Brain className="h-2.5 w-2.5 mr-1" />
+                <LanoLogo size={10} className="mr-1" />
                 Semantic
               </Badge>
             </div>
