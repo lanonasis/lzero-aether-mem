@@ -8,6 +8,7 @@ interface ChatInterfaceProps {
   onSend: () => void;
   isAuthenticated: boolean;
   disabled?: boolean;
+  onAttach?: () => void;
 }
 
 function PaperclipIcon(props: React.SVGProps<SVGSVGElement>) {
@@ -35,6 +36,7 @@ export const ChatInterface = ({
   onSend,
   isAuthenticated,
   disabled = false,
+  onAttach,
 }: ChatInterfaceProps) => {
   return (
     <div className="p-3 bg-[var(--vscode-sideBar-background)] border-t border-[var(--vscode-panel-border)]">
@@ -58,6 +60,7 @@ export const ChatInterface = ({
             variant="ghost"
             className="h-6 w-6 text-[var(--vscode-icon-foreground)] hover:bg-[var(--vscode-list-hoverBackground)] rounded-[2px]"
             disabled={!isAuthenticated || disabled}
+            onClick={onAttach}
             data-testid="btn-attach"
           >
             <PaperclipIcon className="h-3.5 w-3.5" />

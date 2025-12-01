@@ -8,11 +8,14 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     private readonly output: vscode.OutputChannel,
   ) {}
 
+  private view?: vscode.WebviewView;
+
   resolveWebviewView(
     webviewView: vscode.WebviewView,
     _context: vscode.WebviewViewResolveContext,
     _token: vscode.CancellationToken,
   ): void {
+    this.view = webviewView;
     const webview = webviewView.webview;
 
     webview.options = {
@@ -24,6 +27,58 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     );
 
     webview.html = this.getWebviewHtml(webview);
+
+    webview.onDidReceiveMessage((message) => {
+      if (!message || typeof message !== 'object') {
+        return;
+      }
+
+      if (message.type === 'lanonasis:webview-ready') {
+        this.output.appendLine('[LanOnasis] Webview reported ready');
+        webview.postMessage({ type: 'lanonasis:host-ready' });
+        return;
+      }
+
+      if (message.type === 'lanonasis:clipboard:read') {
+        vscode.env.clipboard.readText().then((text) => {
+          webview.postMessage({
+            type: 'lanonasis:clipboard:read:result',
+            payload: { text },
+          });
+        });
+        return;
+      }
+
+      if (message.type === 'lanonasis:clipboard:write') {
+        const text = (message as { payload?: { text?: string } }).payload?.text;
+        if (typeof text === 'string') {
+          vscode.env.clipboard.writeText(text).then(
+            undefined,
+            (err: unknown) => {
+              this.output.appendLine(
+                `[LanOnasis] Failed to write clipboard text: ${String(err)}`,
+              );
+            },
+          );
+        }
+        return;
+      }
+
+      const type = (message as { type?: string }).type ?? 'unknown';
+      this.output.appendLine(
+        `[LanOnasis] Received message from webview: type="${type}"`,
+      );
+    });
+  }
+  public postMessage(message: unknown) {
+    if (!this.view) {
+      this.output.appendLine(
+        '[LanOnasis] No active webview to post message to; ignoring message.',
+      );
+      return;
+    }
+
+    this.view.webview.postMessage(message);
   }
 
   private getWebviewHtml(webview: vscode.Webview): string {
@@ -93,6 +148,44 @@ export function activate(context: vscode.ExtensionContext) {
         'LanOnasis: Authentication will be handled by the browser panel for now.',
       );
     }),
+    vscode.commands.registerCommand(
+      'lanonasis.createMemoryFromSelection',
+      async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+          await vscode.window.showInformationMessage(
+            'LanOnasis: No active editor. Open a file and select some text first.',
+          );
+          return;
+        }
+
+        const selection = editor.selection;
+        const text = selection.isEmpty
+          ? editor.document.getText()
+          : editor.document.getText(selection);
+
+        if (!text.trim()) {
+          await vscode.window.showInformationMessage(
+            'LanOnasis: No text selected and document is empty.',
+          );
+          return;
+        }
+
+        output.appendLine(
+          '[LanOnasis] Sending selection to webview as create-from-selection payload',
+        );
+
+        provider.postMessage({
+          type: 'lanonasis:memory:createFromSelection',
+          payload: { text },
+        });
+
+        // Optionally ensure the LanOnasis view is visible
+        await vscode.commands.executeCommand(
+          'workbench.view.extension.lanonasis',
+        );
+      },
+    ),
   );
 
   output.appendLine('[LanOnasis] Extension activated');

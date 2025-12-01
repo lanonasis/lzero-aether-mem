@@ -36,6 +36,10 @@
       {
         "command": "lanonasis.authenticate",
         "title": "LanOnasis: Authenticate"
+      },
+      {
+        "command": "lanonasis.createMemoryFromSelection",
+        "title": "LanOnasis: Create Memory from Selection"
       }
     ],
     "configuration": {

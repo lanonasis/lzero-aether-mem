@@ -42,12 +42,32 @@ class MemorySidebarProvider {
         this.output = output;
     }
     resolveWebviewView(webviewView, _context, _token) {
+        this.view = webviewView;
         const webview = webviewView.webview;
         webview.options = {
             enableScripts: true,
         };
         this.output.appendLine('[LanOnasis] Initializing sidebar webview using bundled React UI');
         webview.html = this.getWebviewHtml(webview);
+        webview.onDidReceiveMessage((message) => {
+            if (!message || typeof message !== 'object') {
+                return;
+            }
+            if (message.type === 'lanonasis:webview-ready') {
+                this.output.appendLine('[LanOnasis] Webview reported ready');
+                webview.postMessage({ type: 'lanonasis:host-ready' });
+                return;
+            }
+            const type = message.type ?? 'unknown';
+            this.output.appendLine(`[LanOnasis] Received message from webview: type="${type}"`);
+        });
+    }
+    postMessage(message) {
+        if (!this.view) {
+            this.output.appendLine('[LanOnasis] No active webview to post message to; ignoring message.');
+            return;
+        }
+        this.view.webview.postMessage(message);
     }
     getWebviewHtml(webview) {
         const nonce = getNonce();
@@ -94,6 +114,27 @@ function activate(context) {
         output.appendLine('[LanOnasis] Authenticate command invoked');
         // TODO: In a later phase, wire this to OAuth/API key flows using SecretStorage.
         await vscode.window.showInformationMessage('LanOnasis: Authentication will be handled by the browser panel for now.');
+    }), vscode.commands.registerCommand('lanonasis.createMemoryFromSelection', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            await vscode.window.showInformationMessage('LanOnasis: No active editor. Open a file and select some text first.');
+            return;
+        }
+        const selection = editor.selection;
+        const text = selection.isEmpty
+            ? editor.document.getText()
+            : editor.document.getText(selection);
+        if (!text.trim()) {
+            await vscode.window.showInformationMessage('LanOnasis: No text selected and document is empty.');
+            return;
+        }
+        output.appendLine('[LanOnasis] Sending selection to webview as create-from-selection payload');
+        provider.postMessage({
+            type: 'lanonasis:memory:createFromSelection',
+            payload: { text },
+        });
+        // Optionally ensure the LanOnasis view is visible
+        await vscode.commands.executeCommand('workbench.view.extension.lanonasis');
     }));
     output.appendLine('[LanOnasis] Extension activated');
 }

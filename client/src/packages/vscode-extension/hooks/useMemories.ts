@@ -1,32 +1,47 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Memory } from '../../shared/types';
-import { apiClient } from '../services/apiClient';
+import { useLanonasis } from '@lanonasis/shared/sdk/react-hooks';
 
 export const useMemories = (isAuthenticated: boolean) => {
+  const { client, isAuthenticated: sdkAuthenticated } = useLanonasis();
   const [memories, setMemories] = useState<Memory[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const authenticated = isAuthenticated && sdkAuthenticated;
+
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!authenticated) return;
+
+    let isCancelled = false;
 
     const fetchMemories = async () => {
       setIsLoading(true);
       try {
-        const data = await apiClient.getMemories();
-        setMemories(Array.isArray(data) ? data : []);
-        setError(null);
+        const data = await client.memory.list();
+        if (!isCancelled) {
+          setMemories(Array.isArray(data) ? (data as Memory[]) : []);
+          setError(null);
+        }
       } catch (err) {
-        setError((err as Error).message);
-        console.error('Failed to fetch memories:', err);
+        if (!isCancelled) {
+          setError((err as Error).message);
+          console.error('Failed to fetch memories via /api/v1/memory:', err);
+        }
       } finally {
-        setIsLoading(false);
+        if (!isCancelled) {
+          setIsLoading(false);
+        }
       }
     };
 
     fetchMemories();
-  }, [isAuthenticated]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [authenticated, client]);
 
   const filteredMemories = useMemo(() => {
     return memories.filter(m =>
@@ -36,44 +51,49 @@ export const useMemories = (isAuthenticated: boolean) => {
   }, [memories, searchQuery]);
 
   const searchMemories = async (query: string) => {
-    if (!isAuthenticated) return;
+    if (!authenticated) return;
     try {
-      const results = await apiClient.searchMemories(query);
-      setMemories(Array.isArray(results) ? results : []);
+      const results = await client.memory.search(query);
+      setMemories(Array.isArray(results) ? (results as Memory[]) : []);
     } catch (err) {
-      console.error('Search failed:', err);
+      console.error('Search via /api/v1/memory/search failed:', err);
     }
   };
 
   const createMemory = async (data: any): Promise<Memory | undefined> => {
-    if (!isAuthenticated) return;
+    if (!authenticated) return;
     try {
-      const newMemory = (await apiClient.createMemory(data)) as Memory;
-      setMemories([...memories, newMemory]);
+      const created = await client.memory.create(data);
+      const newMemory = created as Memory;
+      setMemories(prev => [...prev, newMemory]);
       return newMemory;
     } catch (err) {
-      console.error('Failed to create memory:', err);
+      console.error('Failed to create memory via /api/v1/memory:', err);
     }
   };
 
-  const updateMemory = async (id: string, data: any): Promise<Memory | undefined> => {
-    if (!isAuthenticated) return;
+  const updateMemory = async (
+    id: string,
+    data: any,
+  ): Promise<Memory | undefined> => {
+    if (!authenticated) return;
     try {
-      const updated = (await apiClient.updateMemory(id, data)) as Memory;
-      setMemories(memories.map(m => (m.id === id ? updated : m)));
-      return updated;
+      const updated = await client.memory.update(id, data);
+      const updatedMemory = updated as Memory;
+      setMemories(prev => prev.map(m => (m.id === id ? updatedMemory : m)));
+      return updatedMemory;
     } catch (err) {
-      console.error('Failed to update memory:', err);
+      console.error('Failed to update memory via /api/v1/memory:', err);
     }
   };
 
   const deleteMemory = async (id: string) => {
-    if (!isAuthenticated) return;
+    if (!authenticated) return;
     try {
-      await apiClient.deleteMemory(id);
-      setMemories(memories.filter(m => m.id !== id));
+      await client.memory.delete(id);
+      setMemories(prev => prev.filter(m => m.id !== id));
     } catch (err) {
-      console.error('Failed to delete memory:', err);
+      console.error('Failed to delete memory via /api/v1/memory:', err);
     }
   };
 

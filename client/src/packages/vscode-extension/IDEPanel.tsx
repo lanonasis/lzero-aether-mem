@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Search,
   Plus,
@@ -103,15 +103,29 @@ const WelcomeView = ({ onLogin }: { onLogin: () => void }) => {
   );
 };
 
-export const IDEPanel = () => {
+interface IDEPanelProps {
+  initialChatInput?: string;
+  onAttachFromClipboard?: () => void;
+}
+
+export const IDEPanel: React.FC<IDEPanelProps> = ({
+  initialChatInput = '',
+  onAttachFromClipboard,
+}) => {
   const { isAuthenticated, login, logout, isLoading: authLoading } = useAuth();
   const { searchQuery, setSearchQuery, filteredMemories, isLoading: memoriesLoading } =
     useMemories(isAuthenticated);
   const { apiKeys, isLoading: keysLoading } = useApiKeys(isAuthenticated);
-  const [chatInput, setChatInput] = useState('');
+  const [chatInput, setChatInput] = useState(initialChatInput);
   const [showApiKeys, setShowApiKeys] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(true);
   const [isMemoriesOpen, setIsMemoriesOpen] = useState(true);
+
+  useEffect(() => {
+    if (initialChatInput !== undefined) {
+      setChatInput(initialChatInput);
+    }
+  }, [initialChatInput]);
 
   return (
     <ErrorBoundary>
@@ -303,6 +317,7 @@ export const IDEPanel = () => {
             onChange={setChatInput}
             onSend={() => setChatInput('')}
             isAuthenticated={isAuthenticated}
+            onAttach={onAttachFromClipboard}
           />
 
           {/* API Key Manager Modal */}

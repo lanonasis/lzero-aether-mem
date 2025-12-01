@@ -1,93 +1,45 @@
 import { useEffect, useState } from 'react';
+import { useLanonasis } from '@lanonasis/shared/sdk/react-hooks';
 
 export const useAuth = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [user, setUser] = useState<{ id: string; name?: string } | null>(null);
-
-  // Check stored auth on mount
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        // Try to fetch a protected endpoint to verify auth
-        const response = await fetch('/api/memories', {
-          headers: { 'Content-Type': 'application/json' },
-        });
-
-        if (response.ok) {
-          setIsAuthenticated(true);
-          setUser({ id: 'dev-user-1' });
-        } else {
-          setIsAuthenticated(false);
-          setUser(null);
-        }
-      } catch (err) {
-        console.error('Auth check failed:', err);
-        setIsAuthenticated(false);
-        setUser(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkAuth();
-  }, []);
-
-  const login = (userData?: { id: string; name?: string }) => {
-    setIsAuthenticated(true);
-    setUser(userData || { id: 'user-1' });
-    setIsLoading(false);
-  };
-
-  const logout = () => {
-    setIsAuthenticated(false);
-    setUser(null);
-    setIsLoading(false);
-  };
+  const { client, isAuthenticated, isConnecting, user, login, logout, error } =
+    useLanonasis();
+  const [isVerifying, setIsVerifying] = useState(true);
 
   useEffect(() => {
     let isCancelled = false;
 
-    const checkAuth = async () => {
-      try {
-        const response = await fetch('/api/memories', {
-          headers: { 'Content-Type': 'application/json' },
-        });
+    const verify = async () => {
+      if (!isAuthenticated) {
+        setIsVerifying(false);
+        return;
+      }
 
-        if (!isCancelled) {
-          if (response.ok) {
-            setIsAuthenticated(true);
-            setUser({ id: 'dev-user-1' });
-          } else {
-            setIsAuthenticated(false);
-            setUser(null);
-          }
-        }
+      try {
+        // This calls /api/v1/memory via the shared SDK (not /api/memories)
+        await client.memory.list();
       } catch (err) {
-        if (!isCancelled) {
-          console.error('Auth check failed:', err);
-          setIsAuthenticated(false);
-          setUser(null);
-        }
+        console.error('Auth verification via /api/v1/memory failed:', err);
       } finally {
         if (!isCancelled) {
-          setIsLoading(false);
+          setIsVerifying(false);
         }
       }
     };
 
-    checkAuth();
+    verify();
 
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [client, isAuthenticated]);
 
   return {
     isAuthenticated,
-    isLoading,
+    isLoading: isConnecting || isVerifying,
     user,
     login,
     logout,
+    error,
   };
 };

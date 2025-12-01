@@ -3,7 +3,15 @@ import { format } from 'date-fns';
 import { Copy, Check, Hash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Memory } from '../../../shared/types';
+import { Memory } from '../../../../shared/types';
+
+declare global {
+  interface Window {
+    vscode?: {
+      postMessage?: (message: unknown) => void;
+    };
+  }
+}
 
 export const MemoryCard = ({ memory }: { memory: Memory }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -11,7 +19,19 @@ export const MemoryCard = ({ memory }: { memory: Memory }) => {
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(memory.content);
+    const text = memory.content ?? '';
+
+    if (window.vscode && typeof window.vscode.postMessage === 'function') {
+      window.vscode.postMessage({
+        type: 'lanonasis:clipboard:write',
+        payload: { text },
+      });
+    } else if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(text).catch(() => {
+        // Ignore clipboard errors in plain web preview
+      });
+    }
+
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -55,7 +75,7 @@ export const MemoryCard = ({ memory }: { memory: Memory }) => {
             {format(memory.date, 'MMM d')}
           </span>
         </div>
-        {memory.tags?.map(tag => (
+        {memory.tags?.map((tag: string) => (
           <div
             key={tag}
             className="flex items-center gap-0.5 px-1 rounded bg-[var(--vscode-badge-background)]/10 text-[var(--vscode-editor-foreground)] opacity-60"
