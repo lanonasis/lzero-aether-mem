@@ -1,0 +1,73 @@
+{
+  "name": "@lanonasis/vscode-extension",
+  "displayName": "LanOnasis Memory",
+  "description": "LanOnasis Memory-as-a-Service companion for VS Code",
+  "version": "0.1.0",
+  "publisher": "lanonasis",
+  "private": true,
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": ["Other"],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onView:lanonasis.memorySidebar",
+    "onCommand:lanonasis.authenticate"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "lanonasis",
+          "title": "LanOnasis",
+          "icon": "./media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "lanonasis": [
+        {
+          "id": "lanonasis.memorySidebar",
+          "name": "LanOnasis Memory"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "lanonasis.authenticate",
+        "title": "LanOnasis: Authenticate"
+      }
+    ],
+    "configuration": {
+      "title": "LanOnasis",
+      "properties": {
+        "lanonasis.webAppUrl": {
+          "type": "string",
+          "default": "http://localhost:5001/vscode",
+          "description": "Development web app URL used by the sidebar webview (IDEPanel preview)."
+        },
+        "lanonasis.apiUrl": {
+          "type": "string",
+          "default": "https://api.lanonasis.com/api/v1",
+          "description": "Base URL for the LanOnasis Memory API."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "build:webview": "vite build --config vite.webview.config.ts",
+    "dev": "tsc -p . --watch",
+    "lint": "echo 'No lint configured for vscode-extension'",
+    "typecheck": "tsc -p . --noEmit",
+    "clean": "rm -rf out media/sidebar-react.* media/style.css"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.17",
+    "@types/node": "^20.19.0",
+    "@types/vscode": "^1.80.0",
+    "@vitejs/plugin-react": "^5.1.1",
+    "typescript": "^5.6.3",
+    "vite": "^7.2.4"
+  }
+}
