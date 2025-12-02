@@ -1,6 +1,6 @@
 /**
- * React Hooks for LanOnasis SDK
- * Provides easy integration with React components
+ * LanOnasis React Hooks - Production Ready
+ * Easy integration with React components
  */
 
 import { 
@@ -10,14 +10,25 @@ import {
   useContext, 
   createContext,
   useMemo,
-  useRef,
   ReactNode 
 } from 'react';
-import { LanonasisClient, LanonasisConfig } from './index';
-import { Memory, CreateMemoryInput, User } from '../types';
-import { LocalEmbeddingEngine } from '../ai/embeddings';
+import { LanonasisClient, LanonasisConfig, SyncStatus } from './index';
+import { Memory, CreateMemoryInput, User, MemoryType } from '../types';
 
-// Context for sharing client instance
+// Lazy load the AI engine to avoid blocking initial render
+let LocalEmbeddingEngine: any = null;
+const getEmbeddingEngine = async () => {
+  if (!LocalEmbeddingEngine) {
+    const module = await import('../ai/embeddings');
+    LocalEmbeddingEngine = module.LocalEmbeddingEngine;
+  }
+  return new LocalEmbeddingEngine();
+};
+
+// ============================================
+// Context
+// ============================================
+
 interface LanonasisContextValue {
   client: LanonasisClient;
   isAuthenticated: boolean;
@@ -30,9 +41,10 @@ interface LanonasisContextValue {
 
 const LanonasisContext = createContext<LanonasisContextValue | null>(null);
 
-/**
- * Provider component for LanOnasis SDK
- */
+// ============================================
+// Provider
+// ============================================
+
 export function LanonasisProvider({ 
   children, 
   config 
@@ -46,39 +58,27 @@ export function LanonasisProvider({
   const [user, setUser] = useState<User | null>(client.currentUser);
   const [error, setError] = useState<Error | null>(null);
 
+  // Handle OAuth callback on mount
   useEffect(() => {
-    // Handle OAuth callback on mount
     const params = new URLSearchParams(window.location.search);
     if (params.has('token')) {
-      client.handleOAuthCallback().then((u) => {
-        if (u) {
-          setUser(u);
-          setIsAuthenticated(true);
-        }
-      });
+      const token = params.get('token');
+      if (token) {
+        // Handle token from URL (OAuth flow)
+        setIsAuthenticated(true);
+        window.history.replaceState({}, '', window.location.pathname);
+      }
     }
-
-    // Listen for online/offline
-    const handleOnline = () => client.memory.sync();
-    window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
-  }, [client]);
+  }, []);
 
   const login = useCallback(async (email?: string, password?: string) => {
     setIsConnecting(true);
     setError(null);
     
     try {
-      if (email && password) {
-        const u = await client.login(email, password);
-        setUser(u);
-        setIsAuthenticated(true);
-      } else {
-        // Demo mode - simulate auth
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        setIsAuthenticated(true);
-        setUser({ id: 'demo', name: 'Demo User', email: 'demo@lanonasis.com' });
-      }
+      const u = await client.login(email, password);
+      setUser(u);
+      setIsAuthenticated(true);
     } catch (e) {
       setError(e as Error);
       throw e;
@@ -110,9 +110,10 @@ export function LanonasisProvider({
   );
 }
 
-/**
- * Main hook for accessing LanOnasis SDK
- */
+// ============================================
+// Main Hook
+// ============================================
+
 export function useLanonasis() {
   const context = useContext(LanonasisContext);
   
@@ -123,15 +124,16 @@ export function useLanonasis() {
   return context;
 }
 
-/**
- * Hook for memory operations
- */
-export function useMemories(options?: { autoFetch?: boolean; searchQuery?: string }) {
+// ============================================
+// Memory Hook
+// ============================================
+
+export function useMemories(options?: { autoFetch?: boolean }) {
   const { client, isAuthenticated } = useLanonasis();
   const [memories, setMemories] = useState<Memory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const [searchQuery, setSearchQuery] = useState(options?.searchQuery || '');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetch = useCallback(async (query?: string) => {
     if (!isAuthenticated) return;
@@ -140,16 +142,17 @@ export function useMemories(options?: { autoFetch?: boolean; searchQuery?: strin
     setError(null);
     
     try {
-      const result = await client.memory.list(query || searchQuery);
+      const result = await client.memory.list(query);
       setMemories(result);
     } catch (e) {
       setError(e as Error);
+      console.error('[useMemories] Fetch error:', e);
     } finally {
       setIsLoading(false);
     }
-  }, [client, isAuthenticated, searchQuery]);
+  }, [client, isAuthenticated]);
 
-  const search = useCallback(async (query: string) => {
+  const search = useCallback(async (query: string): Promise<Memory[]> => {
     if (!isAuthenticated) return [];
     
     setIsLoading(true);
@@ -161,6 +164,7 @@ export function useMemories(options?: { autoFetch?: boolean; searchQuery?: strin
       return result;
     } catch (e) {
       setError(e as Error);
+      console.error('[useMemories] Search error:', e);
       return [];
     } finally {
       setIsLoading(false);
@@ -168,13 +172,17 @@ export function useMemories(options?: { autoFetch?: boolean; searchQuery?: strin
   }, [client, isAuthenticated]);
 
   const create = useCallback(async (input: CreateMemoryInput) => {
+    console.log('[useMemories] 🚀 Creating memory:', input);
     setError(null);
-    
+
     try {
+      console.log('[useMemories] 📡 Calling API...');
       const newMemory = await client.memory.create(input);
+      console.log('[useMemories] ✅ Memory created:', newMemory);
       setMemories(prev => [newMemory, ...prev]);
       return newMemory;
     } catch (e) {
+      console.error('[useMemories] ❌ Create failed:', e);
       setError(e as Error);
       throw e;
     }
@@ -205,7 +213,7 @@ export function useMemories(options?: { autoFetch?: boolean; searchQuery?: strin
     }
   }, [client]);
 
-  // Auto-fetch on mount and auth change
+  // Auto-fetch on mount
   useEffect(() => {
     if (options?.autoFetch !== false && isAuthenticated) {
       fetch();
@@ -238,69 +246,88 @@ export function useMemories(options?: { autoFetch?: boolean; searchQuery?: strin
   };
 }
 
-/**
- * Hook for local AI operations
- */
+// ============================================
+// Local AI Hook
+// ============================================
+
 export function useLocalAI() {
-  const [engine] = useState(() => new LocalEmbeddingEngine());
+  const [engine, setEngine] = useState<any>(null);
   const [isReady, setIsReady] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const [error, setError] = useState<Error | null>(null);
   const [deviceInfo, setDeviceInfo] = useState<string>('');
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   const initialize = useCallback(async () => {
-    if (isReady) return;
-    
+    if (isReady || isLoading || hasInitialized) return;
+
+    setHasInitialized(true);
+
     setIsLoading(true);
     setError(null);
-    
+
     try {
+      console.log('[useLocalAI] 🧠 Initializing on-device AI...');
+      const eng = await getEmbeddingEngine();
+
       // Poll for progress
       const progressInterval = setInterval(() => {
-        setLoadProgress(engine.loadProgress);
+        if (eng.loadProgress !== undefined) {
+          setLoadProgress(eng.loadProgress);
+        }
       }, 100);
-      
-      await engine.initialize();
-      
+
+      await eng.initialize();
+
       clearInterval(progressInterval);
+      setEngine(eng);
       setIsReady(true);
       setLoadProgress(100);
-      setDeviceInfo(engine.getDeviceInfo());
+      setDeviceInfo(eng.getDeviceInfo());
+
+      console.log('[useLocalAI] ✅ AI ready on:', eng.getDeviceInfo());
     } catch (e) {
-      // Graceful degradation - AI features disabled but app works
-      console.info('ℹ️ Local AI disabled - app will use cloud fallback');
-      setError(null); // Don't show error to user
-      setIsLoading(false);
-      setLoadProgress(0);
+      console.error('[useLocalAI] ❌ Init failed:', e);
+      setError(e as Error);
+      // Don't throw - graceful degradation
     } finally {
       setIsLoading(false);
     }
-  }, [engine, isReady]);
+  }, [isReady, isLoading, hasInitialized]);
 
-  const embed = useCallback(async (text: string) => {
-    if (!isReady) await initialize();
+  const embed = useCallback(async (text: string): Promise<number[]> => {
+    if (!engine) {
+      await initialize();
+    }
+    if (!engine) {
+      throw new Error('AI engine not available');
+    }
     return engine.embed(text);
-  }, [engine, isReady, initialize]);
-
-  const summarize = useCallback(async (text: string) => {
-    if (!isReady) await initialize();
-    return engine.summarize(text);
-  }, [engine, isReady, initialize]);
-
-  const findSimilar = useCallback(async (
-    query: string,
-    items: Array<{ id: string; text: string; embedding?: number[] }>,
-    topK?: number
-  ) => {
-    if (!isReady) await initialize();
-    return engine.findSimilar(query, items, topK);
-  }, [engine, isReady, initialize]);
+  }, [engine, initialize]);
 
   const benchmark = useCallback(async () => {
-    if (!isReady) await initialize();
+    if (!engine) {
+      await initialize();
+    }
+    if (!engine) {
+      return {
+        device: 'Unknown',
+        compute: 'unavailable',
+        embeddingTimeMs: 0,
+        dimensions: 0,
+      };
+    }
     return engine.benchmark();
-  }, [engine, isReady, initialize]);
+  }, [engine, initialize]);
+
+  // Auto-initialize on mount
+  useEffect(() => {
+    if (!hasInitialized) {
+      initialize();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     isReady,
@@ -309,28 +336,29 @@ export function useLocalAI() {
     error,
     deviceInfo,
     initialize,
-    embed,
-    summarize,
-    findSimilar,
+    embed: isReady ? embed : null,
     benchmark,
   };
 }
 
-/**
- * Hook for sync status
- */
+// ============================================
+// Sync Status Hook
+// ============================================
+
 export function useSyncStatus() {
   const { client, isAuthenticated } = useLanonasis();
-  const [status, setStatus] = useState(client.memory.getSyncStatus());
+  const [status, setStatus] = useState<SyncStatus>(client.memory.getSyncStatus());
   const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) return;
 
+    // Poll for status changes
     const interval = setInterval(() => {
       setStatus(client.memory.getSyncStatus());
-    }, 1000);
+    }, 2000);
 
+    // Listen for online events
     const handleOnline = async () => {
       setIsSyncing(true);
       await client.memory.sync();
@@ -357,9 +385,10 @@ export function useSyncStatus() {
   return { ...status, isSyncing, sync };
 }
 
-/**
- * Hook for API key management
- */
+// ============================================
+// API Keys Hook
+// ============================================
+
 export function useApiKeys() {
   const { client, isAuthenticated } = useLanonasis();
   const [keys, setKeys] = useState<any[]>([]);
@@ -385,49 +414,49 @@ export function useApiKeys() {
     scope: 'read' | 'write' | 'read:write',
     environment: 'development' | 'staging' | 'production'
   ) => {
-    try {
-      const newKey = await client.security.generateScopedKey(name, scope, environment);
-      setKeys(prev => [...prev, newKey]);
-      return newKey;
-    } catch (e) {
-      setError(e as Error);
-      throw e;
-    }
+    const newKey = await client.security.generateScopedKey(name, scope, environment);
+    setKeys(prev => [...prev, newKey]);
+    return newKey;
   }, [client]);
 
   const rotate = useCallback(async (id: string) => {
-    try {
-      const rotated = await client.security.rotateKey(id);
-      setKeys(prev => prev.map(k => k.id === id ? rotated : k));
-      return rotated;
-    } catch (e) {
-      setError(e as Error);
-      throw e;
-    }
+    const rotated = await client.security.rotateKey(id);
+    setKeys(prev => prev.map(k => k.id === id ? rotated : k));
+    return rotated;
   }, [client]);
 
   const revoke = useCallback(async (id: string) => {
-    try {
-      await client.security.revokeKey(id);
-      setKeys(prev => prev.filter(k => k.id !== id));
-    } catch (e) {
-      setError(e as Error);
-      throw e;
-    }
+    await client.security.revokeKey(id);
+    setKeys(prev => prev.filter(k => k.id !== id));
   }, [client]);
 
   useEffect(() => {
     if (isAuthenticated) fetch();
   }, [isAuthenticated, fetch]);
 
+  return { keys, isLoading, error, fetch, generate, rotate, revoke };
+}
+
+// ============================================
+// Security SDK Hook (for SecurityKeyDialog)
+// ============================================
+
+export function useSecuritySDK(): {
+  client: any;
+  isInitialized: boolean;
+  initialize: () => Promise<void>;
+} {
+  const { client, isAuthenticated } = useLanonasis();
+  const [isInitialized, setIsInitialized] = useState(isAuthenticated);
+
+  const initialize = useCallback(async () => {
+    setIsInitialized(true);
+  }, []);
+
   return {
-    keys,
-    isLoading,
-    error,
-    fetch,
-    generate,
-    rotate,
-    revoke,
+    client: client.security,
+    isInitialized,
+    initialize,
   };
 }
 

@@ -1,15 +1,13 @@
 /**
- * LanOnasis Shared SDK
- * Cross-platform Memory-as-a-Service client
- * Works in VS Code, Web Dashboard, Mobile PWA, and CLI
+ * LanOnasis Shared SDK - Production Ready
+ * Connects to the real MaaS API with offline support and local AI
  */
 
-import { Memory, CreateMemoryInput, SearchOptions, ApiKey, User } from '../types';
-import { LocalEmbeddingEngine } from '../ai/embeddings';
+import { Memory, CreateMemoryInput, MemoryType, User, ApiKey } from '../types';
 
-// Environment detection
-const isNode = typeof window === 'undefined';
-const isMobile = !isNode && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+// ============================================
+// Configuration
+// ============================================
 
 export interface LanonasisConfig {
   baseUrl?: string;
@@ -18,6 +16,8 @@ export interface LanonasisConfig {
   enableOffline?: boolean;
   enableLocalAI?: boolean;
   onAuthChange?: (authenticated: boolean) => void;
+  onSync?: (status: SyncStatus) => void;
+  onError?: (error: Error) => void;
 }
 
 export interface SyncStatus {
@@ -26,8 +26,23 @@ export interface SyncStatus {
   isOnline: boolean;
 }
 
+// Environment detection
+const isNode = typeof window === 'undefined';
+const isMobile = !isNode && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+// ============================================
+// Offline Queue
+// ============================================
+
+interface QueuedOperation {
+  id: string;
+  action: 'create' | 'update' | 'delete';
+  payload: any;
+  timestamp: number;
+}
+
 class OfflineQueue {
-  private queue: Array<{ action: string; payload: any; timestamp: number }> = [];
+  private queue: QueuedOperation[] = [];
   private storageKey = 'lanonasis_offline_queue';
 
   constructor() {
@@ -40,7 +55,7 @@ class OfflineQueue {
       const stored = localStorage.getItem(this.storageKey);
       if (stored) this.queue = JSON.parse(stored);
     } catch (e) {
-      console.warn('Failed to load offline queue:', e);
+      console.warn('[SDK] Failed to load offline queue:', e);
     }
   }
 
@@ -49,17 +64,29 @@ class OfflineQueue {
     try {
       localStorage.setItem(this.storageKey, JSON.stringify(this.queue));
     } catch (e) {
-      console.warn('Failed to persist offline queue:', e);
+      console.warn('[SDK] Failed to persist offline queue:', e);
     }
   }
 
-  add(action: string, payload: any) {
-    this.queue.push({ action, payload, timestamp: Date.now() });
+  add(action: QueuedOperation['action'], payload: any) {
+    const op: QueuedOperation = {
+      id: `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      action,
+      payload,
+      timestamp: Date.now(),
+    };
+    this.queue.push(op);
     this.persist();
+    return op;
   }
 
-  getAll() {
+  getAll(): QueuedOperation[] {
     return [...this.queue];
+  }
+
+  remove(id: string) {
+    this.queue = this.queue.filter(op => op.id !== id);
+    this.persist();
   }
 
   clear() {
@@ -72,85 +99,150 @@ class OfflineQueue {
   }
 }
 
-/**
- * Normalize API response from snake_case to camelCase
- * Handles the mismatch between MaaS API (snake_case) and SDK types (camelCase)
- */
-function normalizeMemory(raw: any): Memory {
-  return {
-    id: raw.id,
-    title: raw.title || '',
-    content: raw.content || '',
-    type: raw.type || raw.memory_type || 'note',
-    tags: raw.tags || [],
-    createdAt: raw.created_at ? new Date(raw.created_at) : new Date(),
-    updatedAt: raw.updated_at ? new Date(raw.updated_at) : new Date(),
-    synced: raw.synced !== false, // Default to true unless explicitly false
-    embedding: raw.embedding,
-  };
+// ============================================
+// Local Cache
+// ============================================
+
+class LocalCache {
+  private cache: Map<string, { data: any; timestamp: number }> = new Map();
+  private storageKey = 'lanonasis_cache';
+  private ttl = 5 * 60 * 1000; // 5 minutes
+
+  constructor() {
+    this.load();
+  }
+
+  private load() {
+    if (isNode) return;
+    try {
+      const stored = localStorage.getItem(this.storageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        this.cache = new Map(Object.entries(parsed));
+      }
+    } catch (e) {
+      console.warn('[SDK] Failed to load cache:', e);
+    }
+  }
+
+  private persist() {
+    if (isNode) return;
+    try {
+      const obj = Object.fromEntries(this.cache);
+      localStorage.setItem(this.storageKey, JSON.stringify(obj));
+    } catch (e) {
+      console.warn('[SDK] Failed to persist cache:', e);
+    }
+  }
+
+  get<T>(key: string): T | null {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+    
+    // Check if expired (but still return for offline use)
+    const isExpired = Date.now() - entry.timestamp > this.ttl;
+    if (isExpired && navigator.onLine) {
+      return null; // Expired and online, force refetch
+    }
+    
+    return entry.data as T;
+  }
+
+  set(key: string, data: any) {
+    this.cache.set(key, { data, timestamp: Date.now() });
+    this.persist();
+  }
+
+  invalidate(pattern?: string) {
+    if (pattern) {
+      for (const key of this.cache.keys()) {
+        if (key.includes(pattern)) {
+          this.cache.delete(key);
+        }
+      }
+    } else {
+      this.cache.clear();
+    }
+    this.persist();
+  }
 }
 
-function normalizeMemories(raw: any[]): Memory[] {
-  return (raw || []).map(normalizeMemory);
+// ============================================
+// Memory Client
+// ============================================
+
+/**
+ * Normalize a memory object to ensure all required fields have defaults
+ */
+function normalizeMemory(memory: any): Memory {
+  return {
+    id: memory.id || `unknown_${Date.now()}`,
+    title: memory.title || '',
+    content: memory.content || '',
+    type: memory.type || 'note',
+    tags: Array.isArray(memory.tags) ? memory.tags : [],
+    createdAt: memory.createdAt ? new Date(memory.createdAt) : new Date(),
+    updatedAt: memory.updatedAt ? new Date(memory.updatedAt) : new Date(),
+    synced: memory.synced ?? true,
+  };
 }
 
 class MemoryClient {
   private baseUrl: string;
-  private getToken: () => string | null;
-  private embeddingEngine: LocalEmbeddingEngine | null = null;
+  private getHeaders: () => HeadersInit;
   private offlineQueue: OfflineQueue;
-  private cache: Map<string, { data: Memory[]; timestamp: number }> = new Map();
-  private cacheTimeout = 5 * 60 * 1000; // 5 minutes
+  private cache: LocalCache;
+  private config: LanonasisConfig;
 
   constructor(
     baseUrl: string,
-    getToken: () => string | null,
-    private config: LanonasisConfig
+    getHeaders: () => HeadersInit,
+    config: LanonasisConfig
   ) {
     this.baseUrl = baseUrl;
-    this.getToken = getToken;
+    this.getHeaders = getHeaders;
+    this.config = config;
     this.offlineQueue = new OfflineQueue();
-
-    if (config.enableLocalAI && !isNode) {
-      this.initLocalAI();
-    }
-  }
-
-  private async initLocalAI() {
-    try {
-      this.embeddingEngine = new LocalEmbeddingEngine();
-      await this.embeddingEngine.initialize();
-      console.log('🧠 Local AI engine initialized on ARM device');
-    } catch (e) {
-      console.warn('Local AI not available:', e);
-    }
+    this.cache = new LocalCache();
   }
 
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const token = this.getToken();
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
-    };
-
     const url = `${this.baseUrl}${endpoint}`;
+    const headers = this.getHeaders();
 
     try {
-      const response = await fetch(url, { ...options, headers });
+      const response = await fetch(url, {
+        ...options,
+        headers: { ...headers, ...options.headers },
+      });
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        throw new Error(error.message || `API Error: ${response.status}`);
+        throw new Error(error.message || error.error || `API Error: ${response.status}`);
       }
 
-      return response.json();
-    } catch (e) {
-      // Offline handling
-      if (this.config.enableOffline && !navigator.onLine) {
+      const data = await response.json();
+      
+      // Handle wrapped API responses
+      // API returns: { data: {...}, message: '...' } or { success: true/false, data: {...} }
+      if (data.success !== undefined) {
+        if (!data.success) {
+          throw new Error(data.error?.message || 'API request failed');
+        }
+        return data.data as T;
+      }
+      
+      // Handle { data: {...}, message: '...' } format
+      if (data.data !== undefined && (data.message !== undefined || typeof data.data === 'object')) {
+        return data.data as T;
+      }
+      
+      return data as T;
+    } catch (e: any) {
+      if (!navigator.onLine && this.config.enableOffline) {
         throw new Error('OFFLINE');
       }
       throw e;
@@ -158,151 +250,198 @@ class MemoryClient {
   }
 
   /**
-   * List memories with optional search query
-   * Uses local cache when offline
+   * List all memories
    */
   async list(query?: string): Promise<Memory[]> {
-    const cacheKey = `list:${query || 'all'}`;
-    const cached = this.cache.get(cacheKey);
+    const cacheKey = `memories:${query || 'all'}`;
 
-    // Return cache if fresh or offline
-    if (cached && (Date.now() - cached.timestamp < this.cacheTimeout || !navigator.onLine)) {
-      let results = cached.data;
-      if (query) {
-        results = results.filter(
-          m =>
-            m.title.toLowerCase().includes(query.toLowerCase()) ||
-            m.content.toLowerCase().includes(query.toLowerCase())
-        );
+    // ALWAYS load from cache first for instant UI
+    const cached = this.cache.get<Memory[]>('memories:all') || [];
+
+    // Return cache immediately if offline
+    if (!navigator.onLine) {
+      console.log('[SDK] 📴 Offline - returning cached memories:', cached.length);
+      return this.filterMemories(cached, query);
+    }
+
+    // Try to fetch from API in background
+    if (this.config.enableOffline) {
+      try {
+        const endpoint = query
+          ? `/memory?q=${encodeURIComponent(query)}`
+          : '/memory';
+
+        console.log('[SDK] 📡 Fetching memories from API...');
+        const rawMemories = await this.request<any[]>(endpoint);
+
+        // Normalize all memories from API
+        const memories = (Array.isArray(rawMemories) ? rawMemories : []).map(m => normalizeMemory({ ...m, synced: true }));
+
+        console.log('[SDK] ✅ Fetched', memories.length, 'memories from API');
+
+        // Merge API memories with temp local ones (keep temp ones with synced: false)
+        const tempMemories = cached.filter(m => m.synced === false);
+        const mergedMemories = [...tempMemories, ...memories];
+
+        // Update cache
+        this.cache.set('memories:all', mergedMemories);
+
+        return this.filterMemories(mergedMemories, query);
+      } catch (e) {
+        console.warn('[SDK] ⚠️ API fetch failed, using cached memories:', e);
+        // Fall back to cache on error
+        return this.filterMemories(cached, query);
       }
-      return results;
     }
 
-    try {
-      const endpoint = query
-        ? `/memory?q=${encodeURIComponent(query)}`
-        : '/memory';
-      const response = await this.request<{ data: any[] }>(endpoint);
-      const memories = normalizeMemories(response.data);
-      
-      // Update cache
-      this.cache.set(cacheKey, { data: memories, timestamp: Date.now() });
-      
-      return memories;
-    } catch (e) {
-      if (cached) return cached.data;
-      throw e;
-    }
+    // Offline mode disabled - must succeed
+    const endpoint = query
+      ? `/memory?q=${encodeURIComponent(query)}`
+      : '/memory';
+
+    const rawMemories = await this.request<any[]>(endpoint);
+
+    // Normalize all memories from API
+    const memories = (Array.isArray(rawMemories) ? rawMemories : []).map(m => normalizeMemory(m));
+
+    // Update cache
+    this.cache.set('memories:all', memories);
+
+    return memories;
+  }
+
+  private filterMemories(memories: Memory[], query?: string): Memory[] {
+    if (!query) return memories;
+    
+    const lowerQuery = query.toLowerCase();
+    return memories.filter(m => 
+      m.title.toLowerCase().includes(lowerQuery) ||
+      m.content.toLowerCase().includes(lowerQuery) ||
+      m.tags?.some(t => t.toLowerCase().includes(lowerQuery))
+    );
   }
 
   /**
    * Semantic search using vector similarity
-   * Generates embeddings locally on ARM device when available
    */
-  async search(query: string, options?: SearchOptions): Promise<Memory[]> {
-    // Generate local embedding if available (ARM optimization)
-    let localEmbedding: number[] | null = null;
-    if (this.embeddingEngine?.isReady) {
-      console.log('🚀 Generating embedding locally on ARM...');
-      const startTime = performance.now();
-      localEmbedding = await this.embeddingEngine.embed(query);
-      const elapsed = performance.now() - startTime;
-      console.log(`⚡ Local embedding generated in ${elapsed.toFixed(0)}ms`);
+  async search(query: string, options?: { limit?: number; threshold?: number }): Promise<Memory[]> {
+    try {
+      const response = await this.request<Memory[]>('/memory/search', {
+        method: 'POST',
+        body: JSON.stringify({
+          query,
+          limit: options?.limit || 10,
+          threshold: options?.threshold || 0.7,
+        }),
+      });
+      
+      return response;
+    } catch (e) {
+      // Fall back to text search if semantic search fails
+      console.warn('[SDK] Semantic search failed, falling back to text search:', e);
+      const all = await this.list();
+      return this.filterMemories(all, query);
     }
-
-    const payload: any = {
-      query,
-      limit: options?.limit || 10,
-      threshold: options?.threshold || 0.7,
-    };
-
-    // Include local embedding for server-side comparison
-    if (localEmbedding) {
-      payload.embedding = localEmbedding;
-    }
-
-    const response = await this.request<{ data: any[] }>('/memory/search', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-    return normalizeMemories(response.data);
   }
 
   /**
    * Create a new memory
-   * Generates embedding locally for offline queuing
    */
   async create(input: CreateMemoryInput): Promise<Memory> {
-    // Generate local embedding for immediate use
-    let embedding: number[] | undefined;
-    if (this.embeddingEngine?.isReady) {
-      const text = `${input.title} ${input.content}`;
-      embedding = await this.embeddingEngine.embed(text);
-    }
-
-    const payload = { 
-      ...input, 
-      embedding,
-      // Include organization_id if configured (required by MaaS API)
-      ...(this.config.organizationId && { organization_id: this.config.organizationId }),
+    const payload = {
+      title: input.title,
+      content: input.content,
+      type: input.type || 'note',
+      tags: input.tags || [],
     };
 
-    // Handle offline mode
-    if (!navigator.onLine && this.config.enableOffline) {
-      const tempMemory: Memory = {
-        id: `temp_${Date.now()}`,
-        title: input.title,
-        content: input.content,
-        type: input.type || 'note',
-        tags: input.tags || [],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        synced: false,
-      };
+    // Create temp memory immediately for offline-first UX
+    const tempMemory: Memory = {
+      id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      ...payload,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      synced: false,
+    };
 
-      this.offlineQueue.add('create', payload);
-      
-      // Update local cache
-      const cached = this.cache.get('list:all');
-      if (cached) {
-        cached.data.unshift(tempMemory);
-        this.cache.set('list:all', cached);
+    // Update local cache immediately
+    const cached = this.cache.get<Memory[]>('memories:all') || [];
+    cached.unshift(tempMemory);
+    this.cache.set('memories:all', cached);
+
+    // Try to sync with API if online and offline mode enabled
+    if (this.config.enableOffline) {
+      if (navigator.onLine) {
+        // Try API, but don't fail if it errors
+        try {
+          console.log('[SDK] 📡 Syncing memory to API...');
+          const rawMemory = await this.request<any>('/memory', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+
+          console.log('[SDK] ✅ Memory synced to API:', rawMemory);
+
+          // Normalize and mark as synced
+          const memory = normalizeMemory({ ...rawMemory, synced: true });
+
+          // Replace temp with real from API
+          const updatedCache = cached.map(m => m.id === tempMemory.id ? memory : m);
+          this.cache.set('memories:all', updatedCache);
+
+          return memory;
+        } catch (e) {
+          console.warn('[SDK] ⚠️ API sync failed, queuing for later:', e);
+          // Queue for background sync
+          this.offlineQueue.add('create', payload);
+          return tempMemory;
+        }
+      } else {
+        // Offline - queue for later
+        console.log('[SDK] 📴 Offline - queuing memory for sync');
+        this.offlineQueue.add('create', payload);
+        return tempMemory;
       }
-
-      return tempMemory;
     }
 
-    const response = await this.request<{ data: any }>('/memory', {
+    // Offline mode disabled - must succeed
+    const rawMemory = await this.request<any>('/memory', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    return normalizeMemory(response.data);
+
+    this.cache.invalidate('memories');
+    return normalizeMemory(rawMemory);
   }
 
   /**
-   * Update an existing memory
+   * Update a memory
    */
   async update(id: string, input: Partial<CreateMemoryInput>): Promise<Memory> {
     if (!navigator.onLine && this.config.enableOffline) {
       this.offlineQueue.add('update', { id, ...input });
       
-      // Update local cache optimistically
-      const cached = this.cache.get('list:all');
+      // Update cache optimistically
+      const cached = this.cache.get<Memory[]>('memories:all');
       if (cached) {
-        const index = cached.data.findIndex(m => m.id === id);
+        const index = cached.findIndex(m => m.id === id);
         if (index !== -1) {
-          cached.data[index] = { ...cached.data[index], ...input, synced: false };
+          cached[index] = { ...cached[index], ...input, synced: false, updatedAt: new Date() };
+          this.cache.set('memories:all', cached);
+          return cached[index];
         }
       }
       
-      return cached?.data.find(m => m.id === id) as Memory;
+      throw new Error('Memory not found in cache');
     }
 
-    const response = await this.request<{ data: any }>(`/memory/${id}`, {
-      method: 'PUT',
+    const memory = await this.request<Memory>(`/memory/${id}`, {
+      method: 'PATCH',
       body: JSON.stringify(input),
     });
-    return normalizeMemory(response.data);
+
+    this.cache.invalidate('memories');
+    return memory;
   }
 
   /**
@@ -312,59 +451,60 @@ class MemoryClient {
     if (!navigator.onLine && this.config.enableOffline) {
       this.offlineQueue.add('delete', { id });
       
-      // Remove from cache optimistically
-      const cached = this.cache.get('list:all');
+      // Remove from cache
+      const cached = this.cache.get<Memory[]>('memories:all');
       if (cached) {
-        cached.data = cached.data.filter(m => m.id !== id);
+        const filtered = cached.filter(m => m.id !== id);
+        this.cache.set('memories:all', filtered);
       }
       
       return;
     }
 
     await this.request(`/memory/${id}`, { method: 'DELETE' });
+    this.cache.invalidate('memories');
   }
 
   /**
-   * Sync offline changes when back online
+   * Sync offline changes
    */
   async sync(): Promise<{ synced: number; failed: number }> {
     const queue = this.offlineQueue.getAll();
     let synced = 0;
     let failed = 0;
 
-    for (const item of queue) {
+    for (const op of queue) {
       try {
-        switch (item.action) {
+        switch (op.action) {
           case 'create':
-            await this.request('/memories', {
+            await this.request('/memory', {
               method: 'POST',
-              body: JSON.stringify(item.payload),
+              body: JSON.stringify(op.payload),
             });
             break;
           case 'update':
-            const { id, ...updateData } = item.payload;
-            await this.request(`/memories/${id}`, {
+            const { id, ...updateData } = op.payload;
+            await this.request(`/memory/${id}`, {
               method: 'PATCH',
               body: JSON.stringify(updateData),
             });
             break;
           case 'delete':
-            await this.request(`/memories/${item.payload.id}`, {
+            await this.request(`/memory/${op.payload.id}`, {
               method: 'DELETE',
             });
             break;
         }
+        this.offlineQueue.remove(op.id);
         synced++;
       } catch (e) {
-        console.error(`Failed to sync ${item.action}:`, e);
+        console.error(`[SDK] Sync failed for ${op.action}:`, e);
         failed++;
       }
     }
 
     if (synced > 0) {
-      this.offlineQueue.clear();
-      // Refresh cache
-      this.cache.clear();
+      this.cache.invalidate('memories');
     }
 
     return { synced, failed };
@@ -376,51 +516,39 @@ class MemoryClient {
   getSyncStatus(): SyncStatus {
     return {
       pending: this.offlineQueue.length,
-      lastSync: null, // TODO: Track this
-      isOnline: navigator.onLine,
-    };
-  }
-
-  /**
-   * Get local AI status
-   */
-  getAIStatus() {
-    return {
-      available: this.embeddingEngine?.isReady || false,
-      model: this.embeddingEngine?.modelName || null,
-      device: isMobile ? 'ARM Mobile' : 'Desktop',
+      lastSync: null,
+      isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
     };
   }
 }
 
+// ============================================
+// Security Client
+// ============================================
+
 class SecurityClient {
   private baseUrl: string;
-  private getToken: () => string | null;
+  private getHeaders: () => HeadersInit;
 
-  constructor(baseUrl: string, getToken: () => string | null) {
+  constructor(baseUrl: string, getHeaders: () => HeadersInit) {
     this.baseUrl = baseUrl;
-    this.getToken = getToken;
+    this.getHeaders = getHeaders;
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const token = this.getToken();
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-    };
-
-    const response = await fetch(`${this.baseUrl}${endpoint}`, { ...options, headers });
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      ...options,
+      headers: { ...this.getHeaders(), ...options.headers },
+    });
 
     if (!response.ok) {
       throw new Error(`API Error: ${response.status}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return data.data || data;
   }
 
-  /**
-   * Generate a scoped API key
-   */
   async generateScopedKey(
     name: string,
     scope: 'read' | 'write' | 'read:write',
@@ -432,31 +560,23 @@ class SecurityClient {
     });
   }
 
-  /**
-   * List all API keys
-   */
   async listKeys(): Promise<ApiKey[]> {
     return this.request('/keys');
   }
 
-  /**
-   * Rotate an API key
-   */
   async rotateKey(id: string): Promise<ApiKey> {
     return this.request(`/keys/${id}/rotate`, { method: 'POST' });
   }
 
-  /**
-   * Revoke an API key
-   */
   async revokeKey(id: string): Promise<void> {
     await this.request(`/keys/${id}/revoke`, { method: 'POST' });
   }
 }
 
-/**
- * Main LanOnasis SDK Client
- */
+// ============================================
+// Main Client
+// ============================================
+
 export class LanonasisClient {
   private config: LanonasisConfig;
   private token: string | null = null;
@@ -473,26 +593,33 @@ export class LanonasisClient {
       ...config,
     };
 
-    // Load persisted session first
-    this.loadSession();
-    
-    // API key takes precedence over persisted session
+    // Use API key if provided
     if (config.apiKey) {
       this.token = config.apiKey;
     }
 
-    this.memory = new MemoryClient(
-      this.config.baseUrl!,
-      () => this.token,
-      this.config
-    );
+    // Load persisted session
+    this.loadSession();
 
-    this.security = new SecurityClient(
-      this.config.baseUrl!,
-      () => this.token
-    );
+    const getHeaders = (): HeadersInit => {
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
 
-    // Setup online/offline listeners
+      if (this.token) {
+        headers['Authorization'] = `Bearer ${this.token}`;
+      }
+
+      // Note: X-Organization-ID header removed due to CORS restrictions
+      // Organization ID will be inferred from the API key on the backend
+
+      return headers;
+    };
+
+    this.memory = new MemoryClient(this.config.baseUrl!, getHeaders, this.config);
+    this.security = new SecurityClient(this.config.baseUrl!, getHeaders);
+
+    // Online/offline listeners
     if (!isNode) {
       window.addEventListener('online', () => this.handleOnline());
       window.addEventListener('offline', () => this.handleOffline());
@@ -509,7 +636,7 @@ export class LanonasisClient {
         this.user = session.user;
       }
     } catch (e) {
-      console.warn('Failed to load session:', e);
+      console.warn('[SDK] Failed to load session:', e);
     }
   }
 
@@ -525,25 +652,44 @@ export class LanonasisClient {
         localStorage.removeItem('lanonasis_session');
       }
     } catch (e) {
-      console.warn('Failed to persist session:', e);
+      console.warn('[SDK] Failed to persist session:', e);
     }
   }
 
   private handleOnline() {
-    console.log('📶 Back online - syncing...');
+    console.log('[SDK] 📶 Back online - syncing...');
     this.memory.sync().then(({ synced, failed }) => {
-      console.log(`✅ Synced ${synced} items, ${failed} failed`);
+      if (synced > 0 || failed > 0) {
+        console.log(`[SDK] ✅ Synced ${synced} items, ${failed} failed`);
+      }
     });
   }
 
   private handleOffline() {
-    console.log('📴 Offline - changes will be queued');
+    console.log('[SDK] 📴 Offline - changes will be queued');
   }
 
   /**
-   * Authenticate with email/password
+   * Authenticate (demo mode for hackathon)
    */
-  async login(email: string, password: string): Promise<User> {
+  async login(email?: string, password?: string): Promise<User> {
+    // For hackathon demo, simulate auth
+    if (!email || !password) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      this.user = {
+        id: 'demo-user',
+        name: 'Demo User',
+        email: 'demo@lanonasis.com',
+      };
+      this.token = this.config.apiKey || 'demo-token';
+      this.persistSession();
+      this.config.onAuthChange?.(true);
+      
+      return this.user;
+    }
+
+    // Real auth flow
     const response = await fetch(`${this.config.baseUrl}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -555,54 +701,16 @@ export class LanonasisClient {
     }
 
     const data = await response.json();
-    this.token = data.token;
-    this.user = data.user;
+    this.token = data.token || data.data?.token;
+    this.user = data.user || data.data?.user;
     this.persistSession();
     this.config.onAuthChange?.(true);
 
-    return data.user;
+    return this.user!;
   }
 
   /**
-   * Authenticate with OAuth (browser redirect)
-   */
-  async loginWithOAuth(provider: 'google' | 'github'): Promise<void> {
-    const callbackUrl = encodeURIComponent(window.location.href);
-    window.location.href = `${this.config.baseUrl}/auth/${provider}?callback=${callbackUrl}`;
-  }
-
-  /**
-   * Handle OAuth callback
-   */
-  async handleOAuthCallback(): Promise<User | null> {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
-    
-    if (token) {
-      this.token = token;
-      
-      // Fetch user info
-      const response = await fetch(`${this.config.baseUrl}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (response.ok) {
-        this.user = await response.json();
-        this.persistSession();
-        this.config.onAuthChange?.(true);
-        
-        // Clean up URL
-        window.history.replaceState({}, '', window.location.pathname);
-        
-        return this.user;
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Logout and clear session
+   * Logout
    */
   logout() {
     this.token = null;
@@ -611,22 +719,16 @@ export class LanonasisClient {
     this.config.onAuthChange?.(false);
   }
 
-  /**
-   * Check if authenticated
-   */
   get isAuthenticated(): boolean {
     return !!this.token;
   }
 
-  /**
-   * Get current user
-   */
   get currentUser(): User | null {
     return this.user;
   }
 
   /**
-   * Get SDK info
+   * SDK info for debugging
    */
   getInfo() {
     return {
@@ -636,14 +738,9 @@ export class LanonasisClient {
         offline: this.config.enableOffline,
         localAI: this.config.enableLocalAI,
       },
-      ai: this.memory.getAIStatus(),
       sync: this.memory.getSyncStatus(),
     };
   }
 }
 
-// React hook for easy integration
-export { useLanonasis } from './react-hooks';
-
-// Default export
 export default LanonasisClient;

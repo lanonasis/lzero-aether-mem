@@ -3,10 +3,6 @@
  * Enables offline-first functionality for the mobile app
  */
 
-/// <reference lib="webworker" />
-
-declare const self: ServiceWorkerGlobalScope;
-
 const CACHE_NAME = 'lanonasis-v2.0.0';
 const STATIC_CACHE = 'lanonasis-static-v2.0.0';
 const DYNAMIC_CACHE = 'lanonasis-dynamic-v2.0.0';
@@ -17,20 +13,12 @@ const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/offline.html',
-  // Add your bundled assets here
 ];
 
 // AI model files to cache (from transformers.js CDN)
 const AI_MODEL_PATTERNS = [
-  'https://huggingface.co/',
-  'https://cdn-lfs.huggingface.co/',
-];
-
-// API endpoints that should work offline with cached data
-const CACHED_API_ENDPOINTS = [
-  '/api/v1/memories',
-  '/api/v1/user/me',
+  'huggingface.co',
+  'cdn-lfs.huggingface.co',
 ];
 
 // ============================================
@@ -41,12 +29,10 @@ self.addEventListener('install', (event) => {
   
   event.waitUntil(
     Promise.all([
-      // Cache static assets
       caches.open(STATIC_CACHE).then((cache) => {
         console.log('[SW] Caching static assets');
         return cache.addAll(STATIC_ASSETS);
       }),
-      // Skip waiting to activate immediately
       self.skipWaiting(),
     ])
   );
@@ -60,7 +46,6 @@ self.addEventListener('activate', (event) => {
   
   event.waitUntil(
     Promise.all([
-      // Clean up old caches
       caches.keys().then((keys) => {
         return Promise.all(
           keys
@@ -75,7 +60,6 @@ self.addEventListener('activate', (event) => {
             })
         );
       }),
-      // Take control of all pages immediately
       self.clients.claim(),
     ])
   );
@@ -85,7 +69,7 @@ self.addEventListener('activate', (event) => {
 // Fetch Handling
 // ============================================
 self.addEventListener('fetch', (event) => {
-  const { request } = event;
+  const request = event.request;
   const url = new URL(request.url);
 
   // Skip non-GET requests
@@ -105,7 +89,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Handle static assets (cache first, network fallback)
+  // Handle static assets (stale-while-revalidate)
   event.respondWith(handleStaticRequest(request));
 });
 
@@ -113,7 +97,7 @@ self.addEventListener('fetch', (event) => {
 // Request Handlers
 // ============================================
 
-async function handleStaticRequest(request: Request): Promise<Response> {
+async function handleStaticRequest(request) {
   const cachedResponse = await caches.match(request);
   
   if (cachedResponse) {
@@ -132,33 +116,31 @@ async function handleStaticRequest(request: Request): Promise<Response> {
     
     return networkResponse;
   } catch (error) {
-    // Return offline page for navigation requests
+    // Return a basic offline response for navigation
     if (request.mode === 'navigate') {
-      const offlinePage = await caches.match('/offline.html');
-      if (offlinePage) return offlinePage;
+      return new Response(
+        '<!DOCTYPE html><html><body><h1>Offline</h1><p>Please check your connection.</p></body></html>',
+        { headers: { 'Content-Type': 'text/html' } }
+      );
     }
-    
     throw error;
   }
 }
 
-async function handleAPIRequest(request: Request): Promise<Response> {
+async function handleAPIRequest(request) {
   const url = new URL(request.url);
-  const cacheKey = url.pathname;
+  const cacheKey = url.pathname + url.search;
 
   try {
-    // Try network first
     const networkResponse = await fetch(request);
     
     if (networkResponse.ok) {
-      // Cache successful API responses
       const cache = await caches.open(DYNAMIC_CACHE);
       cache.put(cacheKey, networkResponse.clone());
     }
     
     return networkResponse;
   } catch (error) {
-    // Network failed, try cache
     const cachedResponse = await caches.match(cacheKey);
     
     if (cachedResponse) {
@@ -166,7 +148,6 @@ async function handleAPIRequest(request: Request): Promise<Response> {
       return cachedResponse;
     }
     
-    // Return offline JSON response
     return new Response(
       JSON.stringify({
         success: false,
@@ -181,8 +162,7 @@ async function handleAPIRequest(request: Request): Promise<Response> {
   }
 }
 
-async function handleAIModelRequest(request: Request): Promise<Response> {
-  // AI models should be heavily cached (they're large and don't change)
+async function handleAIModelRequest(request) {
   const cachedResponse = await caches.match(request);
   
   if (cachedResponse) {
@@ -207,10 +187,9 @@ async function handleAIModelRequest(request: Request): Promise<Response> {
   }
 }
 
-async function fetchAndCache(request: Request, cacheName: string): Promise<void> {
+async function fetchAndCache(request, cacheName) {
   try {
     const response = await fetch(request);
-    
     if (response.ok) {
       const cache = await caches.open(cacheName);
       cache.put(request, response);
@@ -231,92 +210,16 @@ self.addEventListener('sync', (event) => {
   }
 });
 
-async function syncMemories(): Promise<void> {
-  try {
-    // Get pending operations from IndexedDB
-    const pendingOps = await getPendingOperations();
-    
-    if (pendingOps.length === 0) return;
-
-    console.log('[SW] Syncing', pendingOps.length, 'pending operations');
-
-    for (const op of pendingOps) {
-      try {
-        const response = await fetch('/api/v1/memories', {
-          method: op.method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(op.data),
-        });
-
-        if (response.ok) {
-          await removePendingOperation(op.id);
-        }
-      } catch (error) {
-        console.error('[SW] Sync failed for operation:', op.id);
-      }
-    }
-
-    // Notify clients of sync completion
-    const clients = await self.clients.matchAll();
-    clients.forEach((client) => {
-      client.postMessage({
-        type: 'SYNC_COMPLETE',
-        timestamp: Date.now(),
-      });
+async function syncMemories() {
+  // Notify clients of sync
+  const clients = await self.clients.matchAll();
+  clients.forEach((client) => {
+    client.postMessage({
+      type: 'SYNC_COMPLETE',
+      timestamp: Date.now(),
     });
-  } catch (error) {
-    console.error('[SW] Background sync failed:', error);
-  }
+  });
 }
-
-// IndexedDB helpers (simplified)
-async function getPendingOperations(): Promise<any[]> {
-  // In production, implement proper IndexedDB access
-  return [];
-}
-
-async function removePendingOperation(id: string): Promise<void> {
-  // In production, implement proper IndexedDB access
-}
-
-// ============================================
-// Push Notifications
-// ============================================
-self.addEventListener('push', (event) => {
-  if (!event.data) return;
-
-  const data = event.data.json();
-  
-  event.waitUntil(
-    self.registration.showNotification(data.title || 'LanOnasis', {
-      body: data.body || 'You have a new notification',
-      icon: '/icons/icon-192x192.png',
-      badge: '/icons/badge-72x72.png',
-      tag: data.tag || 'default',
-      data: data.data,
-      actions: data.actions || [],
-    })
-  );
-});
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-
-  const urlToOpen = event.notification.data?.url || '/';
-
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window' }).then((clients) => {
-      // Focus existing window if available
-      for (const client of clients) {
-        if (client.url === urlToOpen && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      // Open new window
-      return self.clients.openWindow(urlToOpen);
-    })
-  );
-});
 
 // ============================================
 // Message Handling
@@ -324,7 +227,7 @@ self.addEventListener('notificationclick', (event) => {
 self.addEventListener('message', (event) => {
   console.log('[SW] Received message:', event.data);
 
-  switch (event.data.type) {
+  switch (event.data?.type) {
     case 'SKIP_WAITING':
       self.skipWaiting();
       break;
@@ -333,14 +236,6 @@ self.addEventListener('message', (event) => {
       caches.keys().then((keys) => {
         keys.forEach((key) => caches.delete(key));
       });
-      break;
-      
-    case 'CACHE_AI_MODEL':
-      if (event.data.url) {
-        caches.open(AI_MODEL_CACHE).then((cache) => {
-          cache.add(event.data.url);
-        });
-      }
       break;
   }
 });

@@ -1,6 +1,6 @@
 /**
  * LanOnasis Shared Types
- * Used across VS Code Extension, Web Dashboard, Mobile PWA, and CLI
+ * Compatible with the real MaaS API
  */
 
 import { LucideIcon } from 'lucide-react';
@@ -16,11 +16,15 @@ export interface Memory {
   type: MemoryType;
   tags: string[];
   embedding?: number[];
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Date | string;
+  updatedAt: Date | string;
   synced?: boolean;
   
-  // UI helpers (optional, for display)
+  // API may return these
+  user_id?: string;
+  organization_id?: string;
+  
+  // UI helpers (optional)
   icon?: LucideIcon;
 }
 
@@ -39,6 +43,7 @@ export interface CreateMemoryInput {
   content: string;
   type?: MemoryType;
   tags?: string[];
+  embedding?: number[];
 }
 
 export interface SearchOptions {
@@ -46,19 +51,10 @@ export interface SearchOptions {
   threshold?: number;
   types?: MemoryType[];
   tags?: string[];
-  dateRange?: {
-    from?: Date;
-    to?: Date;
-  };
-}
-
-export interface SearchResult extends Memory {
-  score: number;
-  highlight?: string;
 }
 
 // ============================================
-// User & Authentication
+// User & Auth
 // ============================================
 
 export interface User {
@@ -66,17 +62,10 @@ export interface User {
   name?: string;
   email: string;
   avatar?: string;
-  createdAt?: Date;
-}
-
-export interface AuthSession {
-  token: string;
-  user: User;
-  expiresAt: Date;
 }
 
 // ============================================
-// API Keys & Security
+// API Keys
 // ============================================
 
 export interface ApiKey {
@@ -84,14 +73,13 @@ export interface ApiKey {
   name: string;
   scope: 'read' | 'write' | 'read:write';
   environment: 'development' | 'staging' | 'production';
-  token?: string; // Only shown once on creation
-  createdAt: Date;
-  lastUsedAt?: Date;
-  expiresAt?: Date;
+  token?: string;
+  created_at?: string;
+  last_used_at?: string;
 }
 
 // ============================================
-// Sync & Offline
+// Sync
 // ============================================
 
 export interface SyncStatus {
@@ -100,14 +88,8 @@ export interface SyncStatus {
   isOnline: boolean;
 }
 
-export interface SyncResult {
-  synced: number;
-  failed: number;
-  errors?: string[];
-}
-
 // ============================================
-// AI & Embeddings
+// AI
 // ============================================
 
 export interface EmbeddingResult {
@@ -118,62 +100,8 @@ export interface EmbeddingResult {
   device: 'cpu' | 'webgpu' | 'wasm';
 }
 
-export interface AIStatus {
-  available: boolean;
-  model: string | null;
-  device: string;
-  isLoading?: boolean;
-  loadProgress?: number;
-}
-
 // ============================================
-// Platform Detection
-// ============================================
-
-export type Platform = 
-  | 'vscode'
-  | 'web'
-  | 'mobile-pwa'
-  | 'mobile-native'
-  | 'cli'
-  | 'chrome-extension';
-
-export interface PlatformInfo {
-  platform: Platform;
-  version: string;
-  device: string;
-  isOnline: boolean;
-  features: {
-    offline: boolean;
-    localAI: boolean;
-    push: boolean;
-  };
-}
-
-// ============================================
-// Events & Callbacks
-// ============================================
-
-export type EventType = 
-  | 'memory:created'
-  | 'memory:updated'
-  | 'memory:deleted'
-  | 'sync:started'
-  | 'sync:completed'
-  | 'auth:login'
-  | 'auth:logout'
-  | 'ai:ready'
-  | 'offline'
-  | 'online';
-
-export interface LanonasisEvent<T = any> {
-  type: EventType;
-  payload: T;
-  timestamp: Date;
-}
-
-// ============================================
-// API Response Types
+// API Responses
 // ============================================
 
 export interface ApiResponse<T> {
@@ -183,63 +111,4 @@ export interface ApiResponse<T> {
     code: string;
     message: string;
   };
-  meta?: {
-    page?: number;
-    limit?: number;
-    total?: number;
-  };
-}
-
-export interface PaginatedResponse<T> {
-  items: T[];
-  page: number;
-  limit: number;
-  total: number;
-  hasMore: boolean;
-}
-
-// ============================================
-// Configuration
-// ============================================
-
-export interface LanonasisConfig {
-  baseUrl?: string;
-  apiKey?: string;
-  enableOffline?: boolean;
-  enableLocalAI?: boolean;
-  syncInterval?: number;
-  onAuthChange?: (authenticated: boolean) => void;
-  onSync?: (status: SyncStatus) => void;
-  onError?: (error: Error) => void;
-}
-
-// ============================================
-// Component Props (for UI consistency)
-// ============================================
-
-export interface MemoryCardProps {
-  memory: Memory;
-  onSelect?: (memory: Memory) => void;
-  onCopy?: (content: string) => void;
-  onDelete?: (id: string) => void;
-  onEdit?: (memory: Memory) => void;
-  variant?: 'compact' | 'default' | 'expanded';
-}
-
-export interface SearchBarProps {
-  value: string;
-  onChange: (value: string) => void;
-  onSearch?: (query: string) => void;
-  placeholder?: string;
-  disabled?: boolean;
-  isLoading?: boolean;
-}
-
-export interface ChatInputProps {
-  value: string;
-  onChange: (value: string) => void;
-  onSend: () => void;
-  onAttach?: () => void;
-  disabled?: boolean;
-  placeholder?: string;
 }
