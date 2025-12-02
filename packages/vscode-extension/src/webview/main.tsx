@@ -23,18 +23,35 @@ const container = document.getElementById('root');
 
 function App() {
   const [injectedChat, setInjectedChat] = useState('');
+  const [config, setConfig] = useState({
+    baseUrl: 'https://api.lanonasis.com/api/v1',
+    apiKey: undefined as string | undefined,
+    enableOffline: true,
+    enableLocalAI: true,
+  });
 
   useEffect(() => {
     if (!window.vscode || typeof window.vscode.postMessage !== 'function') {
       return;
     }
-
-    window.vscode.postMessage({ type: 'lanonasis:webview-ready' });
-
     const handleMessage = (event: MessageEvent) => {
       const message = event.data;
       if (!message || typeof message !== 'object') return;
       if (message.type === 'lanonasis:host-ready') {
+        return;
+      }
+      if (
+        message.type === 'lanonasis:config:init' ||
+        message.type === 'lanonasis:config:update'
+      ) {
+        const apiUrl = message.payload?.apiUrl as string | undefined;
+        const apiKey = message.payload?.apiKey as string | undefined;
+
+        setConfig(prev => ({
+          ...prev,
+          ...(apiUrl ? { baseUrl: apiUrl } : {}),
+          ...(apiKey !== undefined ? { apiKey: apiKey || undefined } : {}),
+        }));
         return;
       }
       if (message.type === 'lanonasis:memory:createFromSelection') {
@@ -54,6 +71,7 @@ function App() {
     };
 
     window.addEventListener('message', handleMessage);
+    window.vscode.postMessage({ type: 'lanonasis:webview-ready' });
     return () => {
       window.removeEventListener('message', handleMessage);
     };
@@ -68,15 +86,7 @@ function App() {
   };
 
   return (
-    <LanonasisProvider
-      config={{
-        baseUrl: 'https://api.lanonasis.com/api/v1',
-        apiKey: undefined,
-        organizationId: undefined,
-        enableOffline: true,
-        enableLocalAI: true,
-      }}
-    >
+    <LanonasisProvider config={config}>
       <IDEPanel
         initialChatInput={injectedChat}
         onAttachFromClipboard={handleAttachFromClipboard}

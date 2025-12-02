@@ -1,45 +1,50 @@
 {
-  "name": "@lanonasis/vscode-extension",
-  "displayName": "LanOnasis Memory",
-  "description": "LanOnasis Memory-as-a-Service companion for VS Code",
+  "name": "lzero-memory",
+  "displayName": "L0 Memory",
+  "description": "L0 / LanOnasis Memory-as-a-Service companion for VS Code",
   "version": "0.1.0",
   "publisher": "lanonasis",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lanonasis/lzero-aether-mem.git"
+  },
   "engines": {
     "vscode": "^1.80.0"
   },
   "categories": ["Other"],
   "main": "./out/extension.js",
   "activationEvents": [
-    "onView:lanonasis.memorySidebar",
-    "onCommand:lanonasis.authenticate"
+    "onView:lzero.memorySidebar",
+    "onCommand:lzeroMemory.authenticate"
   ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "lanonasis",
-          "title": "LanOnasis",
+          "id": "lzeroMemory",
+          "title": "L0 Memory",
           "icon": "./media/icon.svg"
         }
       ]
     },
     "views": {
-      "lanonasis": [
+      "lzeroMemory": [
         {
-          "id": "lanonasis.memorySidebar",
-          "name": "LanOnasis Memory"
+          "id": "lzero.memorySidebar",
+          "name": "L0 Memory",
+          "type": "webview"
         }
       ]
     },
     "commands": [
       {
-        "command": "lanonasis.authenticate",
-        "title": "LanOnasis: Authenticate"
+        "command": "lzeroMemory.authenticate",
+        "title": "L0 Memory: Authenticate"
       },
       {
-        "command": "lanonasis.createMemoryFromSelection",
-        "title": "LanOnasis: Create Memory from Selection"
+        "command": "lzeroMemory.createMemoryFromSelection",
+        "title": "L0 Memory: Create Memory from Selection"
       }
     ],
     "configuration": {

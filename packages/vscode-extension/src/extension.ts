@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 class MemorySidebarProvider implements vscode.WebviewViewProvider {
-  public static readonly viewType = 'lanonasis.memorySidebar';
+  public static readonly viewType = 'lzero.memorySidebar';
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -36,6 +36,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       if (message.type === 'lanonasis:webview-ready') {
         this.output.appendLine('[LanOnasis] Webview reported ready');
         webview.postMessage({ type: 'lanonasis:host-ready' });
+        void this.sendConfigToWebview(webview);
         return;
       }
 
@@ -68,6 +69,27 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       this.output.appendLine(
         `[LanOnasis] Received message from webview: type="${type}"`,
       );
+    });
+  }
+
+  private async sendConfigToWebview(webview: vscode.Webview): Promise<void> {
+    const configuration = vscode.workspace.getConfiguration('lanonasis');
+    const apiUrl =
+      configuration.get<string>('apiUrl') || 'https://api.lanonasis.com/api/v1';
+    const apiKey = await this.context.secrets.get('lanonasis.apiKey');
+
+    this.output.appendLine(
+      `[LanOnasis] Sending config to webview (apiUrl=${apiUrl}, apiKey=${
+        apiKey ? '***' : 'none'
+      })`,
+    );
+
+    webview.postMessage({
+      type: 'lanonasis:config:init',
+      payload: {
+        apiUrl,
+        apiKey,
+      },
     });
   }
   public postMessage(message: unknown) {
@@ -141,15 +163,38 @@ export function activate(context: vscode.ExtensionContext) {
         },
       },
     ),
-    vscode.commands.registerCommand('lanonasis.authenticate', async () => {
+    vscode.commands.registerCommand('lzeroMemory.authenticate', async () => {
       output.appendLine('[LanOnasis] Authenticate command invoked');
       // TODO: In a later phase, wire this to OAuth/API key flows using SecretStorage.
+
+      const apiKey = await vscode.window.showInputBox({
+        prompt: 'Enter your LanOnasis API key',
+        placeHolder: 'lanonasis_xxx...',
+        password: true,
+        ignoreFocusOut: true,
+      });
+
+      if (!apiKey) {
+        output.appendLine('[LanOnasis] No API key entered; skipping update.');
+        return;
+      }
+
+      await context.secrets.store('lanonasis.apiKey', apiKey);
+      output.appendLine(
+        '[LanOnasis] API key stored in VS Code SecretStorage.',
+      );
+
+      provider.postMessage({
+        type: 'lanonasis:config:update',
+        payload: { apiKey },
+      });
+
       await vscode.window.showInformationMessage(
-        'LanOnasis: Authentication will be handled by the browser panel for now.',
+        'LanOnasis: API key saved for this environment.',
       );
     }),
     vscode.commands.registerCommand(
-      'lanonasis.createMemoryFromSelection',
+      'lzeroMemory.createMemoryFromSelection',
       async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor) {

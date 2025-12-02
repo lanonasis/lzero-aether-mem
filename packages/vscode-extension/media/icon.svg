@@ -1,6 +1,28 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-  <rect x="3" y="3" width="18" height="18" rx="4" ry="4" fill="#007ACC" />
-  <circle cx="9" cy="10" r="2.2" fill="white" />
-  <circle cx="15" cy="14" r="2.2" fill="white" />
-  <path d="M9 10c0 3.5 2.5 6 6 6" stroke="white" stroke-width="1.4" stroke-linecap="round" />
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 24 24"
+  fill="none"
+>
+  <!-- Background tile to read well in the activity bar -->
+  <rect x="2" y="2" width="20" height="20" rx="4" ry="4" fill="#0F172A" />
+
+  <!-- L shape -->
+  <path
+    d="M7 5v11h7"
+    stroke="#F9FAFB"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- 0 shape -->
+  <ellipse
+    cx="16.5"
+    cy="11.5"
+    rx="3.8"
+    ry="5"
+    stroke="#F9FAFB"
+    stroke-width="2"
+    fill="none"
+  />
 </svg>

@@ -36,11 +36,18 @@ import { SearchBar } from './components/SearchBar';
 import { ChatInterface } from './components/ChatInterface';
 import { ApiKeyManager } from './components/ApiKeyManager';
 import { ErrorBoundary } from '@/services/ErrorBoundary';
+import { L0Logo } from '@/components/L0Logo';
 
 const WelcomeView = ({ onLogin }: { onLogin: () => void }) => {
   return (
     <div className="p-4 space-y-6 select-none">
       <div className="space-y-4">
+        <div className="flex items-center gap-2 text-[var(--vscode-sideBarTitle-foreground)]">
+          <L0Logo className="h-5 w-5" />
+          <span className="text-[11px] font-bold uppercase tracking-wide">
+            LanOnasis Memory
+          </span>
+        </div>
         <h2 className="text-sm font-semibold text-[var(--vscode-editor-foreground)]">
           Welcome to LanOnasis Memory
         </h2>
@@ -134,9 +141,12 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
         <div className="w-full max-w-[400px] h-full flex flex-col bg-[var(--vscode-sideBar-background)] relative">
           {/* Top Header */}
           <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--vscode-sideBar-background)]">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--vscode-sideBarTitle-foreground)]">
-              LanOnasis Memory
-            </span>
+            <div className="flex items-center gap-2">
+              <L0Logo className="h-4 w-4 text-[var(--vscode-icon-foreground)]" />
+              <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--vscode-sideBarTitle-foreground)]">
+                LanOnasis Memory
+              </span>
+            </div>
 
             <div className="flex items-center gap-1">
               {isAuthenticated ? (

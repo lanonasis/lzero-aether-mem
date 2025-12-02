@@ -1,0 +1,14 @@
+.vscode/**
+.vscode-test/**
+.git/**
+.gitignore
+**/*.ts
+**/*.tsx
+**/*.test.*
+**/*.spec.*
+src/**
+node_modules/**
+
+# keep built extension + webview outputs
+!out/**
+!media/**
