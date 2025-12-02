@@ -46,7 +46,6 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   useLanonasis, 
   useMemories, 
@@ -933,7 +932,7 @@ export const MobileApp = () => {
 
   // Authenticated View
   return (
-    <div className="min-h-screen bg-[#0D0D0D] flex flex-col">
+    <div className="h-screen bg-[#0D0D0D] flex flex-col overflow-hidden">
       {/* Header */}
       <header className="sticky top-0 z-30 bg-[#0D0D0D]/80 backdrop-blur-xl border-b border-white/5 safe-area-top">
         <div className="px-4 py-3 flex items-center justify-between">
@@ -985,7 +984,7 @@ export const MobileApp = () => {
       </div>
 
       {/* Content */}
-      <ScrollArea className="flex-1 px-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
         <div className="space-y-3 pb-24">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-12">
@@ -1012,7 +1011,7 @@ export const MobileApp = () => {
             ))
           )}
         </div>
-      </ScrollArea>
+      </div>
 
       {/* FAB */}
       <motion.button
