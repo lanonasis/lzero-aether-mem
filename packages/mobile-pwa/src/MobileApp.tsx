@@ -39,7 +39,6 @@ import {
   Bookmark,
   User,
   MessageSquare,
-  Bot,
   ArrowUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
