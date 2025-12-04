@@ -6,7 +6,12 @@
 
 **Build Command:**
 ```bash
-bun install && bun run build:shared && bun run build:web
+cd packages/shared && tsc && cd ../.. && vite build
+```
+
+**Alternative (using npm scripts):**
+```bash
+bun run build:shared && bun run build:web
 ```
 
 **Output Directory:**
@@ -35,13 +40,20 @@ VITE_ORGANIZATION_ID=ba2c1b22-3c4d-4a5b-aca3-881995d863d5
 # Install dependencies
 bun install
 
-# Build shared SDK first
-bun run build:shared
+# Build shared SDK first (compiles TypeScript)
+cd packages/shared && tsc && cd ../..
 
 # Build the web app
-bun run build:web
+vite build
 
 # Output will be in: dist/public/
+```
+
+**Using npm scripts:**
+```bash
+bun install
+bun run build:shared  # Uses turbo under the hood
+bun run build:web
 ```
 
 ### Vercel CLI Deployment
