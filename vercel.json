@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "bun install && bun run build:shared && bun run build:web",
+  "buildCommand": "cd packages/shared && tsc && cd ../.. && vite build",
   "outputDirectory": "dist/public",
   "framework": null,
   "installCommand": "bun install",
