@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "cd packages/shared && tsc && cd ../.. && vite build",
+  "buildCommand": "bash build.sh",
   "outputDirectory": "dist/public",
   "framework": null,
   "installCommand": "bun install",
