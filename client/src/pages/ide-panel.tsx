@@ -124,9 +124,21 @@ const MOCK_API_KEYS = [
   { id: "key_2", name: "Development Key", scope: "read", created: "2025-11-15", lastUsed: "2 hours ago" },
 ];
 
+const formatMemoryDate = (
+  memory: { date?: Date | string | number | null; createdAt?: Date | string | number | null; updatedAt?: Date | string | number | null },
+  pattern = "MMM d"
+) => {
+  const rawDate = memory.date ?? memory.createdAt ?? memory.updatedAt;
+  if (!rawDate) return "—";
+
+  const parsed = rawDate instanceof Date ? rawDate : new Date(rawDate);
+  return Number.isNaN(parsed.getTime()) ? "—" : format(parsed, pattern);
+};
+
 const MemoryCard = ({ memory }: { memory: typeof MOCK_MEMORIES[0] }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [copied, setCopied] = useState(false);
+  const formattedDate = formatMemoryDate(memory);
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -167,7 +179,7 @@ const MemoryCard = ({ memory }: { memory: typeof MOCK_MEMORIES[0] }) => {
 
       <div className="flex items-center gap-3 text-[11px] text-[var(--vscode-descriptionForeground)] pl-5.5">
         <div className="flex items-center gap-1 opacity-60">
-          <span>{format(memory.date, "MMM d")}</span>
+          <span>{formattedDate}</span>
         </div>
         {memory.tags.map((tag) => (
           <div key={tag} className="flex items-center gap-0.5 px-1 rounded bg-[var(--vscode-badge-background)]/10 text-[var(--vscode-editor-foreground)] opacity-60">

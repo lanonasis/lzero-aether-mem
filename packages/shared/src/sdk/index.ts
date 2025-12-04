@@ -15,6 +15,7 @@ export interface LanonasisConfig {
   organizationId?: string;
   enableOffline?: boolean;
   enableLocalAI?: boolean;
+  debugLogging?: boolean;
   onAuthChange?: (authenticated: boolean) => void;
   onSync?: (status: SyncStatus) => void;
   onError?: (error: Error) => void;
@@ -194,6 +195,8 @@ class MemoryClient {
   private offlineQueue: OfflineQueue;
   private cache: LocalCache;
   private config: LanonasisConfig;
+  private debug: (...args: any[]) => void;
+  private warn: (...args: any[]) => void;
 
   constructor(
     baseUrl: string,
@@ -205,6 +208,12 @@ class MemoryClient {
     this.config = config;
     this.offlineQueue = new OfflineQueue();
     this.cache = new LocalCache();
+    this.debug = (...args: any[]) => {
+      if (this.config.debugLogging) console.log(...args);
+    };
+    this.warn = (...args: any[]) => {
+      if (this.config.debugLogging) console.warn(...args);
+    };
   }
 
   private async request<T>(
@@ -261,7 +270,7 @@ class MemoryClient {
 
     // Return cache immediately if offline
     if (!navigator.onLine) {
-      console.log('[SDK] 📴 Offline - returning cached memories:', cached.length);
+      this.debug('[SDK] 📴 Offline - returning cached memories:', cached.length);
       return this.filterMemories(cached, query);
     }
 
@@ -272,13 +281,13 @@ class MemoryClient {
           ? `/memory?q=${encodeURIComponent(query)}`
           : '/memory';
 
-        console.log('[SDK] 📡 Fetching memories from API...');
+        this.debug('[SDK] 📡 Fetching memories from API...');
         const rawMemories = await this.request<any[]>(endpoint);
 
         // Normalize all memories from API
         const memories = (Array.isArray(rawMemories) ? rawMemories : []).map(m => normalizeMemory({ ...m, synced: true }));
 
-        console.log('[SDK] ✅ Fetched', memories.length, 'memories from API');
+        this.debug('[SDK] ✅ Fetched', memories.length, 'memories from API');
 
         // Merge API memories with temp local ones (keep temp ones with synced: false)
         const tempMemories = cached.filter(m => m.synced === false);
@@ -289,7 +298,7 @@ class MemoryClient {
 
         return this.filterMemories(mergedMemories, query);
       } catch (e) {
-        console.warn('[SDK] ⚠️ API fetch failed, using cached memories:', e);
+        this.warn('[SDK] ⚠️ API fetch failed, using cached memories:', e);
         // Fall back to cache on error
         return this.filterMemories(cached, query);
       }
@@ -339,7 +348,7 @@ class MemoryClient {
       return response;
     } catch (e) {
       // Fall back to text search if semantic search fails
-      console.warn('[SDK] Semantic search failed, falling back to text search:', e);
+      this.warn('[SDK] Semantic search failed, falling back to text search:', e);
       const all = await this.list();
       return this.filterMemories(all, query);
     }
@@ -375,13 +384,13 @@ class MemoryClient {
       if (navigator.onLine) {
         // Try API, but don't fail if it errors
         try {
-          console.log('[SDK] 📡 Syncing memory to API...');
+          this.debug('[SDK] 📡 Syncing memory to API...');
           const rawMemory = await this.request<any>('/memory', {
             method: 'POST',
             body: JSON.stringify(payload),
           });
 
-          console.log('[SDK] ✅ Memory synced to API:', rawMemory);
+          this.debug('[SDK] ✅ Memory synced to API:', rawMemory);
 
           // Normalize and mark as synced
           const memory = normalizeMemory({ ...rawMemory, synced: true });
@@ -392,14 +401,14 @@ class MemoryClient {
 
           return memory;
         } catch (e) {
-          console.warn('[SDK] ⚠️ API sync failed, queuing for later:', e);
+          this.warn('[SDK] ⚠️ API sync failed, queuing for later:', e);
           // Queue for background sync
           this.offlineQueue.add('create', payload);
           return tempMemory;
         }
       } else {
         // Offline - queue for later
-        console.log('[SDK] 📴 Offline - queuing memory for sync');
+        this.debug('[SDK] 📴 Offline - queuing memory for sync');
         this.offlineQueue.add('create', payload);
         return tempMemory;
       }
@@ -499,7 +508,7 @@ class MemoryClient {
         this.offlineQueue.remove(op.id);
         synced++;
       } catch (e) {
-        console.error(`[SDK] Sync failed for ${op.action}:`, e);
+        this.warn(`[SDK] Sync failed for ${op.action}:`, e);
         failed++;
       }
     }
@@ -555,22 +564,22 @@ class SecurityClient {
     scope: 'read' | 'write' | 'read:write',
     environment: 'development' | 'staging' | 'production'
   ): Promise<ApiKey> {
-    return this.request('/api-keys/generate', {
+    return this.request('/keys/generate', {
       method: 'POST',
       body: JSON.stringify({ name, scope, environment }),
     });
   }
 
   async listKeys(): Promise<ApiKey[]> {
-    return this.request('/api-keys');
+    return this.request('/keys');
   }
 
   async rotateKey(id: string): Promise<ApiKey> {
-    return this.request(`/api-keys/${id}/rotate`, { method: 'POST' });
+    return this.request(`/keys/${id}/rotate`, { method: 'POST' });
   }
 
   async revokeKey(id: string): Promise<void> {
-    await this.request(`/api-keys/${id}/revoke`, { method: 'POST' });
+    await this.request(`/keys/${id}/revoke`, { method: 'POST' });
   }
 }
 
@@ -585,13 +594,18 @@ export class LanonasisClient {
 
   public memory: MemoryClient;
   public security: SecurityClient;
+  private debug: (...args: any[]) => void;
 
   constructor(config: LanonasisConfig = {}) {
     this.config = {
       baseUrl: config.baseUrl || 'https://api.lanonasis.com/api/v1',
       enableOffline: config.enableOffline ?? true,
       enableLocalAI: config.enableLocalAI ?? true,
+      debugLogging: config.debugLogging ?? false,
       ...config,
+    };
+    this.debug = (...args: any[]) => {
+      if (this.config.debugLogging) console.log(...args);
     };
 
     // Use API key if provided
@@ -637,7 +651,7 @@ export class LanonasisClient {
         this.user = session.user;
       }
     } catch (e) {
-      console.warn('[SDK] Failed to load session:', e);
+      this.debug('[SDK] Failed to load session:', e);
     }
   }
 
@@ -653,21 +667,21 @@ export class LanonasisClient {
         localStorage.removeItem('lanonasis_session');
       }
     } catch (e) {
-      console.warn('[SDK] Failed to persist session:', e);
+      this.debug('[SDK] Failed to persist session:', e);
     }
   }
 
   private handleOnline() {
-    console.log('[SDK] 📶 Back online - syncing...');
+    this.debug('[SDK] 📶 Back online - syncing...');
     this.memory.sync().then(({ synced, failed }) => {
       if (synced > 0 || failed > 0) {
-        console.log(`[SDK] ✅ Synced ${synced} items, ${failed} failed`);
+        this.debug(`[SDK] ✅ Synced ${synced} items, ${failed} failed`);
       }
     });
   }
 
   private handleOffline() {
-    console.log('[SDK] 📴 Offline - changes will be queued');
+    this.debug('[SDK] 📴 Offline - changes will be queued');
   }
 
   /**
