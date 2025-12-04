@@ -51,12 +51,39 @@ import {
   CollapsibleContent,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
-import { Memory } from "../shared/types";
-import { useLanonasis } from "@/lib/lanonasis-sdk";
-import { useSecuritySDK } from "@/lib/lanonasis-security-sdk";
+import { Memory } from "@lanonasis/shared/types";
+import { useLanonasis } from "@lanonasis/shared/sdk/react-hooks";
 import { LanoLogo } from "@/components/lano-logo";
+import { FileCode, Hash, Terminal as TerminalIcon, GitBranch, Lightbulb, BookOpen } from "lucide-react";
+
+// Helper to get icon for memory type
+const getMemoryIcon = (type: string) => {
+  const icons: Record<string, any> = {
+    code: FileCode,
+    docs: BookOpen,
+    todo: Lightbulb,
+    workflow: GitBranch,
+    status: TerminalIcon,
+    note: Hash,
+    snippet: FileCode,
+    idea: Lightbulb,
+  };
+  return icons[type] || Hash;
+};
 
 const MemoryCard = ({ memory, onSelect }: { memory: Memory; onSelect?: () => void }) => {
+  // Safe date formatter that handles invalid dates
+  const formatDate = (dateString: Date | string | undefined) => {
+    try {
+      if (!dateString) return "Recent";
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "Recent";
+      return format(date, "MMM d");
+    } catch {
+      return "Recent";
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -80,8 +107,8 @@ const MemoryCard = ({ memory, onSelect }: { memory: Memory; onSelect?: () => voi
         </div>
         <div className="flex items-center gap-3 text-[10px] text-[#888888]">
             <div className="flex items-center gap-1">
-            <memory.icon className="h-3 w-3" />
-            <span>{format(memory.date, "MMM d")}</span>
+            {React.createElement(getMemoryIcon(memory.type), { className: "h-3 w-3" })}
+            <span>{formatDate(memory.createdAt)}</span>
             </div>
             {memory.tags.map((tag) => (
             <div key={tag} className="flex items-center gap-1 bg-[#007ACC]/10 px-1.5 py-0.5 rounded text-[#007ACC] text-[9px]">
@@ -140,18 +167,20 @@ const WelcomeView = ({ onLogin, isConnecting }: { onLogin: () => void, isConnect
     )
 };
 
-const SecurityKeyDialog = ({ isOpen, onClose, onGenerate }: { isOpen: boolean; onClose: () => void; onGenerate?: () => void }) => {
+const SecurityKeyDialog = ({ isOpen, onClose, onGenerate, client }: { isOpen: boolean; onClose: () => void; onGenerate?: () => void; client: any }) => {
     const [environment, setEnvironment] = useState<'development' | 'staging' | 'production'>('development');
-    const { client, isInitialized, initialize } = useSecuritySDK();
     const [isGenerating, setIsGenerating] = useState(false);
 
     const handleGenerate = async () => {
-      if (!isInitialized) await initialize();
       setIsGenerating(true);
-      const key = await client.generateScopedKey(`${environment.toUpperCase()} Key`, 'read:write', environment);
-      console.log("Generated Key:", key);
+      try {
+        const key = await client.security.generateScopedKey(`${environment.toUpperCase()} Key`, 'read:write', environment);
+        console.log("Generated Key:", key);
+        onGenerate?.();
+      } catch (e) {
+        console.error("Failed to generate key:", e);
+      }
       setIsGenerating(false);
-      onGenerate?.();
     };
 
     return (
@@ -218,12 +247,35 @@ export const RichPanel = () => {
     const [isAssistantOpen, setIsAssistantOpen] = useState(true);
     const [isMemoriesOpen, setIsMemoriesOpen] = useState(true);
     const [chatInput, setChatInput] = useState("");
+    const [isSending, setIsSending] = useState(false);
 
     useEffect(() => {
         if (isAuthenticated) {
             client.memory.list(searchQuery).then(setMemories);
         }
     }, [isAuthenticated, searchQuery, client]);
+
+    const handleSendMemory = async () => {
+        if (!chatInput.trim() || !isAuthenticated || isSending) return;
+
+        setIsSending(true);
+        try {
+            await client.memory.create({
+                title: chatInput.slice(0, 60),
+                content: chatInput,
+                type: 'note',
+                tags: []
+            });
+            setChatInput("");
+            // Refresh memories list
+            const updated = await client.memory.list(searchQuery);
+            setMemories(updated);
+        } catch (error) {
+            console.error('Failed to create memory:', error);
+        } finally {
+            setIsSending(false);
+        }
+    };
 
     return (
         <div className="flex h-full w-full bg-gradient-to-b from-[#1E1E1E] to-[#0D0D0D] text-[#CCCCCC] font-mono overflow-hidden relative flex-col">
@@ -247,7 +299,7 @@ export const RichPanel = () => {
                       </Button>
                     </motion.div>
                   )}
-                  <Button size="sm" variant="ghost" onClick={isAuthenticated ? logout : login} disabled={isConnecting} className="h-8">
+                  <Button size="sm" variant="ghost" onClick={() => isAuthenticated ? logout() : login()} disabled={isConnecting} className="h-8">
                     {isConnecting ? "..." : (isAuthenticated ? <LogOut className="h-4 w-4" /> : "Log in")}
                   </Button>
                 </div>
@@ -306,6 +358,12 @@ export const RichPanel = () => {
                     <textarea
                       value={chatInput}
                       onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMemory();
+                        }
+                      }}
                       placeholder={isAuthenticated ? "Paste context to remember or ask AI..." : "Connect to access orchestrator..."}
                       disabled={!isAuthenticated}
                       className="w-full min-h-[60px] bg-[#252526] border border-[#3C3C3C] rounded-lg pl-9 pr-10 py-3 text-sm text-[#CCCCCC] placeholder:text-[#666666] resize-none focus:outline-none focus:border-[#007ACC]/50 focus:ring-1 focus:ring-[#007ACC]/20 disabled:opacity-50 transition-all"
@@ -321,10 +379,11 @@ export const RichPanel = () => {
                       </Button>
                       <Button
                         size="icon"
+                        onClick={handleSendMemory}
                         className="h-7 w-7 bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-lg hover:shadow-[#007ACC]/30 text-white rounded-md disabled:opacity-50"
-                        disabled={!isAuthenticated || !chatInput.trim()}
+                        disabled={!isAuthenticated || !chatInput.trim() || isSending}
                       >
-                        <SendHorizontal className="h-3.5 w-3.5" />
+                        {isSending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <SendHorizontal className="h-3.5 w-3.5" />}
                       </Button>
                     </div>
                 </div>
@@ -336,7 +395,7 @@ export const RichPanel = () => {
                 )}
              </div>
              
-             <SecurityKeyDialog isOpen={showSecurityDialog} onClose={() => setShowSecurityDialog(false)} />
+             <SecurityKeyDialog isOpen={showSecurityDialog} onClose={() => setShowSecurityDialog(false)} client={client} />
         </div>
     );
 };

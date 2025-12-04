@@ -4,6 +4,7 @@ import { RichPanel } from "@/components/rich-panel";
 import { Shield, Zap, Globe, Code2, CheckCircle2, Briefcase, Terminal, Copy, Check, Sparkles, Lock, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LanoLogo } from "@/components/lano-logo";
+import { PlatformTabs } from "@/components/PlatformTabs";
 import { useState } from "react";
 
 export default function LandingPage() {
@@ -191,6 +192,9 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* Platform Tabs */}
+      <PlatformTabs />
 
       {/* Features Grid */}
       <section id="features" className="py-24 px-6 bg-[#0A0A0A]">
