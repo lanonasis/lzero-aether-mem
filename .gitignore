@@ -14,3 +14,4 @@ packages/shared/tsconfig.tsbuildinfo
 .env
 packages/mobile-pwa/.env.local
 client/.env.local
+.turbo/cookies/
