@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "bash build.sh",
+  "buildCommand": "bash ../../build.sh || bash ../build.sh || bash ./build.sh",
   "outputDirectory": "dist/public",
   "framework": null,
   "installCommand": "bun install",
