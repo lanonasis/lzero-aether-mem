@@ -29,11 +29,29 @@ function VscodePanelRoute() {
   );
 }
 
+function DashboardRoute() {
+  return (
+    <LanonasisProvider
+      config={{
+        baseUrl:
+          import.meta.env.VITE_API_URL ||
+          "https://api.lanonasis.com/api/v1",
+        apiKey: import.meta.env.VITE_API_KEY,
+        organizationId: import.meta.env.VITE_ORGANIZATION_ID,
+        enableOffline: true,
+        enableLocalAI: false,
+      }}
+    >
+      <Dashboard />
+    </LanonasisProvider>
+  );
+}
+
 function Router() {
   return (
     <Switch>
       <Route path="/" component={LandingPage} />
-      <Route path="/dashboard" component={Dashboard} />
+      <Route path="/dashboard" component={DashboardRoute} />
       <Route path="/vscode" component={VscodePanelRoute} />
       <Route component={NotFound} />
     </Switch>

@@ -33,9 +33,12 @@ export const useApiKeys = (isAuthenticated: boolean) => {
         }
       } catch (err) {
         if (!isCancelled) {
+          // Silently handle 404 - API keys endpoint not available yet
           const message = (err as Error).message;
-          setError(message);
-          console.error('Failed to fetch API keys via security SDK:', err);
+          if (!message.includes('404')) {
+            setError(message);
+            console.error('Failed to fetch API keys via security SDK:', err);
+          }
         }
       } finally {
         if (!isCancelled) {

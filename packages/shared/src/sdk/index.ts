@@ -173,16 +173,17 @@ class LocalCache {
 
 /**
  * Normalize a memory object to ensure all required fields have defaults
+ * Handles both camelCase and snake_case from API
  */
 function normalizeMemory(memory: any): Memory {
   return {
     id: memory.id || `unknown_${Date.now()}`,
     title: memory.title || '',
     content: memory.content || '',
-    type: memory.type || 'note',
+    type: memory.type || memory.memory_type || 'note',
     tags: Array.isArray(memory.tags) ? memory.tags : [],
-    createdAt: memory.createdAt ? new Date(memory.createdAt) : new Date(),
-    updatedAt: memory.updatedAt ? new Date(memory.updatedAt) : new Date(),
+    createdAt: memory.createdAt || memory.created_at || new Date().toISOString(),
+    updatedAt: memory.updatedAt || memory.updated_at || new Date().toISOString(),
     synced: memory.synced ?? true,
   };
 }
@@ -554,22 +555,22 @@ class SecurityClient {
     scope: 'read' | 'write' | 'read:write',
     environment: 'development' | 'staging' | 'production'
   ): Promise<ApiKey> {
-    return this.request('/keys/generate', {
+    return this.request('/api-keys/generate', {
       method: 'POST',
       body: JSON.stringify({ name, scope, environment }),
     });
   }
 
   async listKeys(): Promise<ApiKey[]> {
-    return this.request('/keys');
+    return this.request('/api-keys');
   }
 
   async rotateKey(id: string): Promise<ApiKey> {
-    return this.request(`/keys/${id}/rotate`, { method: 'POST' });
+    return this.request(`/api-keys/${id}/rotate`, { method: 'POST' });
   }
 
   async revokeKey(id: string): Promise<void> {
-    await this.request(`/keys/${id}/revoke`, { method: 'POST' });
+    await this.request(`/api-keys/${id}/revoke`, { method: 'POST' });
   }
 }
 
