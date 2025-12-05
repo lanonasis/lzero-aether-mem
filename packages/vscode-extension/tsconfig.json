@@ -2,21 +2,38 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",
-    "lib": ["ES2020", "DOM"],
+    "lib": [
+      "ES2020",
+      "DOM"
+    ],
     "strict": true,
     "esModuleInterop": true,
     "moduleResolution": "node",
     "rootDir": "src",
     "outDir": "out",
     "sourceMap": true,
-    "types": ["node", "vscode"],
+    "types": [
+      "node",
+      "vscode"
+    ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["../../client/src/*"],
-      "@lanonasis/shared": ["../shared/src/index.ts"],
-      "@lanonasis/shared/*": ["../shared/src/*"]
+      "@/*": [
+        "../../client/src/*"
+      ],
+      "@lanonasis/shared": [
+        "../shared/src/index.ts"
+      ],
+      "@lanonasis/shared/*": [
+        "../shared/src/*"
+      ]
     },
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts"]
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "src/webview/**/*"
+  ]
 }

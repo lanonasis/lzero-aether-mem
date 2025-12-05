@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   Search,
   Plus,
@@ -11,10 +11,10 @@ import {
   LogOut,
   User,
   Key,
-} from 'lucide-react';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
+} from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,23 +22,42 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
-  Collapsible,
-  CollapsibleContent,
-} from '@/components/ui/collapsible';
-import { cn } from '@/lib/utils';
-import { useAuth } from './hooks/useAuth';
-import { useMemories } from './hooks/useMemories';
-import { useApiKeys } from './hooks/useApiKeys';
-import { MemoryCard } from './components/MemoryCard';
-import { SearchBar } from './components/SearchBar';
-import { ChatInterface } from './components/ChatInterface';
-import { ApiKeyManager } from './components/ApiKeyManager';
-import { ErrorBoundary } from '@/services/ErrorBoundary';
-import { L0Logo } from '@/components/L0Logo';
+} from "@/components/ui/dropdown-menu";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
+import { useAuth } from "./hooks/useAuth";
+import { useMemories } from "./hooks/useMemories";
+import { useApiKeys } from "./hooks/useApiKeys";
+import { MemoryCard } from "./components/MemoryCard";
+import { SearchBar } from "./components/SearchBar";
+import { ChatInterface } from "./components/ChatInterface";
+import { ApiKeyManager } from "./components/ApiKeyManager";
+import { ErrorBoundary } from "@/services/ErrorBoundary";
+import { L0Logo } from "@/components/L0Logo";
+import { Input } from "@/components/ui/input";
 
-const WelcomeView = ({ onLogin }: { onLogin: () => void }) => {
+interface WelcomeViewProps {
+  onLoginOAuth: () => void;
+  onLoginApiKey: (apiKey: string) => void;
+  isLoading?: boolean;
+  error?: string | null;
+}
+
+const WelcomeView = ({
+  onLoginOAuth,
+  onLoginApiKey,
+  isLoading,
+  error,
+}: WelcomeViewProps) => {
+  const [showApiKeyInput, setShowApiKeyInput] = React.useState(false);
+  const [apiKeyValue, setApiKeyValue] = React.useState("");
+
+  const handleApiKeySubmit = () => {
+    if (apiKeyValue.trim()) {
+      onLoginApiKey(apiKeyValue.trim());
+    }
+  };
+
   return (
     <div className="p-4 space-y-6 select-none">
       <div className="space-y-4">
@@ -55,22 +74,64 @@ const WelcomeView = ({ onLogin }: { onLogin: () => void }) => {
           Authenticate to access synchronized context and scoped API keys.
         </p>
 
-        <div className="space-y-2 pt-2">
-          <Button
-            className="w-full vscode-button"
-            onClick={onLogin}
-            data-testid="btn-connect-browser"
-          >
-            Connect in Browser
-          </Button>
-          <Button
-            className="w-full vscode-button vscode-button-secondary"
-            onClick={onLogin}
-            data-testid="btn-enter-key"
-          >
-            Enter API Key
-          </Button>
-        </div>
+        {error && (
+          <div className="p-2 rounded text-[12px] bg-red-500/10 text-red-400 border border-red-500/20">
+            {error}
+          </div>
+        )}
+
+        {showApiKeyInput ? (
+          <div className="space-y-2 pt-2">
+            <Input
+              type="password"
+              placeholder="Enter your API key (lns_...)"
+              value={apiKeyValue}
+              onChange={(e) => setApiKeyValue(e.target.value)}
+              className="vscode-input h-8 text-[13px]"
+              autoFocus
+              onKeyDown={(e) => e.key === "Enter" && handleApiKeySubmit()}
+            />
+            <div className="flex gap-2">
+              <Button
+                className="flex-1 vscode-button"
+                onClick={handleApiKeySubmit}
+                disabled={!apiKeyValue.trim() || isLoading}
+                data-testid="btn-submit-key"
+              >
+                {isLoading ? "Connecting..." : "Connect"}
+              </Button>
+              <Button
+                className="vscode-button vscode-button-secondary"
+                onClick={() => {
+                  setShowApiKeyInput(false);
+                  setApiKeyValue("");
+                }}
+                data-testid="btn-cancel-key"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2 pt-2">
+            <Button
+              className="w-full vscode-button"
+              onClick={onLoginOAuth}
+              disabled={isLoading}
+              data-testid="btn-connect-browser"
+            >
+              {isLoading ? "Connecting..." : "Connect in Browser"}
+            </Button>
+            <Button
+              className="w-full vscode-button vscode-button-secondary"
+              onClick={() => setShowApiKeyInput(true)}
+              disabled={isLoading}
+              data-testid="btn-enter-key"
+            >
+              Enter API Key
+            </Button>
+          </div>
+        )}
       </div>
 
       <Separator className="bg-[var(--vscode-panel-border)]" />
@@ -116,23 +177,61 @@ interface IDEPanelProps {
 }
 
 export const IDEPanel: React.FC<IDEPanelProps> = ({
-  initialChatInput = '',
+  initialChatInput = "",
   onAttachFromClipboard,
 }) => {
-  const { isAuthenticated, login, logout, isLoading: authLoading } = useAuth();
-  const { searchQuery, setSearchQuery, filteredMemories, isLoading: memoriesLoading } =
-    useMemories(isAuthenticated);
+  const {
+    isAuthenticated,
+    loginWithOAuth,
+    loginWithApiKey,
+    logout,
+    isLoading: authLoading,
+    error: authError,
+  } = useAuth();
+  const {
+    searchQuery,
+    setSearchQuery,
+    filteredMemories,
+    isLoading: memoriesLoading,
+    createMemory,
+    refetch,
+  } = useMemories(isAuthenticated);
   const { apiKeys, isLoading: keysLoading } = useApiKeys(isAuthenticated);
   const [chatInput, setChatInput] = useState(initialChatInput);
   const [showApiKeys, setShowApiKeys] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(true);
   const [isMemoriesOpen, setIsMemoriesOpen] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     if (initialChatInput !== undefined) {
       setChatInput(initialChatInput);
     }
   }, [initialChatInput]);
+
+  const handleCreate = async () => {
+    // For now, create a memory from the chat input or a placeholder
+    const content = chatInput.trim() || "New memory";
+    try {
+      await createMemory({
+        title: content.slice(0, 50) + (content.length > 50 ? "..." : ""),
+        content,
+        memory_type: "knowledge",
+      });
+      setChatInput("");
+    } catch (err) {
+      console.error("Failed to create memory:", err);
+    }
+  };
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      await refetch();
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   return (
     <ErrorBoundary>
@@ -223,8 +322,8 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                 >
                   <ChevronRight
                     className={cn(
-                      'h-4 w-4 text-[var(--vscode-icon-foreground)] transition-transform mr-0.5 opacity-80',
-                      isAssistantOpen && 'rotate-90'
+                      "h-4 w-4 text-[var(--vscode-icon-foreground)] transition-transform mr-0.5 opacity-80",
+                      isAssistantOpen && "rotate-90"
                     )}
                   />
                   <span className="text-[11px] font-bold text-[var(--vscode-sideBarSectionHeader-foreground)] uppercase">
@@ -234,8 +333,8 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                 <CollapsibleContent>
                   <div className="min-h-[80px] p-4 text-[13px] text-[var(--vscode-descriptionForeground)] flex items-center justify-center text-center italic opacity-80">
                     {isAuthenticated
-                      ? 'Ready to assist. Ask me to recall context or refine prompts.'
-                      : 'Please connect to enable AI assistance.'}
+                      ? "Ready to assist. Ask me to recall context or refine prompts."
+                      : "Please connect to enable AI assistance."}
                   </div>
                 </CollapsibleContent>
               </Collapsible>
@@ -254,8 +353,8 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                   <div className="flex items-center">
                     <ChevronRight
                       className={cn(
-                        'h-4 w-4 text-[var(--vscode-icon-foreground)] transition-transform mr-0.5 opacity-80',
-                        isMemoriesOpen && 'rotate-90'
+                        "h-4 w-4 text-[var(--vscode-icon-foreground)] transition-transform mr-0.5 opacity-80",
+                        isMemoriesOpen && "rotate-90"
                       )}
                     />
                     <span className="text-[11px] font-bold text-[var(--vscode-sideBarSectionHeader-foreground)] uppercase">
@@ -294,6 +393,8 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                         <Button
                           className="flex-1 vscode-button h-7 gap-1.5"
                           data-testid="btn-create"
+                          onClick={handleCreate}
+                          disabled={memoriesLoading}
                         >
                           <Plus className="h-3.5 w-3.5" />
                           Create
@@ -301,20 +402,32 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                         <Button
                           className="flex-1 vscode-button vscode-button-secondary h-7 gap-1.5"
                           data-testid="btn-sync"
+                          onClick={handleSync}
+                          disabled={isSyncing || memoriesLoading}
                         >
-                          <RefreshCw className="h-3.5 w-3.5" />
-                          Sync
+                          <RefreshCw
+                            className={cn(
+                              "h-3.5 w-3.5",
+                              isSyncing && "animate-spin"
+                            )}
+                          />
+                          {isSyncing ? "Syncing..." : "Sync"}
                         </Button>
                       </div>
 
                       <div className="space-y-0.5">
-                        {filteredMemories.map(memory => (
+                        {filteredMemories.map((memory) => (
                           <MemoryCard key={memory.id} memory={memory} />
                         ))}
                       </div>
                     </div>
                   ) : (
-                    <WelcomeView onLogin={login} />
+                    <WelcomeView
+                      onLoginOAuth={loginWithOAuth}
+                      onLoginApiKey={loginWithApiKey}
+                      isLoading={authLoading}
+                      error={authError}
+                    />
                   )}
                 </CollapsibleContent>
               </Collapsible>
@@ -325,7 +438,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
           <ChatInterface
             value={chatInput}
             onChange={setChatInput}
-            onSend={() => setChatInput('')}
+            onSend={() => setChatInput("")}
             isAuthenticated={isAuthenticated}
             onAttach={onAttachFromClipboard}
           />

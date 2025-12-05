@@ -1,45 +1,26 @@
-import { useEffect, useState } from 'react';
-import { useLanonasis } from '@lanonasis/shared/sdk/react-hooks';
+import { useLanonasisContext } from '../context/LanonasisContext';
 
 export const useAuth = () => {
-  const { client, isAuthenticated, isConnecting, user, login, logout, error } =
-    useLanonasis();
-  const [isVerifying, setIsVerifying] = useState(true);
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    const verify = async () => {
-      if (!isAuthenticated) {
-        setIsVerifying(false);
-        return;
-      }
-
-      try {
-        // This calls /api/v1/memory via the shared SDK (not /api/memories)
-        await client.memory.list();
-      } catch (err) {
-        console.error('Auth verification via /api/v1/memory failed:', err);
-      } finally {
-        if (!isCancelled) {
-          setIsVerifying(false);
-        }
-      }
-    };
-
-    verify();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [client, isAuthenticated]);
+  const {
+    isAuthenticated,
+    isLoading,
+    user,
+    error,
+    loginWithOAuth,
+    loginWithApiKey,
+    logout,
+  } = useLanonasisContext();
 
   return {
     isAuthenticated,
-    isLoading: isConnecting || isVerifying,
+    isLoading,
     user,
-    login,
-    logout,
     error,
+    // Expose both login methods
+    loginWithOAuth,
+    loginWithApiKey,
+    // Legacy login function (for backward compatibility)
+    login: loginWithOAuth,
+    logout,
   };
 };
