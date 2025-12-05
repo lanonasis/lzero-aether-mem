@@ -3,7 +3,7 @@ import { format } from 'date-fns';
 import { Copy, Check, Hash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Memory } from '../../../shared/types';
+import { Memory } from '@/packages/shared/types';
 
 export const MemoryCard = ({ memory }: { memory: Memory }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -55,7 +55,7 @@ export const MemoryCard = ({ memory }: { memory: Memory }) => {
             {format(memory.date, 'MMM d')}
           </span>
         </div>
-        {memory.tags?.map(tag => (
+        {memory.tags?.map((tag: string) => (
           <div
             key={tag}
             className="flex items-center gap-0.5 px-1 rounded bg-[var(--vscode-badge-background)]/10 text-[var(--vscode-editor-foreground)] opacity-60"
