@@ -15,3 +15,4 @@ packages/shared/tsconfig.tsbuildinfo
 packages/mobile-pwa/.env.local
 client/.env.local
 .turbo/cookies/
+.vercel
