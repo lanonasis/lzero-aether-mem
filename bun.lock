@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 1,
   "workspaces": {
     "": {
       "name": "lanonasis-aether-memory",
@@ -46,7 +45,7 @@
         "vite": "^7.2.4",
       },
     },
-    "packages/memory-intelligence-mcp-server": {
+    "packages/context-intelligence-engine": {
       "name": "memory-intelligence-mcp-server",
       "version": "1.0.0",
       "bin": {
@@ -1267,7 +1266,7 @@
 
     "media-typer": ["media-typer@1.1.0", "", {}, "sha512-aisnrDP4GNe06UcKFnV5bfMNPBUw4jsLGaWwWfnH3v02GnBuXX2MCVn5RbrWo0j3pczUilYblq7fQ7Nw2t5XKw=="],
 
-    "memory-intelligence-mcp-server": ["memory-intelligence-mcp-server@workspace:packages/memory-intelligence-mcp-server"],
+    "memory-intelligence-mcp-server": ["memory-intelligence-mcp-server@workspace:packages/context-intelligence-engine"],
 
     "merge-descriptors": ["merge-descriptors@2.0.0", "", {}, "sha512-Snk314V5ayFLhp3fkUREub6WtjBfPdCPY1Ln8/8munuLuiYhsABgBVWsozAG+MWMbVEvcdcpbi9R7ww22l9Q3g=="],
 
