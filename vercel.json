@@ -1,5 +1,37 @@
 {
-  "buildCommand": "bun run build:web",
-  "outputDirectory": "dist/public",
-  "installCommand": "bun install"
+  "version": 2,
+  "buildCommand": "bash ../../build.sh || bash ../build.sh || bash ./build.sh",
+  "outputDirectory": "../../dist/public",
+  "framework": null,
+  "installCommand": "bun install",
+  "devCommand": "bun run dev:web",
+  "env": {
+    "VITE_API_URL": "https://api.lanonasis.com/api/v1"
+  },
+  "build": {
+    "env": {
+      "VITE_API_URL": "https://api.lanonasis.com/api/v1"
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
+        },
+        {
+          "key": "Cross-Origin-Embedder-Policy",
+          "value": "credentialless"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }
