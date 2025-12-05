@@ -1,0 +1,86 @@
+{
+  "name": "lzero-memory",
+  "displayName": "L0 Memory",
+  "description": "L0 / LanOnasis Memory-as-a-Service companion for VS Code",
+  "version": "0.1.0",
+  "publisher": "lanonasis",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lanonasis/lzero-aether-mem.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "lzeroMemory",
+          "title": "L0 Memory",
+          "icon": "./media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "lzeroMemory": [
+        {
+          "id": "lzero.memorySidebar",
+          "name": "L0 Memory",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "lzeroMemory.authenticate",
+        "title": "L0 Memory: Authenticate"
+      },
+      {
+        "command": "lzeroMemory.createMemoryFromSelection",
+        "title": "L0 Memory: Create Memory from Selection"
+      }
+    ],
+    "configuration": {
+      "title": "LanOnasis",
+      "properties": {
+        "lanonasis.apiUrl": {
+          "type": "string",
+          "default": "https://api.lanonasis.com/api/v1",
+          "description": "Base URL for the LanOnasis Memory API."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs --production",
+    "build:dev": "node esbuild.config.mjs",
+    "build:webview": "vite build --config vite.webview.config.ts",
+    "watch": "node esbuild.config.mjs --watch",
+    "dev": "node esbuild.config.mjs --watch",
+    "lint": "echo 'No lint configured for vscode-extension'",
+    "typecheck": "tsc -p . --noEmit",
+    "clean": "rm -rf out media/sidebar-react.* media/style.css",
+    "package": "npm run build && npm run build:webview && vsce package",
+    "vscode:prepublish": "npm run build && npm run build:webview"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.17",
+    "@types/node": "^20.19.25",
+    "@types/vscode": "^1.85.0",
+    "@vitejs/plugin-react": "^5.1.1",
+    "esbuild": "^0.27.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.6"
+  },
+  "dependencies": {
+    "@lanonasis/memory-client": "^2.0.0",
+    "@lanonasis/oauth-client": "^1.2.1",
+    "@lanonasis/security-sdk": "^1.0.3"
+  }
+}

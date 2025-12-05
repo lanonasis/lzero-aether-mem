@@ -1,0 +1,24 @@
+# Exclude EVERYTHING first (whitelist approach)
+**
+
+# Then include ONLY what we need for the extension
+!package.json
+!README.md
+!LICENSE
+!out/**
+!media/**
+
+# Explicitly exclude anything that might sneak in
+node_modules/**
+src/**
+*.ts
+*.tsx
+*.vsix
+.turbo/**
+.vscode/**
+.vscode-test/**
+.git/**
+.gitignore
+.cache_ggshield
+**/.cache_ggshield
+../**

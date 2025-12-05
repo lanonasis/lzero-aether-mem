@@ -4,6 +4,7 @@ import { RichPanel } from "@/components/rich-panel";
 import { Shield, Zap, Globe, Code2, CheckCircle2, Briefcase, Terminal, Copy, Check, Sparkles, Lock, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LanoLogo } from "@/components/lano-logo";
+import { PlatformTabs } from "@/components/PlatformTabs";
 import { useState } from "react";
 
 export default function LandingPage() {
@@ -36,7 +37,7 @@ export default function LandingPage() {
             <Button variant="secondary" className="bg-white/10 hover:bg-white/20 text-white border-none h-8 rounded-lg" onClick={() => navigate("/dashboard")}>
               Sign In
             </Button>
-            <Button className="bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-lg hover:shadow-[#007ACC]/50 text-white h-8 rounded-lg group" onClick={() => navigate("/dashboard")}>
+            <Button className="bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-lg hover:shadow-[#007ACC]/50 text-white h-8 rounded-lg group" onClick={() => window.location.href = "http://localhost:5173"}>
               Get Started
               <ArrowRight className="ml-2 h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
             </Button>
@@ -89,7 +90,7 @@ export default function LandingPage() {
             </div>
 
             <div className="flex flex-wrap gap-4 pt-6">
-              <Button className="h-12 px-8 bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-lg hover:shadow-[#007ACC]/40 text-white text-base rounded-lg font-medium group" onClick={() => navigate("/dashboard")}>
+              <Button className="h-12 px-8 bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-lg hover:shadow-[#007ACC]/40 text-white text-base rounded-lg font-medium group" onClick={() => window.location.href = "http://localhost:5173"}>
                 Try Live Demo
                 <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </Button>
@@ -191,6 +192,9 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* Platform Tabs */}
+      <PlatformTabs />
 
       {/* Features Grid */}
       <section id="features" className="py-24 px-6 bg-[#0A0A0A]">

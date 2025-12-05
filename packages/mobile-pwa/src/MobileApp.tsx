@@ -39,14 +39,12 @@ import {
   Bookmark,
   User,
   MessageSquare,
-  Bot,
   ArrowUp,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   useLanonasis, 
   useMemories, 
@@ -85,9 +83,10 @@ const colors = {
 // AI Status Banner
 // ============================================
 const AIStatusBanner = () => {
-  const { isReady, isLoading, loadProgress, deviceInfo, benchmark } = useLocalAI();
+  const { isReady, isLoading, loadProgress, deviceInfo, benchmark, error } = useLocalAI();
   const [benchmarkResult, setBenchmarkResult] = useState<any>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     if (isReady && !benchmarkResult) {
@@ -124,6 +123,33 @@ const AIStatusBanner = () => {
             </div>
           </div>
           <span className="text-xs text-purple-400">{loadProgress}%</span>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // Show error banner if AI failed to load
+  if (error && !dismissed) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mx-4 mt-4 p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/30"
+      >
+        <div className="flex items-center gap-3">
+          <AlertCircle className="h-5 w-5 text-yellow-400 flex-shrink-0" />
+          <div className="flex-1 text-sm">
+            <p className="font-medium text-yellow-300">On-Device AI unavailable</p>
+            <p className="text-xs text-yellow-400/70 mt-1">
+              Using cloud search instead. Check console for details.
+            </p>
+          </div>
+          <button
+            onClick={() => setDismissed(true)}
+            className="text-yellow-400 hover:text-yellow-300"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       </motion.div>
     );
@@ -252,7 +278,7 @@ const MobileMemoryCard = ({
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(memory.content);
+    navigator.clipboard.writeText(memory.content || '');
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     
@@ -291,7 +317,7 @@ const MobileMemoryCard = ({
             {memory.title}
           </h3>
           <p className="mt-1.5 text-xs text-gray-400 line-clamp-2">
-            {memory.content}
+            {memory.content || ''}
           </p>
         </div>
         <Button
@@ -315,7 +341,7 @@ const MobileMemoryCard = ({
         >
           {memory.type}
         </Badge>
-        {memory.tags.slice(0, 2).map(tag => (
+        {(memory.tags || []).slice(0, 2).map(tag => (
           <Badge
             key={tag}
             variant="outline"
@@ -325,7 +351,7 @@ const MobileMemoryCard = ({
           </Badge>
         ))}
         <span className="text-[10px] text-gray-500 ml-auto">
-          {format(new Date(memory.createdAt), 'MMM d')}
+          {memory.createdAt ? format(new Date(memory.createdAt), 'MMM d') : 'Now'}
         </span>
         {!memory.synced && (
           <div className="h-1.5 w-1.5 rounded-full bg-orange-500" title="Not synced" />
@@ -808,13 +834,25 @@ export const MobileApp = () => {
   }, [initAI]);
 
   const handleCreate = async (content: string, type: MemoryType) => {
-    const title = content.split('\n')[0].slice(0, 50) || 'Untitled';
-    await create({
-      title,
-      content,
-      type,
-      tags: [],
-    });
+    console.log('🔥 handleCreate called:', { content, type });
+
+    try {
+      const title = content.split('\n')[0].slice(0, 50) || 'Untitled';
+
+      console.log('📝 Creating memory:', { title, content, type });
+
+      const newMemory = await create({
+        title,
+        content,
+        type,
+        tags: [],
+      });
+
+      console.log('✅ Memory created successfully:', newMemory);
+    } catch (error) {
+      console.error('❌ Failed to create memory:', error);
+      throw error;
+    }
   };
 
   // Unauthenticated View
@@ -893,7 +931,7 @@ export const MobileApp = () => {
 
   // Authenticated View
   return (
-    <div className="min-h-screen bg-[#0D0D0D] flex flex-col">
+    <div className="h-screen bg-[#0D0D0D] flex flex-col overflow-hidden">
       {/* Header */}
       <header className="sticky top-0 z-30 bg-[#0D0D0D]/80 backdrop-blur-xl border-b border-white/5 safe-area-top">
         <div className="px-4 py-3 flex items-center justify-between">
@@ -945,7 +983,7 @@ export const MobileApp = () => {
       </div>
 
       {/* Content */}
-      <ScrollArea className="flex-1 px-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-4 overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
         <div className="space-y-3 pb-24">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-12">
@@ -972,7 +1010,7 @@ export const MobileApp = () => {
             ))
           )}
         </div>
-      </ScrollArea>
+      </div>
 
       {/* FAB */}
       <motion.button

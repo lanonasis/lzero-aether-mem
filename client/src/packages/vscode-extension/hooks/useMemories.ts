@@ -1,92 +1,103 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Memory } from '../../shared/types';
-import { apiClient } from '../services/apiClient';
+import { useState, useMemo, useCallback } from 'react';
+import { useLanonasisContext, type MemoryEntry, type CreateMemoryRequest } from '../context/LanonasisContext';
 
-export const useMemories = (isAuthenticated: boolean) => {
-  const [memories, setMemories] = useState<Memory[]>([]);
+// Map MemoryEntry to the Memory type used in UI components
+interface Memory {
+  id: string;
+  title: string;
+  content: string;
+  type: string;
+  tags: string[];
+  date?: Date;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+function mapMemoryEntry(entry: MemoryEntry): Memory {
+  return {
+    id: entry.id,
+    title: entry.title,
+    content: entry.content,
+    type: entry.memory_type,
+    tags: entry.tags || [],
+    date: entry.created_at ? new Date(entry.created_at) : undefined,
+    createdAt: entry.created_at,
+    updatedAt: entry.updated_at,
+  };
+}
+
+export const useMemories = (_isAuthenticated?: boolean) => {
+  const {
+    isAuthenticated,
+    memories: rawMemories,
+    isLoadingMemories,
+    memoryError,
+    fetchMemories,
+    searchMemories: searchApi,
+    createMemory: createApi,
+    deleteMemory: deleteApi,
+  } = useLanonasisContext();
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const fetchMemories = async () => {
-      setIsLoading(true);
-      try {
-        const data = await apiClient.getMemories();
-        setMemories(Array.isArray(data) ? data : []);
-        setError(null);
-      } catch (err) {
-        setError((err as Error).message);
-        console.error('Failed to fetch memories:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchMemories();
-  }, [isAuthenticated]);
+  // Map MemoryEntry[] to Memory[]
+  const memories = useMemo(() => {
+    return rawMemories.map(mapMemoryEntry);
+  }, [rawMemories]);
 
   const filteredMemories = useMemo(() => {
-    return memories.filter(m =>
-      m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.content.toLowerCase().includes(searchQuery.toLowerCase())
+    if (!searchQuery) return memories;
+    const lowerQuery = searchQuery.toLowerCase();
+    return memories.filter(
+      m =>
+        m.title.toLowerCase().includes(lowerQuery) ||
+        m.content.toLowerCase().includes(lowerQuery)
     );
   }, [memories, searchQuery]);
 
-  const searchMemories = async (query: string) => {
-    if (!isAuthenticated) return;
-    try {
-      const results = await apiClient.searchMemories(query);
-      setMemories(Array.isArray(results) ? results : []);
-    } catch (err) {
-      console.error('Search failed:', err);
-    }
-  };
+  const searchMemories = useCallback(async (query: string) => {
+    if (!isAuthenticated) return [];
+    const results = await searchApi(query);
+    return results.map(mapMemoryEntry);
+  }, [isAuthenticated, searchApi]);
 
-  const createMemory = async (data: any): Promise<Memory | undefined> => {
-    if (!isAuthenticated) return;
+  const createMemory = useCallback(async (data: Partial<CreateMemoryRequest>): Promise<Memory | undefined> => {
+    if (!isAuthenticated) return undefined;
     try {
-      const newMemory = (await apiClient.createMemory(data)) as Memory;
-      setMemories([...memories, newMemory]);
-      return newMemory;
+      const created = await createApi({
+        title: data.title || 'Untitled',
+        content: data.content || '',
+        memory_type: (data.memory_type as any) || 'note',
+        tags: data.tags || [],
+      });
+      return created ? mapMemoryEntry(created) : undefined;
     } catch (err) {
       console.error('Failed to create memory:', err);
+      return undefined;
     }
-  };
+  }, [isAuthenticated, createApi]);
 
-  const updateMemory = async (id: string, data: any): Promise<Memory | undefined> => {
+  const deleteMemory = useCallback(async (id: string) => {
     if (!isAuthenticated) return;
-    try {
-      const updated = (await apiClient.updateMemory(id, data)) as Memory;
-      setMemories(memories.map(m => (m.id === id ? updated : m)));
-      return updated;
-    } catch (err) {
-      console.error('Failed to update memory:', err);
-    }
-  };
+    await deleteApi(id);
+  }, [isAuthenticated, deleteApi]);
 
-  const deleteMemory = async (id: string) => {
+  const refetch = useCallback(async () => {
     if (!isAuthenticated) return;
-    try {
-      await apiClient.deleteMemory(id);
-      setMemories(memories.filter(m => m.id !== id));
-    } catch (err) {
-      console.error('Failed to delete memory:', err);
-    }
-  };
+    await fetchMemories();
+  }, [isAuthenticated, fetchMemories]);
 
   return {
     memories,
     searchQuery,
     setSearchQuery,
     filteredMemories,
-    isLoading,
-    error,
+    isLoading: isLoadingMemories,
+    error: memoryError,
     searchMemories,
     createMemory,
-    updateMemory,
+    updateMemory: async () => undefined, // Not implemented yet
     deleteMemory,
+    refetch,
   };
 };

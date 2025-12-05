@@ -1,18 +1,50 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
-import { Copy, Check, Hash } from 'lucide-react';
+import { Copy, Check, Hash, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Memory } from '@/packages/shared/types';
+import { Memory } from '../../../../shared/types';
+
+declare global {
+  interface Window {
+    vscode?: {
+      postMessage?: (message: unknown) => void;
+    };
+  }
+}
+
+const formatMemoryDate = (memory: Memory) => {
+  const rawDate = memory.date ?? memory.createdAt ?? memory.updatedAt;
+  if (!rawDate) return '—';
+
+  const parsed = rawDate instanceof Date ? rawDate : new Date(rawDate);
+  if (Number.isNaN(parsed.getTime())) return '—';
+
+  return format(parsed, 'MMM d');
+};
 
 export const MemoryCard = ({ memory }: { memory: Memory }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [copied, setCopied] = useState(false);
+  const Icon = memory.icon || FileText;
+  const formattedDate = formatMemoryDate(memory);
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(memory.content);
+    const text = memory.content ?? '';
+
+    if (window.vscode && typeof window.vscode.postMessage === 'function') {
+      window.vscode.postMessage({
+        type: 'lanonasis:clipboard:write',
+        payload: { text },
+      });
+    } else if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(text).catch(() => {
+        // Ignore clipboard errors in plain web preview
+      });
+    }
+
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -30,7 +62,7 @@ export const MemoryCard = ({ memory }: { memory: Memory }) => {
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
-          <memory.icon className="h-3.5 w-3.5 text-[var(--vscode-editor-foreground)] opacity-70 shrink-0" />
+          <Icon className="h-3.5 w-3.5 text-[var(--vscode-editor-foreground)] opacity-70 shrink-0" />
           <h3 className="text-[13px] text-[var(--vscode-editor-foreground)] leading-tight line-clamp-1">
             {memory.title}
           </h3>
@@ -61,7 +93,7 @@ export const MemoryCard = ({ memory }: { memory: Memory }) => {
       <div className="flex items-center gap-3 text-[11px] text-[var(--vscode-descriptionForeground)] pl-5.5">
         <div className="flex items-center gap-1 opacity-60">
           <span data-testid="text-memory-date">
-            {format(memory.date, 'MMM d')}
+            {formattedDate}
           </span>
         </div>
         {memory.tags?.map((tag: string) => (

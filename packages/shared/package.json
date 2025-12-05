@@ -35,7 +35,8 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "lint": "eslint . --ext ts,tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.60.5",

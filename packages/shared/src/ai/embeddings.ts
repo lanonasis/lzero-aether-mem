@@ -32,16 +32,25 @@ async function loadTransformers() {
     
     pipeline = transformersModule.pipeline;
     env = transformersModule.env;
-    
+
     // Configure for browser/mobile use
     env.allowLocalModels = false;
-    env.useBrowserCache = true;
-    
+
+    // Check if Cache API is available (not available in incognito mode)
+    const hasCacheAPI = typeof caches !== 'undefined';
+
+    if (hasCacheAPI) {
+      env.useBrowserCache = true;
+      console.log('✅ Using browser cache for models');
+    } else {
+      env.useBrowserCache = false;
+      console.warn('⚠️ Cache API not available (incognito mode?), models will be downloaded each time');
+    }
+
     // Use CDN mirror for better reliability
-    // Options: 'https://huggingface.co' (default) or 'https://cdn-lfs.huggingface.co'
     env.remoteHost = 'https://huggingface.co';
     env.remotePathTemplate = '{model}/resolve/{revision}/';
-    
+
     // WASM config for ARM devices
     env.backends.onnx.wasm.numThreads = 1; // Better for mobile ARM
     

@@ -7,3 +7,13 @@ vite.config.ts.*
 *.tar.gz.env
 .cache_ggshield
 packages/mobile-pwa/.env
+.turbo/cache/56bbe3acb236e10f-meta.json
+.turbo/cache/56bbe3acb236e10f.tar.zst
+.turbo/daemon/0ed5082905effeab-turbo.log.2025-11-30
+packages/shared/tsconfig.tsbuildinfo
+.turbo/
+.env
+packages/mobile-pwa/.env.local
+client/.env.local
+.turbo/cookies/
+.vercel

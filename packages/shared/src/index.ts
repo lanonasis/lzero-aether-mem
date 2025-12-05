@@ -24,9 +24,11 @@ export {
 export {
   LocalEmbeddingEngine,
   getLocalAIEngine,
-  type EmbeddingResult,
-  type SummarizationResult,
-  type ClassificationResult,
+} from './ai/embeddings';
+export type {
+  EmbeddingResult,
+  SummarizationResult,
+  ClassificationResult,
 } from './ai/embeddings';
 
 // Theme exports (design tokens for cross-platform consistency)
@@ -50,20 +52,8 @@ export type {
   MemoryType,
   CreateMemoryInput,
   SearchOptions,
-  SearchResult,
   User,
-  AuthSession,
   ApiKey,
   SyncStatus,
-  SyncResult,
-  AIStatus,
-  Platform,
-  PlatformInfo,
-  EventType,
-  LanonasisEvent,
   ApiResponse,
-  PaginatedResponse,
-  MemoryCardProps,
-  SearchBarProps,
-  ChatInputProps,
 } from './types/index';
