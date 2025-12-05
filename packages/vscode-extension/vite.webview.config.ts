@@ -3,8 +3,8 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 
-// Path to the memory-client dist folder
-const memoryClientDist = path.resolve(__dirname, 'node_modules/@lanonasis/memory-client/dist');
+// Path to the memory-client dist folder (hoisted to root node_modules)
+const memoryClientDist = path.resolve(__dirname, '../../node_modules/@lanonasis/memory-client/dist');
 
 // Vite build dedicated to the VS Code webview bundle.
 // It reuses the main client's IDEPanel and Tailwind/theme setup.
