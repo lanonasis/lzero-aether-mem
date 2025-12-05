@@ -13,14 +13,9 @@ export const useAuth = () => {
 
   return {
     isAuthenticated,
-    isLoading,
     user,
-    error,
-    // Expose both login methods
-    loginWithOAuth,
-    loginWithApiKey,
-    // Legacy login function (for backward compatibility)
-    login: loginWithOAuth,
+    isLoading,
+    login,
     logout,
   };
 };

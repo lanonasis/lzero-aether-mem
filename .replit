@@ -44,8 +44,15 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev"
-waitForPort = 5000
+args = "bun install"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bun run dev:web"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bun run dev:mobile"
 
 [agent]
 mockupState = "FULLSTACK"
