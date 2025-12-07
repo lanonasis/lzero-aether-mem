@@ -14,6 +14,13 @@ export default defineConfig({
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
       "@lanonasis/shared": path.resolve(import.meta.dirname, "packages", "shared", "src"),
+      "@lanonasis/oauth-client": path.resolve(
+        import.meta.dirname,
+        "client",
+        "src",
+        "lib",
+        "oauth-client-browser.ts",
+      ),
     },
   },
   css: {
