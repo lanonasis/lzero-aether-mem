@@ -25,7 +25,7 @@ const OAUTH_CONFIG = {
   clientId: 'lzero-memory-vscode',
   authBaseUrl: 'https://auth.lanonasis.com',
   redirectUri: 'vscode://lanonasis.lzero-memory/callback',
-  scope: 'memory:read memory:write api_keys:manage',
+  scope: 'memories:read memories:write memories:delete profile',
 } as const;
 
 class VSCodeOAuthFlow {
@@ -213,19 +213,35 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
   }
 
   private async sendConfigToWebview(webview: vscode.Webview): Promise<void> {
-    const configuration = vscode.workspace.getConfiguration('lanonasis');
-    const apiUrl = configuration.get<string>('apiUrl') || 'https://api.lanonasis.com/api/v1';
+    // Try new config first, fall back to old for backward compatibility
+    const newConfig = vscode.workspace.getConfiguration('lzero');
+    const oldConfig = vscode.workspace.getConfiguration('lanonasis');
+    const apiUrl = newConfig.get<string>('apiUrl') ||
+                   oldConfig.get<string>('apiUrl') ||
+                   'https://api.lanonasis.com/api/v1';
     let authCredential: string | undefined;
 
     try {
       const tokensJson = await this.context.secrets.get(STORAGE_KEYS.OAUTH_TOKENS);
       if (tokensJson) {
         const tokens: TokenResponse = JSON.parse(tokensJson);
-        const issuedAt = tokens.issued_at ?? Date.now();
-        const expiresAt = issuedAt + (tokens.expires_in * 1000);
-        if (Date.now() <= expiresAt - 5 * 60 * 1000) {
-          authCredential = tokens.access_token;
-          this.output.appendLine('[LanOnasis] Found valid OAuth token');
+
+        // Clear tokens if they have old scopes (memory:* or api_keys:manage)
+        const hasOldScopes = tokens.scope && (
+          tokens.scope.includes('memory:') ||
+          tokens.scope.includes('api_keys:manage')
+        );
+
+        if (hasOldScopes) {
+          this.output.appendLine('[LanOnasis] Clearing cached tokens with old scopes');
+          await this.context.secrets.delete(STORAGE_KEYS.OAUTH_TOKENS);
+        } else {
+          const issuedAt = tokens.issued_at ?? Date.now();
+          const expiresAt = issuedAt + (tokens.expires_in * 1000);
+          if (Date.now() <= expiresAt - 5 * 60 * 1000) {
+            authCredential = tokens.access_token;
+            this.output.appendLine('[LanOnasis] Found valid OAuth token');
+          }
         }
       }
     } catch (err) {

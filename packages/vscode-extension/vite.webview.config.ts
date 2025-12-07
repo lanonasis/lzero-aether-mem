@@ -10,6 +10,9 @@ const memoryClientDist = path.resolve(__dirname, 'node_modules/@lanonasis/memory
 // It reuses the main client's IDEPanel and Tailwind/theme setup.
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  css: {
+    postcss: './postcss.config.js',
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '../../client/src'),

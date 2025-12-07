@@ -1,5 +1,6 @@
-# Exclude EVERYTHING first (whitelist approach)
-**
+# Exclude parent directories to prevent leakage
+../../**
+../**
 
 # Then include ONLY what we need for the extension
 !package.json
@@ -21,4 +22,9 @@ src/**
 .gitignore
 .cache_ggshield
 **/.cache_ggshield
-../**
+**/.DS_Store
+.DS_Store
+.env
+.env.*
+**/.env
+**/.env.*
