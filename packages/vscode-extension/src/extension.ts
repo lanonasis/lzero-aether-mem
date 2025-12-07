@@ -22,7 +22,7 @@ function isValidApiKeyFormat(apiKey: string): boolean {
 }
 
 const OAUTH_CONFIG = {
-  clientId: 'lzero-memory-vscode',
+  clientId: 'vscode-extension',
   authBaseUrl: 'https://auth.lanonasis.com',
   redirectUri: 'vscode://lanonasis.lzero-memory/callback',
   scope: 'memories:read memories:write memories:delete profile',
