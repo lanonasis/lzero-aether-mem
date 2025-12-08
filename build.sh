@@ -30,11 +30,17 @@ echo "Project root: $PROJECT_ROOT"
 # Build shared package
 echo "Building shared package..."
 cd "$PROJECT_ROOT/packages/shared"
-npx tsc
+if ! npx tsc; then
+  echo "Error: TypeScript compilation failed"
+  exit 1
+fi
 cd "$PROJECT_ROOT"
 
 # Build web app
 echo "Building web app with Vite..."
-npx vite build
+if ! npx vite build; then
+  echo "Error: Vite build failed"
+  exit 1
+fi
 
 echo "Build complete! Output directory: $PROJECT_ROOT/dist/public"
