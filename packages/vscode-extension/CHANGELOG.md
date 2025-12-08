@@ -5,6 +5,28 @@ All notable changes to the L0 Memory VS Code Extension will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2025-12-08
+
+### Added
+- **Chat Participant** (`@memory`) for VS Code Chat integration
+  - `@memory find [query]` - Semantic search
+  - `@memory save [content]` - Create memory
+  - `@memory list` - Show recent memories
+- **Memory Caching** with offline support using VS Code globalState
+- **Natural Language Chat** in sidebar with intent parsing
+- **Offline Status Banner** showing connection state and pending sync count
+- **AI-Powered Search** via extension host message bridge
+- New commands: `L0 Memory: Sync Memories`, `L0 Memory: Search Memories`
+
+### Fixed
+- Activity bar icon now uses `currentColor` for proper theme adaptation
+- Create and Sync buttons are now always responsive (removed incorrect disabled state)
+- Buttons show loading spinners during operations
+
+### Changed
+- Minimum VS Code version bumped to 1.93.0 for Chat Participant API
+- Added "AI" category to extension
+
 ## [0.1.1] - 2025-12-08
 
 ### Added
@@ -35,5 +57,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Credentials stored securely in VS Code SecretStorage
 - Content Security Policy (CSP) for webview protection
 
+[0.2.0]: https://github.com/lanonasis/lzero-aether-mem/releases/tag/vscode-extension-v0.2.0
 [0.1.1]: https://github.com/lanonasis/lzero-aether-mem/releases/tag/vscode-extension-v0.1.1
 [0.1.0]: https://github.com/lanonasis/lzero-aether-mem/releases/tag/vscode-extension-v0.1.0

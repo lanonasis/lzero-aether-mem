@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import * as crypto from 'crypto';
+import { MemoryCache, CachedMemory } from './memoryCache';
+import { MemoryChatParticipant } from './chatParticipant';
 
 interface TokenResponse {
   access_token: string;
@@ -14,6 +16,12 @@ const STORAGE_KEYS = {
   API_KEY: 'lanonasis.apiKey',
   OAUTH_TOKENS: 'lanonasis.tokens',
 } as const;
+
+// API configuration
+const getApiUrl = (): string => {
+  const config = vscode.workspace.getConfiguration('lzero');
+  return config.get<string>('apiUrl') || 'https://api.lanonasis.com/api/v1';
+};
 
 const VALID_API_KEY_PREFIXES = ['lano_', 'lns_'] as const;
 
@@ -153,6 +161,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     private readonly context: vscode.ExtensionContext,
     private readonly output: vscode.OutputChannel,
     private readonly oauthFlow: VSCodeOAuthFlow,
+    private readonly cache: MemoryCache,
   ) { }
 
   resolveWebviewView(
@@ -209,7 +218,156 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         if (typeof text === 'string') void vscode.env.clipboard.writeText(text);
         return;
       }
+
+      // Memory cache operations
+      if (message.type === 'lanonasis:cache:get') {
+        const memories = this.cache.getMemories();
+        const status = this.cache.getStatus();
+        webview.postMessage({ 
+          type: 'lanonasis:cache:data', 
+          payload: { memories, status } 
+        });
+        return;
+      }
+
+      if (message.type === 'lanonasis:cache:search') {
+        const query = message.payload?.query as string;
+        if (query) {
+          const results = this.cache.semanticSearchLocal(query);
+          webview.postMessage({ 
+            type: 'lanonasis:cache:search:result', 
+            payload: { results, query } 
+          });
+        }
+        return;
+      }
+
+      if (message.type === 'lanonasis:cache:add') {
+        const memory = message.payload?.memory;
+        if (memory) {
+          void this.cache.addLocal(memory).then((created) => {
+            webview.postMessage({ 
+              type: 'lanonasis:cache:added', 
+              payload: { memory: created } 
+            });
+          });
+        }
+        return;
+      }
+
+      if (message.type === 'lanonasis:cache:sync') {
+        void this.syncMemories(webview);
+        return;
+      }
+
+      if (message.type === 'lanonasis:ai:search') {
+        const query = message.payload?.query as string;
+        if (query) {
+          void this.handleAISearch(webview, query);
+        }
+        return;
+      }
     });
+  }
+
+  private async syncMemories(webview: vscode.Webview): Promise<void> {
+    this.cache.setSyncing(true);
+    webview.postMessage({ type: 'lanonasis:sync:start' });
+
+    try {
+      const apiKey = await this.getStoredApiKey();
+      if (!apiKey) {
+        webview.postMessage({ type: 'lanonasis:sync:error', payload: { error: 'Not authenticated' } });
+        return;
+      }
+
+      const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/memories?limit=100`, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const memories = (data.memories || data || []) as CachedMemory[];
+      await this.cache.updateFromApi(memories);
+      this.cache.setOnline(true);
+
+      webview.postMessage({ 
+        type: 'lanonasis:sync:complete', 
+        payload: { memories, status: this.cache.getStatus() } 
+      });
+    } catch (err) {
+      this.cache.setOnline(false);
+      this.output.appendLine(`[LanOnasis] Sync error: ${err}`);
+      webview.postMessage({ 
+        type: 'lanonasis:sync:error', 
+        payload: { error: String(err) } 
+      });
+    } finally {
+      this.cache.setSyncing(false);
+    }
+  }
+
+  private async handleAISearch(webview: vscode.Webview, query: string): Promise<void> {
+    try {
+      // First, search local cache
+      const localResults = this.cache.semanticSearchLocal(query);
+      
+      // Send local results immediately
+      webview.postMessage({ 
+        type: 'lanonasis:ai:search:local', 
+        payload: { results: localResults, query } 
+      });
+
+      // Then try API semantic search
+      const apiKey = await this.getStoredApiKey();
+      if (apiKey) {
+        const apiUrl = getApiUrl();
+        const response = await fetch(`${apiUrl}/memories/search?q=${encodeURIComponent(query)}&limit=10`, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const apiResults = (data.memories || data || []) as CachedMemory[];
+          webview.postMessage({ 
+            type: 'lanonasis:ai:search:api', 
+            payload: { results: apiResults, query } 
+          });
+        }
+      }
+    } catch (err) {
+      this.output.appendLine(`[LanOnasis] AI search error: ${err}`);
+    }
+  }
+
+  private async getStoredApiKey(): Promise<string | undefined> {
+    try {
+      const tokensJson = await this.context.secrets.get(STORAGE_KEYS.OAUTH_TOKENS);
+      if (tokensJson) {
+        const tokens: TokenResponse = JSON.parse(tokensJson);
+        const issuedAt = tokens.issued_at ?? Date.now();
+        const expiresAt = issuedAt + (tokens.expires_in * 1000);
+        if (Date.now() <= expiresAt - 5 * 60 * 1000) {
+          return tokens.access_token;
+        }
+      }
+    } catch { /* ignore */ }
+
+    try {
+      return await this.context.secrets.get(STORAGE_KEYS.API_KEY);
+    } catch { /* ignore */ }
+
+    return undefined;
   }
 
   private async sendConfigToWebview(webview: vscode.Webview): Promise<void> {
@@ -342,6 +500,9 @@ export function activate(context: vscode.ExtensionContext) {
   const output = vscode.window.createOutputChannel('LanOnasis Memory');
   output.appendLine('[LanOnasis] Extension activating...');
 
+  // Initialize memory cache
+  const cache = new MemoryCache(context, output);
+
   const oauthFlow = new VSCodeOAuthFlow(output);
 
   const uriHandler = vscode.window.registerUriHandler({
@@ -352,7 +513,31 @@ export function activate(context: vscode.ExtensionContext) {
   });
   context.subscriptions.push(uriHandler);
 
-  const provider = new MemorySidebarProvider(context, output, oauthFlow);
+  const provider = new MemorySidebarProvider(context, output, oauthFlow, cache);
+
+  // Initialize Chat Participant (@memory)
+  const getApiKey = async (): Promise<string | undefined> => {
+    try {
+      const tokensJson = await context.secrets.get(STORAGE_KEYS.OAUTH_TOKENS);
+      if (tokensJson) {
+        const tokens: TokenResponse = JSON.parse(tokensJson);
+        return tokens.access_token;
+      }
+    } catch { /* ignore */ }
+    try {
+      return await context.secrets.get(STORAGE_KEYS.API_KEY);
+    } catch { /* ignore */ }
+    return undefined;
+  };
+
+  const chatParticipant = new MemoryChatParticipant(
+    context,
+    output,
+    cache,
+    getApiUrl(),
+    getApiKey,
+  );
+  chatParticipant.register();
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(MemorySidebarProvider.viewType, provider, { webviewOptions: { retainContextWhenHidden: true } }),
@@ -381,6 +566,47 @@ export function activate(context: vscode.ExtensionContext) {
       if (!text) { await vscode.window.showInformationMessage('No text selected'); return; }
       provider.postMessage({ type: 'lanonasis:inject-chat', payload: { text } });
       await vscode.commands.executeCommand('lzero.memorySidebar.focus');
+    }),
+  );
+
+  // Sync memories command
+  context.subscriptions.push(
+    vscode.commands.registerCommand('lzeroMemory.syncMemories', async () => {
+      provider.postMessage({ type: 'lanonasis:cache:sync' });
+      await vscode.window.showInformationMessage('LanOnasis: Syncing memories...');
+    }),
+  );
+
+  // Search memories command with quick pick
+  context.subscriptions.push(
+    vscode.commands.registerCommand('lzeroMemory.searchMemories', async () => {
+      const query = await vscode.window.showInputBox({
+        prompt: 'Search your memories',
+        placeHolder: 'e.g., OAuth implementation, regex pattern...',
+      });
+      if (query) {
+        const results = cache.semanticSearchLocal(query);
+        if (results.length === 0) {
+          await vscode.window.showInformationMessage(`No memories found for "${query}"`);
+          return;
+        }
+        const items = results.map(m => ({
+          label: m.title,
+          description: m.memory_type,
+          detail: m.content.slice(0, 100) + (m.content.length > 100 ? '...' : ''),
+          memory: m,
+        }));
+        const selected = await vscode.window.showQuickPick(items, {
+          placeHolder: `Found ${results.length} memories`,
+          matchOnDescription: true,
+          matchOnDetail: true,
+        });
+        if (selected) {
+          // Copy to clipboard
+          await vscode.env.clipboard.writeText(selected.memory.content);
+          await vscode.window.showInformationMessage(`Copied "${selected.label}" to clipboard`);
+        }
+      }
     }),
   );
 

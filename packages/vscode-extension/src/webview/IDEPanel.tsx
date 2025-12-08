@@ -2,8 +2,14 @@
  * IDEPanel - Main sidebar component for L0 Memory VS Code Extension
  * Uses @lanonasis/memory-client for memory operations
  * Auth is managed by VS Code extension host (secrets storage)
+ * 
+ * Enhanced Features:
+ * - Local memory caching with offline support
+ * - Natural language semantic search
+ * - AI-powered chat interface
+ * - Sync status and pending queue indicator
  */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   useMemories,
   useCreateMemory,
@@ -13,6 +19,38 @@ import type {
   MemoryEntry,
   CreateMemoryRequest,
 } from "@lanonasis/memory-client/react";
+
+// Types for cache and sync
+interface CachedMemory extends MemoryEntry {
+  _pending?: 'create' | 'update' | 'delete';
+  _localId?: string;
+}
+
+interface SyncStatus {
+  isOnline: boolean;
+  lastSyncAt: number | null;
+  pendingCount: number;
+  isSyncing: boolean;
+}
+
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  memories?: CachedMemory[];
+  timestamp: number;
+}
+
+// VS Code API bridge
+declare global {
+  interface Window {
+    vscode?: {
+      postMessage: (message: unknown) => void;
+      getState: () => unknown;
+      setState: (state: unknown) => void;
+    };
+  }
+}
 import { Button, Input } from "./components/ui";
 import { L0Logo } from "./components/L0Logo";
 
@@ -401,6 +439,110 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({
 );
 
 // ============================================
+// Offline Status Banner
+// ============================================
+
+interface OfflineStatusProps {
+  syncStatus: SyncStatus;
+  onSync: () => void;
+}
+
+const OfflineStatusBanner: React.FC<OfflineStatusProps> = ({ syncStatus, onSync }) => {
+  if (syncStatus.isOnline && syncStatus.pendingCount === 0) return null;
+
+  return (
+    <div className={`px-3 py-2 text-[11px] flex items-center justify-between ${
+      syncStatus.isOnline 
+        ? 'bg-yellow-500/10 text-yellow-400 border-b border-yellow-500/20'
+        : 'bg-red-500/10 text-red-400 border-b border-red-500/20'
+    }`}>
+      <div className="flex items-center gap-2">
+        {!syncStatus.isOnline ? (
+          <>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="1" y1="1" x2="23" y2="23" />
+              <path d="M16.72 11.06A10.94 10.94 0 0119 12.55" />
+              <path d="M5 12.55a10.94 10.94 0 015.17-2.39" />
+              <path d="M10.71 5.05A16 16 0 0122.58 9" />
+              <path d="M1.42 9a15.91 15.91 0 014.7-2.88" />
+              <path d="M8.53 16.11a6 6 0 016.95 0" />
+              <line x1="12" y1="20" x2="12.01" y2="20" />
+            </svg>
+            <span>Offline</span>
+          </>
+        ) : (
+          <>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-pulse">
+              <path d="M23 4v6h-6M1 20v-6h6" />
+              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+            </svg>
+            <span>{syncStatus.pendingCount} pending</span>
+          </>
+        )}
+      </div>
+      {syncStatus.pendingCount > 0 && syncStatus.isOnline && (
+        <button
+          onClick={onSync}
+          disabled={syncStatus.isSyncing}
+          className="text-[10px] px-2 py-0.5 rounded bg-yellow-500/20 hover:bg-yellow-500/30 transition-colors disabled:opacity-50"
+        >
+          {syncStatus.isSyncing ? 'Syncing...' : 'Sync now'}
+        </button>
+      )}
+    </div>
+  );
+};
+
+// ============================================
+// Chat Message Component
+// ============================================
+
+interface ChatMessageProps {
+  message: ChatMessage;
+}
+
+const ChatMessageView: React.FC<ChatMessageProps> = ({ message }) => {
+  const isUser = message.role === 'user';
+  
+  return (
+    <div className={`flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
+      <div className={`max-w-[90%] rounded-lg px-3 py-2 text-[13px] ${
+        isUser 
+          ? 'bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)]'
+          : 'bg-[var(--vscode-editor-background)] text-[var(--vscode-editor-foreground)] border border-[var(--vscode-panel-border)]'
+      }`}>
+        {message.content}
+      </div>
+      
+      {/* Show relevant memories for assistant responses */}
+      {!isUser && message.memories && message.memories.length > 0 && (
+        <div className="w-full mt-2 space-y-1">
+          <div className="text-[10px] text-[var(--vscode-descriptionForeground)] uppercase tracking-wide px-1">
+            Related memories ({message.memories.length})
+          </div>
+          {message.memories.slice(0, 3).map((memory) => (
+            <div 
+              key={memory.id}
+              className="p-2 rounded bg-[var(--vscode-editor-background)] border border-[var(--vscode-panel-border)] text-[12px]"
+            >
+              <div className="font-medium text-[var(--vscode-editor-foreground)] line-clamp-1">
+                {memory.title}
+              </div>
+              <div className="text-[var(--vscode-descriptionForeground)] line-clamp-2 mt-0.5">
+                {memory.content.slice(0, 100)}{memory.content.length > 100 ? '...' : ''}
+              </div>
+              {memory._pending && (
+                <div className="text-[10px] text-yellow-400 mt-1">⏳ Pending sync</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================
 // Main IDEPanel Component
 // ============================================
 
@@ -447,12 +589,109 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
   const [isAssistantOpen, setIsAssistantOpen] = useState(true);
   const [isMemoriesOpen, setIsMemoriesOpen] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  
+  // New state for enhanced features
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [isAISearching, setIsAISearching] = useState(false);
+  const [cachedMemories, setCachedMemories] = useState<CachedMemory[]>([]);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
+    isOnline: true,
+    lastSyncAt: null,
+    pendingCount: 0,
+    isSyncing: false,
+  });
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (initialChatInput !== undefined) {
       setChatInput(initialChatInput);
     }
   }, [initialChatInput]);
+
+  // Listen for messages from extension host
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const message = event.data;
+      if (!message || typeof message !== 'object') return;
+
+      // Handle cache data
+      if (message.type === 'lanonasis:cache:data') {
+        setCachedMemories(message.payload?.memories || []);
+        if (message.payload?.status) {
+          setSyncStatus(message.payload.status);
+        }
+      }
+
+      // Handle sync status updates
+      if (message.type === 'lanonasis:sync:start') {
+        setSyncStatus(prev => ({ ...prev, isSyncing: true }));
+      }
+      if (message.type === 'lanonasis:sync:complete') {
+        setCachedMemories(message.payload?.memories || []);
+        setSyncStatus(message.payload?.status || { ...syncStatus, isSyncing: false });
+      }
+      if (message.type === 'lanonasis:sync:error') {
+        setSyncStatus(prev => ({ ...prev, isSyncing: false, isOnline: false }));
+      }
+
+      // Handle AI search results
+      if (message.type === 'lanonasis:ai:search:local') {
+        const results = message.payload?.results || [];
+        if (results.length > 0) {
+          // Update the last assistant message with local results
+          setChatMessages(prev => {
+            const last = prev[prev.length - 1];
+            if (last?.role === 'assistant') {
+              return [...prev.slice(0, -1), { ...last, memories: results }];
+            }
+            return prev;
+          });
+        }
+      }
+      if (message.type === 'lanonasis:ai:search:api') {
+        const results = message.payload?.results || [];
+        setIsAISearching(false);
+        // Merge with existing results, preferring API results
+        setChatMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last?.role === 'assistant') {
+            const existingIds = new Set((last.memories || []).map(m => m.id));
+            const newMemories = results.filter((m: CachedMemory) => !existingIds.has(m.id));
+            return [...prev.slice(0, -1), { 
+              ...last, 
+              memories: [...(last.memories || []), ...newMemories].slice(0, 5) 
+            }];
+          }
+          return prev;
+        });
+      }
+
+      // Handle memory added
+      if (message.type === 'lanonasis:cache:added') {
+        const newMemory = message.payload?.memory;
+        if (newMemory) {
+          setCachedMemories(prev => [newMemory, ...prev]);
+          setSyncStatus(prev => ({ ...prev, pendingCount: prev.pendingCount + 1 }));
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    
+    // Request initial cache data
+    if (window.vscode) {
+      window.vscode.postMessage({ type: 'lanonasis:cache:get' });
+    }
+
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  // Scroll chat to bottom when new messages arrive
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
 
   // Handle search with debounce
   useEffect(() => {
@@ -461,14 +700,23 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
     }
   }, [searchQuery, search]);
 
-  const displayMemories = searchQuery.length > 2 ? searchResults : memories;
+  // Combine API memories with cached memories
+  const displayMemories = searchQuery.length > 2 
+    ? searchResults 
+    : (memories.length > 0 ? memories : cachedMemories);
 
   const handleCreate = async () => {
-    const content = chatInput.trim();
+    const content = chatInput.trim() || searchQuery.trim();
     if (!content) {
-      // Don't create empty memories
+      // Focus the chat input if no content
+      const textarea = document.querySelector('textarea');
+      if (textarea) {
+        textarea.focus();
+        textarea.placeholder = "Type content to save as a memory...";
+      }
       return;
     }
+    
     try {
       const request: CreateMemoryRequest = {
         title: content.slice(0, 50) + (content.length > 50 ? "..." : ""),
@@ -481,35 +729,182 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
       await refresh();
     } catch (err) {
       console.error("Failed to create memory:", err);
+      // Fall back to local cache
+      if (window.vscode) {
+        window.vscode.postMessage({
+          type: 'lanonasis:cache:add',
+          payload: {
+            memory: {
+              title: content.slice(0, 50) + (content.length > 50 ? "..." : ""),
+              content,
+              memory_type: "knowledge",
+              tags: [],
+            }
+          }
+        });
+        setChatInput("");
+      }
     }
   };
 
   const handleSync = async () => {
     setIsSyncing(true);
     try {
+      // Request sync from extension host
+      if (window.vscode) {
+        window.vscode.postMessage({ type: 'lanonasis:cache:sync' });
+      }
       await refresh();
     } finally {
       setIsSyncing(false);
     }
   };
 
+  // Parse user intent from natural language
+  const parseIntent = (input: string): { action: 'search' | 'create' | 'help'; query: string } => {
+    const lower = input.toLowerCase().trim();
+    
+    // Help intent
+    if (lower === 'help' || lower === '?' || lower.includes('how do i')) {
+      return { action: 'help', query: input };
+    }
+    
+    // Create intent
+    const createPatterns = [
+      /^save\s+(.+)/i,
+      /^create\s+(?:a\s+)?(?:memory|note)\s*:?\s*(.+)/i,
+      /^remember\s+(.+)/i,
+      /^store\s+(.+)/i,
+    ];
+    for (const pattern of createPatterns) {
+      const match = input.match(pattern);
+      if (match) {
+        return { action: 'create', query: match[1] || input };
+      }
+    }
+    
+    // Default: search intent
+    return { action: 'search', query: input };
+  };
+
   const handleSendChat = async () => {
-    // Create a memory from the chat input
     const content = chatInput.trim();
     if (!content) return;
 
-    try {
-      const request: CreateMemoryRequest = {
-        title: content.slice(0, 50) + (content.length > 50 ? "..." : ""),
-        content,
-        memory_type: "context",
-        tags: [],
+    // Add user message
+    const userMessage: ChatMessage = {
+      id: `user_${Date.now()}`,
+      role: 'user',
+      content,
+      timestamp: Date.now(),
+    };
+    setChatMessages(prev => [...prev, userMessage]);
+    setChatInput("");
+
+    // Parse intent
+    const intent = parseIntent(content);
+
+    if (intent.action === 'help') {
+      // Show help message
+      const helpMessage: ChatMessage = {
+        id: `assistant_${Date.now()}`,
+        role: 'assistant',
+        content: `🧠 **L0 Memory Assistant**\n\nI can help you:\n• **Search**: "find my OAuth notes" or "what was that regex?"\n• **Save**: "save Use PKCE for mobile OAuth"\n• **List**: "show my memories"\n\nTry asking me something!`,
+        timestamp: Date.now(),
       };
-      await createMemory(request);
-      setChatInput("");
-      await refresh();
+      setChatMessages(prev => [...prev, helpMessage]);
+      return;
+    }
+
+    if (intent.action === 'create') {
+      // Create a memory
+      try {
+        const request: CreateMemoryRequest = {
+          title: intent.query.slice(0, 50) + (intent.query.length > 50 ? "..." : ""),
+          content: intent.query,
+          memory_type: "knowledge",
+          tags: [],
+        };
+        await createMemory(request);
+        
+        const confirmMessage: ChatMessage = {
+          id: `assistant_${Date.now()}`,
+          role: 'assistant',
+          content: `✅ Memory saved: "${intent.query.slice(0, 50)}${intent.query.length > 50 ? '...' : ''}"`,
+          timestamp: Date.now(),
+        };
+        setChatMessages(prev => [...prev, confirmMessage]);
+        await refresh();
+      } catch (err) {
+        // Fall back to local cache
+        if (window.vscode) {
+          window.vscode.postMessage({
+            type: 'lanonasis:cache:add',
+            payload: {
+              memory: {
+                title: intent.query.slice(0, 50) + (intent.query.length > 50 ? "..." : ""),
+                content: intent.query,
+                memory_type: "knowledge",
+                tags: [],
+              }
+            }
+          });
+        }
+        const confirmMessage: ChatMessage = {
+          id: `assistant_${Date.now()}`,
+          role: 'assistant',
+          content: `✅ Memory saved locally (will sync when online): "${intent.query.slice(0, 50)}${intent.query.length > 50 ? '...' : ''}"`,
+          timestamp: Date.now(),
+        };
+        setChatMessages(prev => [...prev, confirmMessage]);
+      }
+      return;
+    }
+
+    // Search intent - use AI search
+    setIsAISearching(true);
+    
+    // Add assistant response placeholder
+    const assistantMessage: ChatMessage = {
+      id: `assistant_${Date.now()}`,
+      role: 'assistant',
+      content: `🔍 Searching for: "${intent.query}"`,
+      memories: [],
+      timestamp: Date.now(),
+    };
+    setChatMessages(prev => [...prev, assistantMessage]);
+
+    // Request AI search from extension host
+    if (window.vscode) {
+      window.vscode.postMessage({
+        type: 'lanonasis:ai:search',
+        payload: { query: intent.query }
+      });
+    }
+
+    // Also try API search
+    try {
+      const results = await search(intent.query);
+      if (results && results.length > 0) {
+        setChatMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last?.role === 'assistant') {
+            return [...prev.slice(0, -1), { 
+              ...last, 
+              content: results.length > 0 
+                ? `Found ${results.length} relevant memories:` 
+                : `No memories found for "${intent.query}"`,
+              memories: results as CachedMemory[]
+            }];
+          }
+          return prev;
+        });
+      }
     } catch (err) {
-      console.error("Failed to create memory from chat:", err);
+      // API search failed, rely on local results
+      console.log('API search failed, using local results');
+    } finally {
+      setIsAISearching(false);
     }
   };
 
@@ -531,6 +926,11 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
           <div className="flex items-center gap-1">
             {isAuthenticated ? (
               <>
+                {/* Online/Offline indicator */}
+                <div 
+                  className={`h-1.5 w-1.5 rounded-full mr-1 ${syncStatus.isOnline ? 'bg-green-500' : 'bg-red-500'}`}
+                  title={syncStatus.isOnline ? 'Online' : 'Offline'}
+                />
                 {userEmail && (
                   <span
                     className="text-[10px] text-[var(--vscode-descriptionForeground)] mr-2 max-w-[100px] truncate"
@@ -560,6 +960,11 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
           </div>
         </div>
 
+        {/* Offline/Pending Status Banner */}
+        {isAuthenticated && (
+          <OfflineStatusBanner syncStatus={syncStatus} onSync={handleSync} />
+        )}
+
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto">
           {/* Memory Assistant Section */}
@@ -569,16 +974,44 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
             onToggle={() => setIsAssistantOpen(!isAssistantOpen)}
           />
           {isAssistantOpen && (
-            <div className="min-h-[80px] p-4 text-[13px] text-[var(--vscode-descriptionForeground)] flex items-center justify-center text-center italic opacity-80">
-              {isAuthenticated
-                ? "Ready to assist. Ask me to recall context or refine prompts."
-                : "Please connect to enable AI assistance."}
+            <div 
+              ref={chatContainerRef}
+              className="min-h-[120px] max-h-[200px] overflow-y-auto p-3 space-y-3"
+            >
+              {chatMessages.length === 0 ? (
+                <div className="text-[13px] text-[var(--vscode-descriptionForeground)] flex flex-col items-center justify-center text-center py-4">
+                  {isAuthenticated ? (
+                    <>
+                      <div className="text-[var(--vscode-button-background)] mb-2">
+                        {icons.lightbulb}
+                      </div>
+                      <p className="italic opacity-80">Ask me to find or save memories</p>
+                      <p className="text-[11px] mt-1 opacity-60">Try: "find my OAuth notes"</p>
+                    </>
+                  ) : (
+                    <p className="italic opacity-80">Please connect to enable AI assistance.</p>
+                  )}
+                </div>
+              ) : (
+                chatMessages.map((msg) => (
+                  <ChatMessageView key={msg.id} message={msg} />
+                ))
+              )}
+              {isAISearching && (
+                <div className="flex items-center gap-2 text-[12px] text-[var(--vscode-descriptionForeground)]">
+                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Searching...
+                </div>
+              )}
             </div>
           )}
 
           {/* Memories Section */}
           <SectionHeader
-            title="Memories"
+            title={`Memories${syncStatus.pendingCount > 0 ? ` (${syncStatus.pendingCount} pending)` : ''}`}
             isOpen={isMemoriesOpen}
             onToggle={() => setIsMemoriesOpen(!isMemoriesOpen)}
             actions={
@@ -588,7 +1021,9 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                     {icons.search}
                   </Button>
                   <Button variant="ghost" size="icon" onClick={handleSync}>
-                    {icons.refresh}
+                    <span className={isSyncing || syncStatus.isSyncing ? "animate-spin" : ""}>
+                      {icons.refresh}
+                    </span>
                   </Button>
                 </>
               )
@@ -611,21 +1046,28 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                     <Button
                       className="flex-1 h-7 gap-1.5"
                       onClick={handleCreate}
-                      disabled={createLoading || memoriesLoading}
+                      disabled={createLoading}
                     >
-                      {icons.plus}
-                      Create
+                      {createLoading ? (
+                        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                      ) : (
+                        icons.plus
+                      )}
+                      {createLoading ? "Creating..." : "Create"}
                     </Button>
                     <Button
                       className="flex-1 h-7 gap-1.5"
                       variant="secondary"
                       onClick={handleSync}
-                      disabled={isSyncing || memoriesLoading}
+                      disabled={isSyncing || syncStatus.isSyncing}
                     >
-                      <span className={isSyncing ? "animate-spin" : ""}>
+                      <span className={isSyncing || syncStatus.isSyncing ? "animate-spin" : ""}>
                         {icons.refresh}
                       </span>
-                      {isSyncing ? "Syncing..." : "Sync"}
+                      {isSyncing || syncStatus.isSyncing ? "Syncing..." : "Sync"}
                     </Button>
                   </div>
 
@@ -639,7 +1081,9 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                       <div className="p-4 text-center text-[13px] text-[var(--vscode-descriptionForeground)]">
                         {searchQuery
                           ? "No memories found"
-                          : "No memories yet. Create one!"}
+                          : cachedMemories.length > 0 
+                            ? "Loading from cache..."
+                            : "No memories yet. Create one!"}
                       </div>
                     ) : (
                       displayMemories.map((memory) => (
@@ -667,8 +1111,16 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
               <textarea
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendChat();
+                  }
+                }}
                 placeholder={
-                  isAuthenticated ? "Refine context..." : "Connect to chat"
+                  isAuthenticated 
+                    ? "Ask me anything... (e.g., 'find my OAuth notes')" 
+                    : "Connect to chat"
                 }
                 disabled={!isAuthenticated}
                 className="w-full min-h-[40px] bg-transparent border-none text-[13px] text-[var(--vscode-input-foreground)] placeholder:text-[var(--vscode-input-placeholderForeground)] resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed font-sans"
@@ -692,11 +1144,18 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
               <Button
                 size="icon"
                 className="h-6 w-6"
-                disabled={!isAuthenticated || !chatInput.trim()}
+                disabled={!isAuthenticated || !chatInput.trim() || isAISearching}
                 onClick={handleSendChat}
-                title="Send"
+                title="Send (Enter)"
               >
-                {icons.send}
+                {isAISearching ? (
+                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                ) : (
+                  icons.send
+                )}
               </Button>
             </div>
           </div>

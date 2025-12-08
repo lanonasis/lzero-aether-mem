@@ -2,7 +2,7 @@
   "name": "lzero-memory",
   "displayName": "L0 Memory",
   "description": "L0 / LanOnasis Memory-as-a-Service companion for VS Code",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "lanonasis",
   "private": true,
   "repository": {
@@ -15,9 +15,10 @@
     "theme": "dark"
   },
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.93.0"
   },
   "categories": [
+    "AI",
     "Other"
   ],
   "main": "./out/extension.js",
@@ -49,6 +50,37 @@
       {
         "command": "lzeroMemory.createMemoryFromSelection",
         "title": "L0 Memory: Create Memory from Selection"
+      },
+      {
+        "command": "lzeroMemory.syncMemories",
+        "title": "L0 Memory: Sync Memories"
+      },
+      {
+        "command": "lzeroMemory.searchMemories",
+        "title": "L0 Memory: Search Memories"
+      }
+    ],
+    "chatParticipants": [
+      {
+        "id": "lanonasis.memory",
+        "name": "memory",
+        "fullName": "L0 Memory",
+        "description": "Search and manage your developer memories with AI",
+        "isSticky": false,
+        "commands": [
+          {
+            "name": "find",
+            "description": "Search your memories semantically"
+          },
+          {
+            "name": "save",
+            "description": "Save a new memory"
+          },
+          {
+            "name": "list",
+            "description": "List your recent memories"
+          }
+        ]
       }
     ],
     "configuration": {

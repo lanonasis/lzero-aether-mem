@@ -9,28 +9,53 @@ L0 Memory is the **LanOnasis Memory-as-a-Service companion** for VS Code.
 
 It brings your cross-platform memory system directly into the editor with:
 
-- **Rich sidebar UI** built with React (IDEPanel)
+- **Chat Participant** (`@memory`) for natural language queries in VS Code Chat
+- **Rich sidebar UI** built with React with AI-powered semantic search
+- **Offline-first architecture** with local caching and sync queue
 - **Editor selection → memory chat** via `L0 Memory: Create Memory from Selection`
 - **Clipboard integration** for attaching snippets and copying memories
 - **API key management** backed by the LanOnasis MaaS `/api/v1` services
 
 ## Features
 
-- **L0-branded sidebar** with Memory Assistant, Memories list, and Chat
-- **Secure auth**
-  - `L0 Memory: Authenticate` stores your API key in VS Code SecretStorage
-  - API base URL is configurable via `LanOnasis › Api Url`
-- **MaaS integration**
-  - Uses the shared L0/LanOnasis SDK to talk to `/api/v1/memory` and security APIs
-- **VS Code integration**
-  - Command palette entries
-  - Uses the current editor selection as memory/chat input
-  - Clipboard read/write bridged through the VS Code host
+### Chat Participant (`@memory`)
+
+Use natural language in VS Code Chat:
+
+```
+@memory find my OAuth implementation notes
+@memory save Use PKCE flow for mobile OAuth
+@memory list
+@memory help
+```
+
+### Sidebar UI
+
+- **Memory Assistant** - Natural language chat with AI-powered search
+- **Memories list** - Browse, search, and manage your memories
+- **Offline indicator** - Shows connection status and pending sync count
+- **Quick actions** - Create and sync with one click
+
+### Offline-First
+
+- Memories are cached locally using VS Code globalState
+- Create memories offline - they sync when back online
+- Pending sync queue with visual indicator
+
+### Secure Auth
+
+- `L0 Memory: Authenticate` stores your API key in VS Code SecretStorage
+- OAuth 2.0 PKCE flow support
+- API base URL is configurable via `lzero.apiUrl`
 
 ## Commands
 
-- `L0 Memory: Authenticate` (`lzeroMemory.authenticate`)
-- `L0 Memory: Create Memory from Selection` (`lzeroMemory.createMemoryFromSelection`)
+| Command | Description |
+|---------|-------------|
+| `L0 Memory: Authenticate` | Sign in with OAuth or API key |
+| `L0 Memory: Create Memory from Selection` | Save selected text as a memory |
+| `L0 Memory: Sync Memories` | Force sync with the server |
+| `L0 Memory: Search Memories` | Quick pick search with copy to clipboard |
 
 ## Configuration
 
@@ -40,7 +65,7 @@ Under `LanOnasis` settings:
 
 ## Requirements
 
-- VS Code `^1.80.0`
+- VS Code `^1.93.0` (for Chat Participant support)
 - A valid LanOnasis / L0 **API key** for the MaaS backend.
 
 ## Notes
