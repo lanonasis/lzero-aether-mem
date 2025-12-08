@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "L0 Memory",
+    "description": "The name of the extension"
+  },
+  "extensionDescription": {
+    "message": "Your AI-powered developer memory. Store, search, and recall context across all your tools.",
+    "description": "The description of the extension"
+  }
+}

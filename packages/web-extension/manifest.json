@@ -1,0 +1,104 @@
+{
+  "manifest_version": 3,
+  "name": "L0 Memory",
+  "default_locale": "en",
+  "short_name": "L0 Memory",
+  "version": "0.1.0",
+  "description": "Your AI-powered developer memory. Store, search, and recall context across all your tools.",
+  "author": "LanOnasis",
+  "homepage_url": "https://lanonasis.com",
+  
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+
+  "action": {
+    "default_popup": "src/popup/index.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png"
+    },
+    "default_title": "L0 Memory"
+  },
+
+  "side_panel": {
+    "default_path": "src/sidepanel/index.html"
+  },
+
+  "options_ui": {
+    "page": "src/options/index.html",
+    "open_in_tab": true
+  },
+
+  "background": {
+    "service_worker": "background/index.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/index.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "permissions": [
+    "storage",
+    "contextMenus",
+    "sidePanel",
+    "activeTab",
+    "alarms",
+    "offscreen"
+  ],
+
+  "host_permissions": [
+    "https://api.lanonasis.com/*",
+    "https://auth.lanonasis.com/*"
+  ],
+
+  "omnibox": {
+    "keyword": "mem"
+  },
+
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+M",
+        "mac": "Alt+M"
+      },
+      "description": "Open L0 Memory popup"
+    },
+    "open_side_panel": {
+      "suggested_key": {
+        "default": "Alt+Shift+M",
+        "mac": "Alt+Shift+M"
+      },
+      "description": "Open L0 Memory side panel"
+    },
+    "save_selection": {
+      "suggested_key": {
+        "default": "Alt+S",
+        "mac": "Alt+S"
+      },
+      "description": "Save selection as memory"
+    }
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+
+  "minimum_chrome_version": "114"
+}

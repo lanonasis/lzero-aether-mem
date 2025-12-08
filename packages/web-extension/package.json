@@ -1,0 +1,53 @@
+{
+  "name": "@lanonasis/web-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "L0 Memory Browser Extension - Chrome, Firefox, Edge",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch --mode development",
+    "build": "tsc && vite build",
+    "build:chrome": "BROWSER=chrome vite build",
+    "build:firefox": "BROWSER=firefox vite build",
+    "package": "npm run build && node scripts/package.js",
+    "package:chrome": "npm run build:chrome && cd dist && zip -r ../lzero-memory-chrome.zip .",
+    "package:firefox": "npm run build:firefox && cd dist && zip -r ../lzero-memory-firefox.zip .",
+    "lint": "eslint . --ext ts,tsx",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist *.zip"
+  },
+  "dependencies": {
+    "@lanonasis/memory-client": "^2.0.0",
+    "@lanonasis/shared": "workspace:*",
+    "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-scroll-area": "^1.2.10",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@tanstack/react-query": "^5.60.5",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^3.6.0",
+    "framer-motion": "^12.23.24",
+    "idb": "^8.0.0",
+    "lucide-react": "^0.545.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwind-merge": "^3.3.1",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.14",
+    "@tailwindcss/vite": "^4.1.14",
+    "@types/chrome": "^0.0.287",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.14",
+    "typescript": "^5.6.3",
+    "vite": "^7.1.9",
+    "vitest": "^3.2.4"
+  }
+}
