@@ -2,12 +2,17 @@
   "name": "lzero-memory",
   "displayName": "L0 Memory",
   "description": "L0 / LanOnasis Memory-as-a-Service companion for VS Code",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "lanonasis",
   "private": true,
   "repository": {
     "type": "git",
     "url": "https://github.com/lanonasis/lzero-aether-mem.git"
+  },
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#0F172A",
+    "theme": "dark"
   },
   "engines": {
     "vscode": "^1.85.0"

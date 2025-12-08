@@ -11,6 +11,7 @@
 
 # Explicitly exclude anything that might sneak in
 node_modules/**
+
 src/**
 *.ts
 *.tsx
