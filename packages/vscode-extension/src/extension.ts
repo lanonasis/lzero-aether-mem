@@ -180,6 +180,11 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       if (message.type === 'lanonasis:webview-ready') {
         this.output.appendLine('[LanOnasis] Webview ready');
         webview.postMessage({ type: 'lanonasis:host-ready' });
+        // Serve cached memories immediately for fast UX before any network call
+        const memories = this.cache.getMemories();
+        const status = this.cache.getStatus();
+        webview.postMessage({ type: 'lanonasis:cache:data', payload: { memories, status } });
+
         void this.sendConfigToWebview(webview);
         return;
       }
@@ -494,6 +499,11 @@ export function activate(context: vscode.ExtensionContext) {
   const output = vscode.window.createOutputChannel('LanOnasis Memory');
   output.appendLine('[LanOnasis] Extension activating...');
 
+  // Read retainContextWhenHidden setting (default false)
+  const retainContextWhenHidden = vscode.workspace
+    .getConfiguration('lzero')
+    .get<boolean>('retainContextWhenHidden', false);
+
   // Initialize memory cache
   const cache = new MemoryCache(context, output);
 
@@ -534,7 +544,9 @@ export function activate(context: vscode.ExtensionContext) {
   chatParticipant.register();
 
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(MemorySidebarProvider.viewType, provider, { webviewOptions: { retainContextWhenHidden: true } }),
+    vscode.window.registerWebviewViewProvider(MemorySidebarProvider.viewType, provider, {
+      webviewOptions: { retainContextWhenHidden },
+    }),
   );
 
   context.subscriptions.push(

@@ -33,7 +33,9 @@
   },
   "main": "./out/extension.js",
   "browser": "./out/extension.web.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onUri"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -101,6 +103,11 @@
           "type": "string",
           "default": "https://api.lanonasis.com/api/v1",
           "description": "Base URL for the L0 Memory API."
+        },
+        "lzero.retainContextWhenHidden": {
+          "type": "boolean",
+          "default": false,
+          "description": "Keep the sidebar webview context alive when hidden. Turn on only if you need instant resume and accept higher memory usage."
         }
       }
     }
