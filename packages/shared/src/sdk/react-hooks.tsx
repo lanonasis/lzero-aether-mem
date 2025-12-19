@@ -290,6 +290,8 @@ export function useLocalAI() {
     } catch (e) {
       console.error('[useLocalAI] ❌ Init failed:', e);
       setError(e as Error);
+      // Reset hasInitialized to allow retries
+      setHasInitialized(false);
       // Don't throw - graceful degradation
     } finally {
       setIsLoading(false);
