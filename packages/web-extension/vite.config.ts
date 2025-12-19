@@ -11,7 +11,7 @@ function fixHtmlPaths() {
     closeBundle() {
       const distDir = path.resolve(__dirname, 'dist');
       const htmlDirs = ['src/popup', 'src/sidepanel', 'src/options'];
-      
+
       htmlDirs.forEach(dir => {
         const htmlPath = path.resolve(distDir, dir, 'index.html');
         if (existsSync(htmlPath)) {
@@ -33,13 +33,13 @@ function copyExtensionFiles() {
     name: 'copy-extension-files',
     closeBundle() {
       const distDir = path.resolve(__dirname, 'dist');
-      
+
       // Copy manifest
       copyFileSync(
         path.resolve(__dirname, 'manifest.json'),
         path.resolve(distDir, 'manifest.json')
       );
-      
+
       // Copy icons
       const iconsDir = path.resolve(distDir, 'icons');
       if (!existsSync(iconsDir)) {
@@ -55,7 +55,7 @@ function copyExtensionFiles() {
           }
         });
       }
-      
+
       // Copy locales
       const localesDir = path.resolve(distDir, '_locales/en');
       if (!existsSync(localesDir)) {
