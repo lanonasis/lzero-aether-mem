@@ -89,7 +89,10 @@ export class MemoryCache {
    */
   private async getClient(): Promise<CoreMemoryClient | null> {
     const { authToken } = await chrome.storage.local.get('authToken');
-    if (!authToken) return null;
+    if (!authToken) {
+      console.log('[MemoryCache] No auth token available');
+      return null;
+    }
 
     if (!this.client) {
       this.client = createMemoryClient({
@@ -97,7 +100,11 @@ export class MemoryCache {
         authToken,
         timeout: 15000,
         onError: (error) => {
-          console.error('[MemoryCache] API Error:', error.message);
+          console.error('[MemoryCache] API Error:', error.message, error);
+          // Mark offline only for network errors
+          if (error.message?.includes('fetch') || error.message?.includes('network')) {
+            this.isOnline = false;
+          }
         },
       });
     } else {
