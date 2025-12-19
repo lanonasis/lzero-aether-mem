@@ -5,9 +5,26 @@ All notable changes to the L0 Memory VS Code Extension will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2025-06-20
+
+### Fixed
+
+- **Chat Participant Commands** - Slash commands (`/save`, `/find`, `/list`) now work correctly
+- **API Endpoint** - Fixed incorrect `/memories` (plural) → `/memory` (singular) endpoints
+- **API Response Parsing** - Fixed data extraction from API responses (`data.data` vs `data.memories`)
+- **SDK URL Handling** - Fixed double path issue where SDK was receiving `/api/v1` twice
+- **Settings Button** - Settings button in sidebar now properly opens VS Code settings
+- **Sync Error Handling** - Network errors properly mark offline mode; API errors don't affect connection status
+
+### Changed
+
+- Improved TypeScript configuration for module resolution compatibility
+- Better separation of API URL (for direct fetch) vs base URL (for SDK/webview)
+
 ## [0.3.0] - 2025-12-19
 
 ### Added
+
 - **VS Code for the Web Support** - Extension now works on vscode.dev, github.dev, and GitHub Codespaces
 - Dual build system generating both Node.js (`extension.js`) and browser (`extension.web.js`) bundles
 - Cross-platform crypto utilities using Web Crypto API
@@ -15,11 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `virtualWorkspaces` and `untrustedWorkspaces` capabilities
 
 ### Changed
+
 - Replaced Node.js `crypto` module with Web Crypto API for cross-platform compatibility
 - Updated build configuration to produce both desktop and web extension bundles
 - Updated description to indicate Desktop & Web support
 
 ### Technical
+
 - Added `browser` entry point in package.json
 - Added `capabilities` section for virtual workspaces and untrusted workspaces
 - Refactored OAuth PKCE flow to use async crypto operations
@@ -27,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0] - 2025-12-08
 
 ### Added
+
 - **Chat Participant** (`@memory`) for VS Code Chat integration
   - `@memory find [query]` - Semantic search
   - `@memory save [content]` - Create memory
@@ -38,30 +58,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New commands: `L0 Memory: Sync Memories`, `L0 Memory: Search Memories`
 
 ### Fixed
+
 - Activity bar icon now uses `currentColor` for proper theme adaptation
 - Create and Sync buttons are now always responsive (removed incorrect disabled state)
 - Buttons show loading spinners during operations
 
 ### Changed
+
 - Minimum VS Code version bumped to 1.93.0 for Chat Participant API
 - Added "AI" category to extension
 
 ## [0.1.1] - 2025-12-08
 
 ### Added
+
 - Marketplace icon (128×128 PNG) for proper display in VS Code and marketplace
 - Gallery banner with dark theme branding
 
 ### Fixed
+
 - Extension icon now displays correctly in marketplace and extension list
 - Reduced VSIX package size from ~3MB to ~123KB by removing stale build artifacts
 
 ### Changed
+
 - Cleaned up `.vscodeignore` to exclude unnecessary files
 
 ## [0.1.0] - 2025-12-06
 
 ### Added
+
 - Initial release of L0 Memory VS Code Extension
 - Rich sidebar UI built with React
 - OAuth 2.0 PKCE authentication flow
@@ -73,6 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configurable API endpoint via settings
 
 ### Security
+
 - Credentials stored securely in VS Code SecretStorage
 - Content Security Policy (CSP) for webview protection
 

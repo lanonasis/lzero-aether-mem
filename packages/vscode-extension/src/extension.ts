@@ -17,10 +17,20 @@ const STORAGE_KEYS = {
   OAUTH_TOKENS: 'lanonasis.tokens',
 } as const;
 
-// API configuration
+// API configuration - returns the full API path (with /api/v1)
 const getApiUrl = (): string => {
   const config = vscode.workspace.getConfiguration('lzero');
-  return config.get<string>('apiUrl') || 'https://api.lanonasis.com/api/v1';
+  const baseUrl = config.get<string>('apiUrl') || 'https://api.lanonasis.com';
+  // Normalize: if user already included /api/v1, use it; otherwise add it
+  return baseUrl.includes('/api/v1') ? baseUrl : `${baseUrl}/api/v1`;
+};
+
+// Get base URL without /api/v1 (for memory-client SDK which adds it internally)
+const getApiBaseUrl = (): string => {
+  const config = vscode.workspace.getConfiguration('lzero');
+  const configUrl = config.get<string>('apiUrl') || 'https://api.lanonasis.com';
+  // Strip /api/v1 suffix if present
+  return configUrl.replace(/\/api\/v1\/?$/, '');
 };
 
 const VALID_API_KEY_PREFIXES = ['lano_', 'lns_'] as const;
@@ -205,6 +215,11 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      if (message.type === 'lanonasis:open-settings') {
+        void vscode.commands.executeCommand('workbench.action.openSettings', 'lzero');
+        return;
+      }
+
       if (message.type === 'lanonasis:clipboard:read') {
         void vscode.env.clipboard.readText().then((text) => {
           webview.postMessage({ type: 'lanonasis:clipboard:read:result', payload: { text } });
@@ -281,7 +296,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       }
 
       const apiUrl = getApiUrl();
-      const response = await fetch(`${apiUrl}/memories?limit=100`, {
+      const response = await fetch(`${apiUrl}/memory?limit=100`, {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
@@ -293,7 +308,8 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       }
 
       const data = await response.json();
-      const memories = (data.memories || data || []) as CachedMemory[];
+      // API returns { data: [...] } or { success: true, data: [...] }
+      const memories = (data.data || data.memories || data || []) as CachedMemory[];
       await this.cache.updateFromApi(memories);
       this.cache.setOnline(true);
 
@@ -302,11 +318,19 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         payload: { memories, status: this.cache.getStatus() }
       });
     } catch (err) {
-      this.cache.setOnline(false);
+      // Only mark as offline for network errors, not API errors (404, 401, etc.)
+      const errorStr = String(err);
+      const isNetworkError = errorStr.includes('fetch') ||
+        errorStr.includes('network') ||
+        errorStr.includes('ECONNREFUSED') ||
+        errorStr.includes('ETIMEDOUT');
+      if (isNetworkError) {
+        this.cache.setOnline(false);
+      }
       this.output.appendLine(`[LanOnasis] Sync error: ${err}`);
       webview.postMessage({
         type: 'lanonasis:sync:error',
-        payload: { error: String(err) }
+        payload: { error: errorStr, isNetworkError }
       });
     } finally {
       this.cache.setSyncing(false);
@@ -328,7 +352,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       const apiKey = await this.getStoredApiKey();
       if (apiKey) {
         const apiUrl = getApiUrl();
-        const response = await fetch(`${apiUrl}/memories/search?q=${encodeURIComponent(query)}&limit=10`, {
+        const response = await fetch(`${apiUrl}/memory/search?q=${encodeURIComponent(query)}&limit=10`, {
           headers: {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
@@ -337,7 +361,8 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
 
         if (response.ok) {
           const data = await response.json();
-          const apiResults = (data.memories || data || []) as CachedMemory[];
+          // API returns { data: [...] } or { success: true, data: [...] }
+          const apiResults = (data.data || data.memories || data || []) as CachedMemory[];
           webview.postMessage({
             type: 'lanonasis:ai:search:api',
             payload: { results: apiResults, query }
@@ -373,9 +398,8 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     // Try new config first, fall back to old for backward compatibility
     const newConfig = vscode.workspace.getConfiguration('lzero');
     const oldConfig = vscode.workspace.getConfiguration('lanonasis');
-    const apiUrl = newConfig.get<string>('apiUrl') ||
-      oldConfig.get<string>('apiUrl') ||
-      'https://api.lanonasis.com/api/v1';
+    // Send base URL to webview (memory-client SDK adds /api/v1 internally)
+    const apiUrl = getApiBaseUrl();
     let authCredential: string | undefined;
 
     try {
