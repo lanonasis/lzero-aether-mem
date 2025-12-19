@@ -5,6 +5,25 @@ All notable changes to the L0 Memory VS Code Extension will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-12-19
+
+### Added
+- **VS Code for the Web Support** - Extension now works on vscode.dev, github.dev, and GitHub Codespaces
+- Dual build system generating both Node.js (`extension.js`) and browser (`extension.web.js`) bundles
+- Cross-platform crypto utilities using Web Crypto API
+- `extensionKind` configuration for UI and workspace support
+- `virtualWorkspaces` and `untrustedWorkspaces` capabilities
+
+### Changed
+- Replaced Node.js `crypto` module with Web Crypto API for cross-platform compatibility
+- Updated build configuration to produce both desktop and web extension bundles
+- Updated description to indicate Desktop & Web support
+
+### Technical
+- Added `browser` entry point in package.json
+- Added `capabilities` section for virtual workspaces and untrusted workspaces
+- Refactored OAuth PKCE flow to use async crypto operations
+
 ## [0.2.0] - 2025-12-08
 
 ### Added

@@ -7,6 +7,8 @@
 
 L0 Memory is the **LanOnasis Memory-as-a-Service companion** for VS Code.
 
+**🌐 Works everywhere:** VS Code Desktop, [vscode.dev](https://vscode.dev), [github.dev](https://github.dev), and GitHub Codespaces!
+
 It brings your cross-platform memory system directly into the editor with:
 
 - **Chat Participant** (`@memory`) for natural language queries in VS Code Chat
@@ -15,6 +17,15 @@ It brings your cross-platform memory system directly into the editor with:
 - **Editor selection → memory chat** via `L0 Memory: Create Memory from Selection`
 - **Clipboard integration** for attaching snippets and copying memories
 - **API key management** backed by the LanOnasis MaaS `/api/v1` services
+
+## Platform Support
+
+| Platform | Support |
+|----------|---------|
+| VS Code Desktop (Windows, macOS, Linux) | ✅ Full Support |
+| vscode.dev | ✅ Full Support |
+| github.dev | ✅ Full Support |
+| GitHub Codespaces | ✅ Full Support |
 
 ## Features
 

@@ -1,8 +1,8 @@
 {
   "name": "lzero-memory",
   "displayName": "L0 Memory",
-  "description": "L0 / LanOnasis Memory-as-a-Service companion for VS Code",
-  "version": "0.2.0",
+  "description": "L0 / LanOnasis Memory-as-a-Service companion for VS Code (Desktop & Web)",
+  "version": "0.3.0",
   "publisher": "lanonasis",
   "private": true,
   "repository": {
@@ -21,7 +21,18 @@
     "AI",
     "Other"
   ],
+  "extensionKind": [
+    "ui",
+    "workspace"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": true,
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
   "main": "./out/extension.js",
+  "browser": "./out/extension.web.js",
   "activationEvents": [],
   "contributes": {
     "viewsContainers": {

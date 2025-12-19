@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import * as crypto from 'crypto';
+import { generateRandomString, sha256Base64Url } from './crypto';
 import { MemoryCache, CachedMemory } from './memoryCache';
 import { MemoryChatParticipant } from './chatParticipant';
 
@@ -46,14 +46,8 @@ class VSCodeOAuthFlow {
 
   constructor(private readonly output: vscode.OutputChannel) { }
 
-  private generateRandomString(length: number = 32): string {
-    const bytes = crypto.randomBytes(length);
-    return bytes.toString('base64url').slice(0, length);
-  }
-
-  private generateCodeChallenge(verifier: string): string {
-    const hash = crypto.createHash('sha256').update(verifier).digest();
-    return hash.toString('base64url');
+  private async generateCodeChallenge(verifier: string): Promise<string> {
+    return sha256Base64Url(verifier);
   }
 
   private buildAuthorizationUrl(codeChallenge: string, state: string): string {
@@ -123,9 +117,9 @@ class VSCodeOAuthFlow {
   }
 
   public async authenticate(): Promise<TokenResponse> {
-    const codeVerifier = this.generateRandomString(43);
-    const codeChallenge = this.generateCodeChallenge(codeVerifier);
-    const state = this.generateRandomString(32);
+    const codeVerifier = generateRandomString(43);
+    const codeChallenge = await this.generateCodeChallenge(codeVerifier);
+    const state = generateRandomString(32);
     const authUrl = this.buildAuthorizationUrl(codeChallenge, state);
 
     const codePromise = new Promise<string>((resolve, reject) => {
@@ -223,9 +217,9 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       if (message.type === 'lanonasis:cache:get') {
         const memories = this.cache.getMemories();
         const status = this.cache.getStatus();
-        webview.postMessage({ 
-          type: 'lanonasis:cache:data', 
-          payload: { memories, status } 
+        webview.postMessage({
+          type: 'lanonasis:cache:data',
+          payload: { memories, status }
         });
         return;
       }
@@ -234,9 +228,9 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         const query = message.payload?.query as string;
         if (query) {
           const results = this.cache.semanticSearchLocal(query);
-          webview.postMessage({ 
-            type: 'lanonasis:cache:search:result', 
-            payload: { results, query } 
+          webview.postMessage({
+            type: 'lanonasis:cache:search:result',
+            payload: { results, query }
           });
         }
         return;
@@ -246,9 +240,9 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         const memory = message.payload?.memory;
         if (memory) {
           void this.cache.addLocal(memory).then((created) => {
-            webview.postMessage({ 
-              type: 'lanonasis:cache:added', 
-              payload: { memory: created } 
+            webview.postMessage({
+              type: 'lanonasis:cache:added',
+              payload: { memory: created }
             });
           });
         }
@@ -298,16 +292,16 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       await this.cache.updateFromApi(memories);
       this.cache.setOnline(true);
 
-      webview.postMessage({ 
-        type: 'lanonasis:sync:complete', 
-        payload: { memories, status: this.cache.getStatus() } 
+      webview.postMessage({
+        type: 'lanonasis:sync:complete',
+        payload: { memories, status: this.cache.getStatus() }
       });
     } catch (err) {
       this.cache.setOnline(false);
       this.output.appendLine(`[LanOnasis] Sync error: ${err}`);
-      webview.postMessage({ 
-        type: 'lanonasis:sync:error', 
-        payload: { error: String(err) } 
+      webview.postMessage({
+        type: 'lanonasis:sync:error',
+        payload: { error: String(err) }
       });
     } finally {
       this.cache.setSyncing(false);
@@ -318,11 +312,11 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     try {
       // First, search local cache
       const localResults = this.cache.semanticSearchLocal(query);
-      
+
       // Send local results immediately
-      webview.postMessage({ 
-        type: 'lanonasis:ai:search:local', 
-        payload: { results: localResults, query } 
+      webview.postMessage({
+        type: 'lanonasis:ai:search:local',
+        payload: { results: localResults, query }
       });
 
       // Then try API semantic search
@@ -339,9 +333,9 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         if (response.ok) {
           const data = await response.json();
           const apiResults = (data.memories || data || []) as CachedMemory[];
-          webview.postMessage({ 
-            type: 'lanonasis:ai:search:api', 
-            payload: { results: apiResults, query } 
+          webview.postMessage({
+            type: 'lanonasis:ai:search:api',
+            payload: { results: apiResults, query }
           });
         }
       }
@@ -375,8 +369,8 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     const newConfig = vscode.workspace.getConfiguration('lzero');
     const oldConfig = vscode.workspace.getConfiguration('lanonasis');
     const apiUrl = newConfig.get<string>('apiUrl') ||
-                   oldConfig.get<string>('apiUrl') ||
-                   'https://api.lanonasis.com/api/v1';
+      oldConfig.get<string>('apiUrl') ||
+      'https://api.lanonasis.com/api/v1';
     let authCredential: string | undefined;
 
     try {
