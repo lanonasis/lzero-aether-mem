@@ -15,6 +15,7 @@
     "tsBuildInfoFile": "./node_modules/typescript/tsbuildinfo",
     "noEmit": true,
     "module": "ESNext",
+    "target": "ES2020",
     "strict": true,
     "lib": [
       "esnext",
@@ -26,8 +27,8 @@
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
     "moduleResolution": "bundler",
-    "ignoreDeprecations": "5.0",
-    "baseUrl": ".",
+    "downlevelIteration": true,
+    "ignoreDeprecations": "6.0",
     "types": [
       "node",
       "vite/client"

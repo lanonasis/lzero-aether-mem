@@ -8,8 +8,9 @@
     ],
     "strict": true,
     "esModuleInterop": true,
-    "moduleResolution": "node10",
-    "ignoreDeprecations": "5.0",
+    "moduleResolution": "bundler",
+    "downlevelIteration": true,
+    "ignoreDeprecations": "6.0",
     "rootDir": "src",
     "outDir": "out",
     "sourceMap": true,
@@ -17,7 +18,6 @@
       "node",
       "vscode"
     ],
-    "baseUrl": ".",
     "paths": {
       "@/*": [
         "../../client/src/*"

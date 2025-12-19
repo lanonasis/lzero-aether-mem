@@ -95,7 +95,7 @@ export class MockStorage {
   async updateMemory(id: string, updates: any): Promise<Memory | undefined> {
     const index = mockMemories.findIndex(m => m.id === id);
     if (index === -1) return undefined;
-    
+
     mockMemories[index] = {
       ...mockMemories[index],
       ...updates,
@@ -113,11 +113,11 @@ export class MockStorage {
 
   async searchMemories(userId: string, query: string): Promise<Memory[]> {
     const queryLower = query.toLowerCase();
-    return mockMemories.filter(m => 
+    return mockMemories.filter(m =>
       m.userId === userId &&
       (m.title.toLowerCase().includes(queryLower) ||
-       m.content.toLowerCase().includes(queryLower) ||
-       m.tags?.some((tag: string) => tag.toLowerCase().includes(queryLower)))
+        m.content.toLowerCase().includes(queryLower) ||
+        m.tags?.some((tag: string) => tag.toLowerCase().includes(queryLower)))
     );
   }
 
@@ -135,7 +135,7 @@ export class MockStorage {
       environment: key.environment || "development",
       createdAt: new Date(),
       lastRotated: new Date(),
-      lastUsed: undefined,
+      lastUsed: null,
     };
     mockApiKeys.push(newKey);
     return newKey;
