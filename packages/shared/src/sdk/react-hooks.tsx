@@ -3,23 +3,23 @@
  * Easy integration with React components
  */
 
-import { 
-  useState, 
-  useEffect, 
-  useCallback, 
-  useContext, 
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useContext,
   createContext,
   useMemo,
-  ReactNode 
-} from 'react';
-import { LanonasisClient, LanonasisConfig, SyncStatus } from './index';
-import { Memory, CreateMemoryInput, User, MemoryType } from '../types';
+  ReactNode,
+} from "react";
+import { LanonasisClient, LanonasisConfig, SyncStatus } from "./index";
+import { Memory, CreateMemoryInput, User, MemoryType } from "../types";
 
 // Lazy load the AI engine to avoid blocking initial render
 let LocalEmbeddingEngine: any = null;
 const getEmbeddingEngine = async () => {
   if (!LocalEmbeddingEngine) {
-    const module = await import('../ai/embeddings');
+    const module = await import("../ai/embeddings");
     LocalEmbeddingEngine = module.LocalEmbeddingEngine;
   }
   return new LocalEmbeddingEngine();
@@ -45,15 +45,17 @@ const LanonasisContext = createContext<LanonasisContextValue | null>(null);
 // Provider
 // ============================================
 
-export function LanonasisProvider({ 
-  children, 
-  config 
-}: { 
-  children: ReactNode; 
-  config?: LanonasisConfig 
+export function LanonasisProvider({
+  children,
+  config,
+}: {
+  children: ReactNode;
+  config?: LanonasisConfig;
 }) {
   const [client] = useState(() => new LanonasisClient(config));
-  const [isAuthenticated, setIsAuthenticated] = useState(client.isAuthenticated);
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    client.isAuthenticated
+  );
   const [isConnecting, setIsConnecting] = useState(false);
   const [user, setUser] = useState<User | null>(client.currentUser);
   const [error, setError] = useState<Error | null>(null);
@@ -61,31 +63,34 @@ export function LanonasisProvider({
   // Handle OAuth callback on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.has('token')) {
-      const token = params.get('token');
+    if (params.has("token")) {
+      const token = params.get("token");
       if (token) {
         // Handle token from URL (OAuth flow)
         setIsAuthenticated(true);
-        window.history.replaceState({}, '', window.location.pathname);
+        window.history.replaceState({}, "", window.location.pathname);
       }
     }
   }, []);
 
-  const login = useCallback(async (email?: string, password?: string) => {
-    setIsConnecting(true);
-    setError(null);
-    
-    try {
-      const u = await client.login(email, password);
-      setUser(u);
-      setIsAuthenticated(true);
-    } catch (e) {
-      setError(e as Error);
-      throw e;
-    } finally {
-      setIsConnecting(false);
-    }
-  }, [client]);
+  const login = useCallback(
+    async (email?: string, password?: string) => {
+      setIsConnecting(true);
+      setError(null);
+
+      try {
+        const u = await client.login(email, password);
+        setUser(u);
+        setIsAuthenticated(true);
+      } catch (e) {
+        setError(e as Error);
+        throw e;
+      } finally {
+        setIsConnecting(false);
+      }
+    },
+    [client]
+  );
 
   const logout = useCallback(() => {
     client.logout();
@@ -93,15 +98,18 @@ export function LanonasisProvider({
     setUser(null);
   }, [client]);
 
-  const value = useMemo(() => ({
-    client,
-    isAuthenticated,
-    isConnecting,
-    user,
-    login,
-    logout,
-    error,
-  }), [client, isAuthenticated, isConnecting, user, login, logout, error]);
+  const value = useMemo(
+    () => ({
+      client,
+      isAuthenticated,
+      isConnecting,
+      user,
+      login,
+      logout,
+      error,
+    }),
+    [client, isAuthenticated, isConnecting, user, login, logout, error]
+  );
 
   return (
     <LanonasisContext.Provider value={value}>
@@ -116,11 +124,11 @@ export function LanonasisProvider({
 
 export function useLanonasis() {
   const context = useContext(LanonasisContext);
-  
+
   if (!context) {
-    throw new Error('useLanonasis must be used within a LanonasisProvider');
+    throw new Error("useLanonasis must be used within a LanonasisProvider");
   }
-  
+
   return context;
 }
 
@@ -133,85 +141,100 @@ export function useMemories(options?: { autoFetch?: boolean }) {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const fetch = useCallback(async (query?: string) => {
-    if (!isAuthenticated) return;
-    
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const result = await client.memory.list(query);
-      setMemories(result);
-    } catch (e) {
-      setError(e as Error);
-      console.error('[useMemories] Fetch error:', e);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [client, isAuthenticated]);
+  const fetch = useCallback(
+    async (query?: string) => {
+      if (!isAuthenticated) return;
 
-  const search = useCallback(async (query: string): Promise<Memory[]> => {
-    if (!isAuthenticated) return [];
-    
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const result = await client.memory.search(query);
-      setMemories(result);
-      return result;
-    } catch (e) {
-      setError(e as Error);
-      console.error('[useMemories] Search error:', e);
-      return [];
-    } finally {
-      setIsLoading(false);
-    }
-  }, [client, isAuthenticated]);
+      setIsLoading(true);
+      setError(null);
 
-  const create = useCallback(async (input: CreateMemoryInput) => {
-    console.log('[useMemories] 🚀 Creating memory:', input);
-    setError(null);
+      try {
+        const result = await client.memory.list(query);
+        setMemories(result);
+      } catch (e) {
+        setError(e as Error);
+        console.error("[useMemories] Fetch error:", e);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [client, isAuthenticated]
+  );
 
-    try {
-      console.log('[useMemories] 📡 Calling API...');
-      const newMemory = await client.memory.create(input);
-      console.log('[useMemories] ✅ Memory created:', newMemory);
-      setMemories(prev => [newMemory, ...prev]);
-      return newMemory;
-    } catch (e) {
-      console.error('[useMemories] ❌ Create failed:', e);
-      setError(e as Error);
-      throw e;
-    }
-  }, [client]);
+  const search = useCallback(
+    async (query: string): Promise<Memory[]> => {
+      if (!isAuthenticated) return [];
 
-  const update = useCallback(async (id: string, input: Partial<CreateMemoryInput>) => {
-    setError(null);
-    
-    try {
-      const updated = await client.memory.update(id, input);
-      setMemories(prev => prev.map(m => m.id === id ? updated : m));
-      return updated;
-    } catch (e) {
-      setError(e as Error);
-      throw e;
-    }
-  }, [client]);
+      setIsLoading(true);
+      setError(null);
 
-  const remove = useCallback(async (id: string) => {
-    setError(null);
-    
-    try {
-      await client.memory.delete(id);
-      setMemories(prev => prev.filter(m => m.id !== id));
-    } catch (e) {
-      setError(e as Error);
-      throw e;
-    }
-  }, [client]);
+      try {
+        const result = await client.memory.search(query);
+        setMemories(result);
+        return result;
+      } catch (e) {
+        setError(e as Error);
+        console.error("[useMemories] Search error:", e);
+        return [];
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [client, isAuthenticated]
+  );
+
+  const create = useCallback(
+    async (input: CreateMemoryInput) => {
+      console.log("[useMemories] 🚀 Creating memory:", input);
+      setError(null);
+
+      try {
+        console.log("[useMemories] 📡 Calling API...");
+        const newMemory = await client.memory.create(input);
+        console.log("[useMemories] ✅ Memory created:", newMemory);
+        setMemories((prev) => [newMemory, ...prev]);
+        return newMemory;
+      } catch (e) {
+        console.error("[useMemories] ❌ Create failed:", e);
+        setError(e as Error);
+        throw e;
+      }
+    },
+    [client]
+  );
+
+  const update = useCallback(
+    async (id: string, input: Partial<CreateMemoryInput>) => {
+      setError(null);
+
+      try {
+        const updated = await client.memory.update(id, input);
+        setMemories((prev) => prev.map((m) => (m.id === id ? updated : m)));
+        return updated;
+      } catch (e) {
+        setError(e as Error);
+        throw e;
+      }
+    },
+    [client]
+  );
+
+  const remove = useCallback(
+    async (id: string) => {
+      setError(null);
+
+      try {
+        await client.memory.delete(id);
+        setMemories((prev) => prev.filter((m) => m.id !== id));
+      } catch (e) {
+        setError(e as Error);
+        throw e;
+      }
+    },
+    [client]
+  );
 
   // Auto-fetch on mount
   useEffect(() => {
@@ -226,7 +249,7 @@ export function useMemories(options?: { autoFetch?: boolean }) {
       fetch();
       return;
     }
-    
+
     const timer = setTimeout(() => fetch(searchQuery), 300);
     return () => clearTimeout(timer);
   }, [searchQuery, fetch]);
@@ -256,7 +279,7 @@ export function useLocalAI() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const [error, setError] = useState<Error | null>(null);
-  const [deviceInfo, setDeviceInfo] = useState<string>('');
+  const [deviceInfo, setDeviceInfo] = useState<string>("");
   const [hasInitialized, setHasInitialized] = useState(false);
 
   const initialize = useCallback(async () => {
@@ -268,7 +291,7 @@ export function useLocalAI() {
     setError(null);
 
     try {
-      console.log('[useLocalAI] 🧠 Initializing on-device AI...');
+      console.log("[useLocalAI] 🧠 Initializing on-device AI...");
       const eng = await getEmbeddingEngine();
 
       // Poll for progress
@@ -286,25 +309,30 @@ export function useLocalAI() {
       setLoadProgress(100);
       setDeviceInfo(eng.getDeviceInfo());
 
-      console.log('[useLocalAI] ✅ AI ready on:', eng.getDeviceInfo());
+      console.log("[useLocalAI] ✅ AI ready on:", eng.getDeviceInfo());
     } catch (e) {
-      console.error('[useLocalAI] ❌ Init failed:', e);
+      console.error("[useLocalAI] ❌ Init failed:", e);
       setError(e as Error);
+      // Reset hasInitialized to allow retries
+      setHasInitialized(false);
       // Don't throw - graceful degradation
     } finally {
       setIsLoading(false);
     }
   }, [isReady, isLoading, hasInitialized]);
 
-  const embed = useCallback(async (text: string): Promise<number[]> => {
-    if (!engine) {
-      await initialize();
-    }
-    if (!engine) {
-      throw new Error('AI engine not available');
-    }
-    return engine.embed(text);
-  }, [engine, initialize]);
+  const embed = useCallback(
+    async (text: string): Promise<number[]> => {
+      if (!engine) {
+        await initialize();
+      }
+      if (!engine) {
+        throw new Error("AI engine not available");
+      }
+      return engine.embed(text);
+    },
+    [engine, initialize]
+  );
 
   const benchmark = useCallback(async () => {
     if (!engine) {
@@ -312,8 +340,8 @@ export function useLocalAI() {
     }
     if (!engine) {
       return {
-        device: 'Unknown',
-        compute: 'unavailable',
+        device: "Unknown",
+        compute: "unavailable",
         embeddingTimeMs: 0,
         dimensions: 0,
       };
@@ -347,7 +375,9 @@ export function useLocalAI() {
 
 export function useSyncStatus() {
   const { client, isAuthenticated } = useLanonasis();
-  const [status, setStatus] = useState<SyncStatus>(client.memory.getSyncStatus());
+  const [status, setStatus] = useState<SyncStatus>(
+    client.memory.getSyncStatus()
+  );
   const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
@@ -366,11 +396,11 @@ export function useSyncStatus() {
       setStatus(client.memory.getSyncStatus());
     };
 
-    window.addEventListener('online', handleOnline);
+    window.addEventListener("online", handleOnline);
 
     return () => {
       clearInterval(interval);
-      window.removeEventListener('online', handleOnline);
+      window.removeEventListener("online", handleOnline);
     };
   }, [client, isAuthenticated]);
 
@@ -397,7 +427,7 @@ export function useApiKeys() {
 
   const fetch = useCallback(async () => {
     if (!isAuthenticated) return;
-    
+
     setIsLoading(true);
     try {
       const result = await client.security.listKeys();
@@ -409,26 +439,39 @@ export function useApiKeys() {
     }
   }, [client, isAuthenticated]);
 
-  const generate = useCallback(async (
-    name: string,
-    scope: 'read' | 'write' | 'read:write',
-    environment: 'development' | 'staging' | 'production'
-  ) => {
-    const newKey = await client.security.generateScopedKey(name, scope, environment);
-    setKeys(prev => [...prev, newKey]);
-    return newKey;
-  }, [client]);
+  const generate = useCallback(
+    async (
+      name: string,
+      scope: "read" | "write" | "read:write",
+      environment: "development" | "staging" | "production"
+    ) => {
+      const newKey = await client.security.generateScopedKey(
+        name,
+        scope,
+        environment
+      );
+      setKeys((prev) => [...prev, newKey]);
+      return newKey;
+    },
+    [client]
+  );
 
-  const rotate = useCallback(async (id: string) => {
-    const rotated = await client.security.rotateKey(id);
-    setKeys(prev => prev.map(k => k.id === id ? rotated : k));
-    return rotated;
-  }, [client]);
+  const rotate = useCallback(
+    async (id: string) => {
+      const rotated = await client.security.rotateKey(id);
+      setKeys((prev) => prev.map((k) => (k.id === id ? rotated : k)));
+      return rotated;
+    },
+    [client]
+  );
 
-  const revoke = useCallback(async (id: string) => {
-    await client.security.revokeKey(id);
-    setKeys(prev => prev.filter(k => k.id !== id));
-  }, [client]);
+  const revoke = useCallback(
+    async (id: string) => {
+      await client.security.revokeKey(id);
+      setKeys((prev) => prev.filter((k) => k.id !== id));
+    },
+    [client]
+  );
 
   useEffect(() => {
     if (isAuthenticated) fetch();

@@ -1,24 +1,14 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useLanonasisContext, type MemoryEntry, type CreateMemoryRequest } from '../context/LanonasisContext';
+import type { Memory, MemoryType } from '../../shared/types';
 
 // Map MemoryEntry to the Memory type used in UI components
-interface Memory {
-  id: string;
-  title: string;
-  content: string;
-  type: string;
-  tags: string[];
-  date?: Date;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
 function mapMemoryEntry(entry: MemoryEntry): Memory {
   return {
     id: entry.id,
     title: entry.title,
     content: entry.content,
-    type: entry.memory_type,
+    type: (entry.memory_type || 'note') as MemoryType,
     tags: entry.tags || [],
     date: entry.created_at ? new Date(entry.created_at) : undefined,
     createdAt: entry.created_at,

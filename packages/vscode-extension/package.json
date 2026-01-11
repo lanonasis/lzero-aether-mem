@@ -1,8 +1,8 @@
 {
   "name": "lzero-memory",
   "displayName": "L0 Memory",
-  "description": "L0 / LanOnasis Memory-as-a-Service companion for VS Code",
-  "version": "0.2.0",
+  "description": "L0 / LanOnasis Memory-as-a-Service companion for VS Code (Desktop & Web)",
+  "version": "0.3.1",
   "publisher": "lanonasis",
   "private": true,
   "repository": {
@@ -21,8 +21,21 @@
     "AI",
     "Other"
   ],
+  "extensionKind": [
+    "ui",
+    "workspace"
+  ],
+  "capabilities": {
+    "virtualWorkspaces": true,
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
   "main": "./out/extension.js",
-  "activationEvents": [],
+  "browser": "./out/extension.web.js",
+  "activationEvents": [
+    "onUri"
+  ],
   "contributes": {
     "viewsContainers": {
       "activitybar": [
@@ -88,8 +101,13 @@
       "properties": {
         "lzero.apiUrl": {
           "type": "string",
-          "default": "https://api.lanonasis.com/api/v1",
-          "description": "Base URL for the L0 Memory API."
+          "default": "https://api.lanonasis.com",
+          "description": "Base URL for the L0 Memory API (without /api/v1 suffix)."
+        },
+        "lzero.retainContextWhenHidden": {
+          "type": "boolean",
+          "default": false,
+          "description": "Keep the sidebar webview context alive when hidden. Turn on only if you need instant resume and accept higher memory usage."
         }
       }
     }

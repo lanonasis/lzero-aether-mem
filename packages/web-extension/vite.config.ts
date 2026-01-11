@@ -2,7 +2,30 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
-import { copyFileSync, mkdirSync, existsSync } from 'fs';
+import { copyFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, readdirSync } from 'fs';
+
+// Fix relative paths in HTML files for browser extension
+function fixHtmlPaths() {
+  return {
+    name: 'fix-html-paths',
+    closeBundle() {
+      const distDir = path.resolve(__dirname, 'dist');
+      const htmlDirs = ['src/popup', 'src/sidepanel', 'src/options'];
+
+      htmlDirs.forEach(dir => {
+        const htmlPath = path.resolve(distDir, dir, 'index.html');
+        if (existsSync(htmlPath)) {
+          let content = readFileSync(htmlPath, 'utf-8');
+          // Replace absolute paths with relative paths (go up 2 levels from src/popup to dist root)
+          content = content.replace(/src="\/assets\//g, 'src="../../assets/');
+          content = content.replace(/href="\/assets\//g, 'href="../../assets/');
+          writeFileSync(htmlPath, content);
+          console.log(`[fix-html-paths] Fixed: ${dir}/index.html`);
+        }
+      });
+    }
+  };
+}
 
 // Copy manifest and icons after build
 function copyExtensionFiles() {
@@ -10,13 +33,13 @@ function copyExtensionFiles() {
     name: 'copy-extension-files',
     closeBundle() {
       const distDir = path.resolve(__dirname, 'dist');
-      
+
       // Copy manifest
       copyFileSync(
         path.resolve(__dirname, 'manifest.json'),
         path.resolve(distDir, 'manifest.json')
       );
-      
+
       // Copy icons
       const iconsDir = path.resolve(distDir, 'icons');
       if (!existsSync(iconsDir)) {
@@ -32,7 +55,7 @@ function copyExtensionFiles() {
           }
         });
       }
-      
+
       // Copy locales
       const localesDir = path.resolve(distDir, '_locales/en');
       if (!existsSync(localesDir)) {
@@ -52,6 +75,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     copyExtensionFiles(),
+    fixHtmlPaths(),
   ],
   resolve: {
     alias: {
@@ -59,6 +83,7 @@ export default defineConfig({
       '@lanonasis/shared': path.resolve(__dirname, '../shared/src'),
     },
   },
+  base: './',
   build: {
     outDir: 'dist',
     emptyOutDir: true,

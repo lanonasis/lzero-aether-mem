@@ -36,6 +36,17 @@ function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
+  // Restore lightweight UI state (non-secret) from VS Code persisted state
+  useEffect(() => {
+    if (!window.vscode || typeof window.vscode.getState !== "function") return;
+    const state = (window.vscode.getState?.() || {}) as Partial<{
+      injectedChat: string;
+      authError: string | null;
+    }>;
+    if (state.injectedChat) setInjectedChat(state.injectedChat);
+    if (state.authError !== undefined) setAuthError(state.authError);
+  }, []);
+
   useEffect(() => {
     if (!window.vscode || typeof window.vscode.postMessage !== "function") {
       return;
@@ -85,6 +96,10 @@ function App() {
         const text = message.payload?.text ?? "";
         if (text) {
           setInjectedChat(text);
+          window.vscode?.setState?.({
+            injectedChat: text,
+            authError,
+          });
         }
         return;
       }
@@ -93,6 +108,10 @@ function App() {
         const text = message.payload?.text ?? "";
         if (text) {
           setInjectedChat(text);
+          window.vscode?.setState?.({
+            injectedChat: text,
+            authError,
+          });
         }
         return;
       }
@@ -120,6 +139,10 @@ function App() {
     }
     setAuthLoading(true);
     setAuthError(null);
+    window.vscode?.setState?.({
+      injectedChat,
+      authError: null,
+    });
     window.vscode.postMessage({
       type: "lanonasis:request-auth",
       method: "oauth",
@@ -133,6 +156,10 @@ function App() {
     }
     setAuthLoading(true);
     setAuthError(null);
+    window.vscode?.setState?.({
+      injectedChat,
+      authError: null,
+    });
     window.vscode.postMessage({
       type: "lanonasis:submit-api-key",
       payload: { apiKey: key },
@@ -149,6 +176,10 @@ function App() {
     setApiKey(undefined);
     setAuthError(null);
     setAuthLoading(false);
+    window.vscode?.setState?.({
+      injectedChat,
+      authError: null,
+    });
   };
 
   return (

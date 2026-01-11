@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import * as crypto from 'crypto';
+import { generateRandomString, sha256Base64Url } from './crypto';
 import { MemoryCache, CachedMemory } from './memoryCache';
 import { MemoryChatParticipant } from './chatParticipant';
 
@@ -17,10 +17,20 @@ const STORAGE_KEYS = {
   OAUTH_TOKENS: 'lanonasis.tokens',
 } as const;
 
-// API configuration
+// API configuration - returns the full API path (with /api/v1)
 const getApiUrl = (): string => {
   const config = vscode.workspace.getConfiguration('lzero');
-  return config.get<string>('apiUrl') || 'https://api.lanonasis.com/api/v1';
+  const baseUrl = config.get<string>('apiUrl') || 'https://api.lanonasis.com';
+  // Normalize: if user already included /api/v1, use it; otherwise add it
+  return baseUrl.includes('/api/v1') ? baseUrl : `${baseUrl}/api/v1`;
+};
+
+// Get base URL without /api/v1 (for memory-client SDK which adds it internally)
+const getApiBaseUrl = (): string => {
+  const config = vscode.workspace.getConfiguration('lzero');
+  const configUrl = config.get<string>('apiUrl') || 'https://api.lanonasis.com';
+  // Strip /api/v1 suffix if present
+  return configUrl.replace(/\/api\/v1\/?$/, '');
 };
 
 const VALID_API_KEY_PREFIXES = ['lano_', 'lns_'] as const;
@@ -46,14 +56,8 @@ class VSCodeOAuthFlow {
 
   constructor(private readonly output: vscode.OutputChannel) { }
 
-  private generateRandomString(length: number = 32): string {
-    const bytes = crypto.randomBytes(length);
-    return bytes.toString('base64url').slice(0, length);
-  }
-
-  private generateCodeChallenge(verifier: string): string {
-    const hash = crypto.createHash('sha256').update(verifier).digest();
-    return hash.toString('base64url');
+  private async generateCodeChallenge(verifier: string): Promise<string> {
+    return sha256Base64Url(verifier);
   }
 
   private buildAuthorizationUrl(codeChallenge: string, state: string): string {
@@ -123,9 +127,9 @@ class VSCodeOAuthFlow {
   }
 
   public async authenticate(): Promise<TokenResponse> {
-    const codeVerifier = this.generateRandomString(43);
-    const codeChallenge = this.generateCodeChallenge(codeVerifier);
-    const state = this.generateRandomString(32);
+    const codeVerifier = generateRandomString(43);
+    const codeChallenge = await this.generateCodeChallenge(codeVerifier);
+    const state = generateRandomString(32);
     const authUrl = this.buildAuthorizationUrl(codeChallenge, state);
 
     const codePromise = new Promise<string>((resolve, reject) => {
@@ -186,6 +190,11 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       if (message.type === 'lanonasis:webview-ready') {
         this.output.appendLine('[LanOnasis] Webview ready');
         webview.postMessage({ type: 'lanonasis:host-ready' });
+        // Serve cached memories immediately for fast UX before any network call
+        const memories = this.cache.getMemories();
+        const status = this.cache.getStatus();
+        webview.postMessage({ type: 'lanonasis:cache:data', payload: { memories, status } });
+
         void this.sendConfigToWebview(webview);
         return;
       }
@@ -206,6 +215,11 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      if (message.type === 'lanonasis:open-settings') {
+        void vscode.commands.executeCommand('workbench.action.openSettings', 'lzero');
+        return;
+      }
+
       if (message.type === 'lanonasis:clipboard:read') {
         void vscode.env.clipboard.readText().then((text) => {
           webview.postMessage({ type: 'lanonasis:clipboard:read:result', payload: { text } });
@@ -223,9 +237,9 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       if (message.type === 'lanonasis:cache:get') {
         const memories = this.cache.getMemories();
         const status = this.cache.getStatus();
-        webview.postMessage({ 
-          type: 'lanonasis:cache:data', 
-          payload: { memories, status } 
+        webview.postMessage({
+          type: 'lanonasis:cache:data',
+          payload: { memories, status }
         });
         return;
       }
@@ -234,9 +248,9 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         const query = message.payload?.query as string;
         if (query) {
           const results = this.cache.semanticSearchLocal(query);
-          webview.postMessage({ 
-            type: 'lanonasis:cache:search:result', 
-            payload: { results, query } 
+          webview.postMessage({
+            type: 'lanonasis:cache:search:result',
+            payload: { results, query }
           });
         }
         return;
@@ -246,9 +260,9 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         const memory = message.payload?.memory;
         if (memory) {
           void this.cache.addLocal(memory).then((created) => {
-            webview.postMessage({ 
-              type: 'lanonasis:cache:added', 
-              payload: { memory: created } 
+            webview.postMessage({
+              type: 'lanonasis:cache:added',
+              payload: { memory: created }
             });
           });
         }
@@ -282,7 +296,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       }
 
       const apiUrl = getApiUrl();
-      const response = await fetch(`${apiUrl}/memories?limit=100`, {
+      const response = await fetch(`${apiUrl}/memory?limit=100`, {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
@@ -294,20 +308,29 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       }
 
       const data = await response.json();
-      const memories = (data.memories || data || []) as CachedMemory[];
+      // API returns { data: [...] } or { success: true, data: [...] }
+      const memories = (data.data || data.memories || data || []) as CachedMemory[];
       await this.cache.updateFromApi(memories);
       this.cache.setOnline(true);
 
-      webview.postMessage({ 
-        type: 'lanonasis:sync:complete', 
-        payload: { memories, status: this.cache.getStatus() } 
+      webview.postMessage({
+        type: 'lanonasis:sync:complete',
+        payload: { memories, status: this.cache.getStatus() }
       });
     } catch (err) {
-      this.cache.setOnline(false);
+      // Only mark as offline for network errors, not API errors (404, 401, etc.)
+      const errorStr = String(err);
+      const isNetworkError = errorStr.includes('fetch') ||
+        errorStr.includes('network') ||
+        errorStr.includes('ECONNREFUSED') ||
+        errorStr.includes('ETIMEDOUT');
+      if (isNetworkError) {
+        this.cache.setOnline(false);
+      }
       this.output.appendLine(`[LanOnasis] Sync error: ${err}`);
-      webview.postMessage({ 
-        type: 'lanonasis:sync:error', 
-        payload: { error: String(err) } 
+      webview.postMessage({
+        type: 'lanonasis:sync:error',
+        payload: { error: errorStr, isNetworkError }
       });
     } finally {
       this.cache.setSyncing(false);
@@ -318,18 +341,18 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     try {
       // First, search local cache
       const localResults = this.cache.semanticSearchLocal(query);
-      
+
       // Send local results immediately
-      webview.postMessage({ 
-        type: 'lanonasis:ai:search:local', 
-        payload: { results: localResults, query } 
+      webview.postMessage({
+        type: 'lanonasis:ai:search:local',
+        payload: { results: localResults, query }
       });
 
       // Then try API semantic search
       const apiKey = await this.getStoredApiKey();
       if (apiKey) {
         const apiUrl = getApiUrl();
-        const response = await fetch(`${apiUrl}/memories/search?q=${encodeURIComponent(query)}&limit=10`, {
+        const response = await fetch(`${apiUrl}/memory/search?q=${encodeURIComponent(query)}&limit=10`, {
           headers: {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
@@ -338,10 +361,11 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
 
         if (response.ok) {
           const data = await response.json();
-          const apiResults = (data.memories || data || []) as CachedMemory[];
-          webview.postMessage({ 
-            type: 'lanonasis:ai:search:api', 
-            payload: { results: apiResults, query } 
+          // API returns { data: [...] } or { success: true, data: [...] }
+          const apiResults = (data.data || data.memories || data || []) as CachedMemory[];
+          webview.postMessage({
+            type: 'lanonasis:ai:search:api',
+            payload: { results: apiResults, query }
           });
         }
       }
@@ -374,9 +398,8 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     // Try new config first, fall back to old for backward compatibility
     const newConfig = vscode.workspace.getConfiguration('lzero');
     const oldConfig = vscode.workspace.getConfiguration('lanonasis');
-    const apiUrl = newConfig.get<string>('apiUrl') ||
-                   oldConfig.get<string>('apiUrl') ||
-                   'https://api.lanonasis.com/api/v1';
+    // Send base URL to webview (memory-client SDK adds /api/v1 internally)
+    const apiUrl = getApiBaseUrl();
     let authCredential: string | undefined;
 
     try {
@@ -500,6 +523,11 @@ export function activate(context: vscode.ExtensionContext) {
   const output = vscode.window.createOutputChannel('LanOnasis Memory');
   output.appendLine('[LanOnasis] Extension activating...');
 
+  // Read retainContextWhenHidden setting (default false)
+  const retainContextWhenHidden = vscode.workspace
+    .getConfiguration('lzero')
+    .get<boolean>('retainContextWhenHidden', false);
+
   // Initialize memory cache
   const cache = new MemoryCache(context, output);
 
@@ -540,7 +568,9 @@ export function activate(context: vscode.ExtensionContext) {
   chatParticipant.register();
 
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(MemorySidebarProvider.viewType, provider, { webviewOptions: { retainContextWhenHidden: true } }),
+    vscode.window.registerWebviewViewProvider(MemorySidebarProvider.viewType, provider, {
+      webviewOptions: { retainContextWhenHidden },
+    }),
   );
 
   context.subscriptions.push(

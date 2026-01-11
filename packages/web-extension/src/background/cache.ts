@@ -5,8 +5,8 @@
  */
 
 import { openDB, type IDBPDatabase, type DBSchema } from 'idb';
-import { 
-  createMemoryClient, 
+import {
+  createMemoryClient,
   type CoreMemoryClient,
   type MemoryEntry,
 } from '@lanonasis/memory-client';
@@ -89,7 +89,10 @@ export class MemoryCache {
    */
   private async getClient(): Promise<CoreMemoryClient | null> {
     const { authToken } = await chrome.storage.local.get('authToken');
-    if (!authToken) return null;
+    if (!authToken) {
+      console.log('[MemoryCache] No auth token available');
+      return null;
+    }
 
     if (!this.client) {
       this.client = createMemoryClient({
@@ -97,7 +100,11 @@ export class MemoryCache {
         authToken,
         timeout: 15000,
         onError: (error) => {
-          console.error('[MemoryCache] API Error:', error.message);
+          console.error('[MemoryCache] API Error:', error.message, error);
+          // Mark offline only for network errors
+          if (error.message?.includes('fetch') || error.message?.includes('network')) {
+            this.isOnline = false;
+          }
         },
       });
     } else {
@@ -120,7 +127,7 @@ export class MemoryCache {
   async getMemories(): Promise<CachedMemory[]> {
     if (!this.db) await this.init();
     const all = await this.db!.getAll('memories');
-    return all.sort((a, b) => 
+    return all.sort((a, b) =>
       new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
   }
@@ -162,7 +169,7 @@ export class MemoryCache {
     if (!this.db) await this.init();
 
     const tx = this.db!.transaction('memories', 'readwrite');
-    
+
     // Clear non-pending memories
     const existing = await tx.store.getAll();
     for (const mem of existing) {
@@ -280,7 +287,7 @@ export class MemoryCache {
 
       // Fetch latest from API using SDK
       const response = await client.listMemories({ limit: 100 });
-      
+
       if (response.data) {
         const memories = response.data.data.map((m: MemoryEntry) => ({
           id: m.id,
@@ -373,7 +380,7 @@ export class MemoryCache {
     await this.db!.clear('memories');
     await this.db!.clear('meta');
     this.lastSyncAt = null;
-    
+
     // Clear client auth
     if (this.client) {
       this.client.clearAuth();

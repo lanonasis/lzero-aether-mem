@@ -28,7 +28,7 @@ export class MemoryChatParticipant {
     private readonly cache: MemoryCache,
     private readonly apiUrl: string,
     private readonly getApiKey: () => Promise<string | undefined>,
-  ) {}
+  ) { }
 
   public register(): void {
     // Check if Chat API is available (VS Code 1.85+)
@@ -40,7 +40,7 @@ export class MemoryChatParticipant {
     try {
       this.participant = vscode.chat.createChatParticipant(PARTICIPANT_ID, this.handleRequest.bind(this));
       this.participant.iconPath = vscode.Uri.joinPath(this.context.extensionUri, 'media', 'icon.png');
-      
+
       // Add follow-up provider
       this.participant.followupProvider = {
         provideFollowups: this.provideFollowups.bind(this),
@@ -60,9 +60,27 @@ export class MemoryChatParticipant {
     token: vscode.CancellationToken,
   ): Promise<vscode.ChatResult> {
     const query = request.prompt.trim();
-    this.output.appendLine(`[ChatParticipant] Request: "${query}"`);
+    const command = request.command; // Slash command like /save, /find, /list
 
-    // Parse intent
+    this.output.appendLine(`[ChatParticipant] Request: "${query}", command: "${command || 'none'}"`);
+
+    // Handle slash commands first
+    if (command) {
+      switch (command) {
+        case 'save':
+          return this.handleCreate(query || 'Untitled memory', stream);
+        case 'find':
+          const searchResult = await this.parseIntent(query || '');
+          return this.handleSearch({ ...searchResult, query }, stream, token);
+        case 'list':
+          return this.handleList(stream);
+        default:
+          // Unknown command, fall through to intent parsing
+          break;
+      }
+    }
+
+    // Parse intent from natural language
     const result = await this.parseIntent(query);
 
     switch (result.action) {
@@ -79,7 +97,7 @@ export class MemoryChatParticipant {
   }
 
   private async parseIntent(query: string): Promise<MemoryParticipantResult> {
-    const q = query.toLowerCase();
+    const q = query.toLowerCase().trim();
 
     // Help intent
     if (q === 'help' || q === '?' || q.includes('how do i') || q.includes('what can you')) {
@@ -87,26 +105,29 @@ export class MemoryChatParticipant {
     }
 
     // List intent
-    if (q === 'list' || q === 'show all' || q === 'all memories' || q.match(/^(list|show)\s*(all|my)?\s*memories?$/)) {
+    if (q === 'list' || q === 'show all' || q === 'all memories' || /^(list|show)\s*(all|my)?\s*memories?$/i.test(q)) {
       return { memories: this.cache.getMemories().slice(0, 10), action: 'list' };
     }
 
-    // Create intent
+    // Create intent - use original query for matching to preserve content
     const createPatterns = [
       /^save\s+(.+)/i,
       /^create\s+(?:a\s+)?(?:memory|note)\s*:?\s*(.+)/i,
       /^remember\s+(.+)/i,
       /^store\s+(.+)/i,
+      /^\/save\s+(.+)/i,  // Handle /save command format
     ];
     for (const pattern of createPatterns) {
-      if (pattern.test(q)) {
+      const match = query.match(pattern);
+      if (match && match[1]) {
+        this.output.appendLine(`[ChatParticipant] Detected create intent: "${match[1]}"`);
         return { memories: [], action: 'create', query };
       }
     }
 
     // Default: search intent
     const memories = this.cache.semanticSearchLocal(query);
-    
+
     // If no local results, try API
     if (memories.length === 0) {
       const apiMemories = await this.searchApi(query);
@@ -121,7 +142,7 @@ export class MemoryChatParticipant {
       const apiKey = await this.getApiKey();
       if (!apiKey) return [];
 
-      const response = await fetch(`${this.apiUrl}/memories/search?q=${encodeURIComponent(query)}&limit=5`, {
+      const response = await fetch(`${this.apiUrl}/memory/search?q=${encodeURIComponent(query)}&limit=5`, {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
@@ -129,9 +150,10 @@ export class MemoryChatParticipant {
       });
 
       if (!response.ok) return [];
-      
+
       const data = await response.json();
-      return (data.memories || data || []) as CachedMemory[];
+      // API returns { data: [...] } or { success: true, data: [...] }
+      return (data.data || data.memories || data || []) as CachedMemory[];
     } catch (err) {
       this.output.appendLine(`[ChatParticipant] API search error: ${err}`);
       return [];
@@ -159,11 +181,11 @@ export class MemoryChatParticipant {
       const isPending = memory._pending ? ' *(pending sync)*' : '';
       stream.markdown(`### ${memory.title}${isPending}\n`);
       stream.markdown(`${memory.content.slice(0, 200)}${memory.content.length > 200 ? '...' : ''}\n\n`);
-      
+
       if (memory.tags.length > 0) {
         stream.markdown(`🏷️ ${memory.tags.map(t => `\`${t}\``).join(' ')}\n\n`);
       }
-      
+
       stream.markdown(`---\n\n`);
     }
 
@@ -210,7 +232,7 @@ export class MemoryChatParticipant {
       const apiKey = await this.getApiKey();
       if (!apiKey) return;
 
-      const response = await fetch(`${this.apiUrl}/memories`, {
+      const response = await fetch(`${this.apiUrl}/memory`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
@@ -239,7 +261,7 @@ export class MemoryChatParticipant {
     const status = this.cache.getStatus();
 
     stream.markdown(`## 🧠 Your Memories\n\n`);
-    
+
     if (status.pendingCount > 0) {
       stream.markdown(`⏳ *${status.pendingCount} memories pending sync*\n\n`);
     }
