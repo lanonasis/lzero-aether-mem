@@ -142,11 +142,11 @@ export class MemoryChatParticipant {
       const apiKey = await this.getApiKey();
       if (!apiKey) return [];
 
-      // Use POST /memories/search per OpenAPI spec
-      const response = await fetch(`${this.apiUrl}/memories/search`, {
+      // Use POST /functions/v1/memory-search (Supabase edge function)
+      const response = await fetch(`${this.apiUrl}/functions/v1/memory-search`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'X-API-Key': apiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -159,7 +159,7 @@ export class MemoryChatParticipant {
       if (!response.ok) return [];
 
       const data = await response.json();
-      // API returns { data: { results: [...] } } per OpenAPI spec
+      // API returns { data: { results: [...] } } or { results: [...] }
       const results = data.data?.results || data.results || data.data || data || [];
       return results as CachedMemory[];
     } catch (err) {

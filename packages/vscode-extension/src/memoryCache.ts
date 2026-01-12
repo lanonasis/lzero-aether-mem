@@ -95,8 +95,8 @@ export class MemoryCache {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-        const response = await fetch('https://api.lanonasis.com/api/v1/health', {
-          method: 'HEAD',
+        const response = await fetch('https://lanonasis.supabase.co/functions/v1/system-health', {
+          method: 'GET',
           signal: controller.signal,
         });
 
