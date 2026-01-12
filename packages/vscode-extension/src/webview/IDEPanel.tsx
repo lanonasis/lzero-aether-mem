@@ -627,7 +627,16 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
     pendingCount: 0,
     isSyncing: false,
   });
+  const [errorNotification, setErrorNotification] = useState<string | null>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+
+  // Auto-dismiss error notification after 5 seconds
+  useEffect(() => {
+    if (errorNotification) {
+      const timer = setTimeout(() => setErrorNotification(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorNotification]);
 
   useEffect(() => {
     if (initialChatInput !== undefined) {
@@ -666,11 +675,20 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
       if (message.type === "lanonasis:sync:error") {
         // Only mark as offline for network errors, not API errors (404, etc.)
         const isNetworkError = message.payload?.isNetworkError === true;
+        const errorMessage = message.payload?.error || "Sync failed";
         setSyncStatus((prev) => ({
           ...prev,
           isSyncing: false,
           isOnline: isNetworkError ? false : prev.isOnline,
         }));
+        // Show error to user
+        setErrorNotification(isNetworkError ? "Network error - working offline" : errorMessage);
+      }
+
+      // Handle auth errors
+      if (message.type === "lanonasis:auth:result" && !message.payload?.success) {
+        const errorMessage = message.payload?.error || "Authentication failed";
+        setErrorNotification(errorMessage);
       }
 
       // Handle AI search results
@@ -689,8 +707,9 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
       }
       if (message.type === "lanonasis:ai:search:api") {
         const results = message.payload?.results || [];
+        const query = message.payload?.query || "";
         setIsAISearching(false);
-        // Merge with existing results, preferring API results
+        // Merge with existing results, preferring API results, and update content
         setChatMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last?.role === "assistant") {
@@ -698,14 +717,15 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
             const newMemories = results.filter(
               (m: CachedMemory) => !existingIds.has(m.id)
             );
+            const allMemories = [...(last.memories || []), ...newMemories].slice(0, 5);
             return [
               ...prev.slice(0, -1),
               {
                 ...last,
-                memories: [...(last.memories || []), ...newMemories].slice(
-                  0,
-                  5
-                ),
+                content: allMemories.length > 0
+                  ? `Found ${allMemories.length} relevant memories:`
+                  : `No memories found for "${query}"`,
+                memories: allMemories,
               },
             ];
           }
@@ -934,17 +954,17 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
     setChatMessages((prev) => [...prev, assistantMessage]);
 
     // Request AI search from extension host
+    // The extension host handles both local and API search, sending results via messages
+    // This avoids race conditions from duplicate API calls
     if (window.vscode) {
       window.vscode.postMessage({
         type: "lanonasis:ai:search",
         payload: { query: intent.query },
       });
-    }
-
-    // Also try API search
-    try {
-      const results = await search(intent.query);
-      if (results && results.length > 0) {
+    } else {
+      // Fallback for non-vscode context (e.g., browser testing)
+      try {
+        const results = await search(intent.query);
         setChatMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last?.role === "assistant") {
@@ -953,27 +973,39 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
               {
                 ...last,
                 content:
-                  results.length > 0
+                  results && results.length > 0
                     ? `Found ${results.length} relevant memories:`
                     : `No memories found for "${intent.query}"`,
-                memories: results as CachedMemory[],
+                memories: (results || []) as CachedMemory[],
               },
             ];
           }
           return prev;
         });
+      } catch (err) {
+        console.log("Search failed:", err);
+      } finally {
+        setIsAISearching(false);
       }
-    } catch (err) {
-      // API search failed, rely on local results
-      console.log("API search failed, using local results");
-    } finally {
-      setIsAISearching(false);
     }
   };
 
   return (
     <div className="flex h-screen w-full bg-[var(--vscode-sideBar-background)] text-[var(--vscode-sideBar-foreground)] font-sans overflow-hidden justify-center select-none">
       <div className="w-full max-w-[400px] h-full flex flex-col bg-[var(--vscode-sideBar-background)] relative">
+        {/* Error Notification Banner */}
+        {errorNotification && (
+          <div className="absolute top-0 left-0 right-0 z-50 px-3 py-2 bg-red-900/90 border-b border-red-700 flex items-center justify-between">
+            <span className="text-[11px] text-red-200">{errorNotification}</span>
+            <button
+              onClick={() => setErrorNotification(null)}
+              className="text-red-200 hover:text-white text-xs ml-2"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--vscode-sideBar-background)]">
           <div className="flex items-center gap-2">

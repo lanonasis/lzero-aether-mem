@@ -142,18 +142,26 @@ export class MemoryChatParticipant {
       const apiKey = await this.getApiKey();
       if (!apiKey) return [];
 
-      const response = await fetch(`${this.apiUrl}/memory/search?q=${encodeURIComponent(query)}&limit=5`, {
+      // Use POST /memories/search per OpenAPI spec
+      const response = await fetch(`${this.apiUrl}/memories/search`, {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          query,
+          limit: 5,
+          threshold: 0.7,
+        }),
       });
 
       if (!response.ok) return [];
 
       const data = await response.json();
-      // API returns { data: [...] } or { success: true, data: [...] }
-      return (data.data || data.memories || data || []) as CachedMemory[];
+      // API returns { data: { results: [...] } } per OpenAPI spec
+      const results = data.data?.results || data.results || data.data || data || [];
+      return results as CachedMemory[];
     } catch (err) {
       this.output.appendLine(`[ChatParticipant] API search error: ${err}`);
       return [];

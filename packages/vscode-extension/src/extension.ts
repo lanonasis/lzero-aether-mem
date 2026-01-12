@@ -296,12 +296,87 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       }
 
       const apiUrl = getApiUrl();
-      const response = await fetch(`${apiUrl}/memory?limit=100`, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const headers = {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      };
+
+      // Step 1: Push pending changes to API
+      const pendingQueue = this.cache.getPendingQueue();
+      const syncResults: { success: number; failed: number } = { success: 0, failed: 0 };
+
+      for (const pending of pendingQueue) {
+        try {
+          if (pending._pending === 'create') {
+            // Create new memory on server
+            const createResponse = await fetch(`${apiUrl}/memories`, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({
+                title: pending.title,
+                content: pending.content,
+                memory_type: pending.memory_type,
+                tags: pending.tags,
+              }),
+            });
+
+            if (createResponse.ok) {
+              const created = await createResponse.json();
+              const serverMemory = created.data || created;
+              await this.cache.markSynced(pending._localId || pending.id, serverMemory);
+              syncResults.success++;
+              this.output.appendLine(`[LanOnasis] Synced new memory: ${pending.title}`);
+            } else {
+              syncResults.failed++;
+              this.output.appendLine(`[LanOnasis] Failed to sync memory: ${pending.title} (${createResponse.status})`);
+            }
+          } else if (pending._pending === 'update') {
+            // Update existing memory on server
+            const updateResponse = await fetch(`${apiUrl}/memories/${pending.id}`, {
+              method: 'PUT',
+              headers,
+              body: JSON.stringify({
+                title: pending.title,
+                content: pending.content,
+                memory_type: pending.memory_type,
+                tags: pending.tags,
+              }),
+            });
+
+            if (updateResponse.ok) {
+              const updated = await updateResponse.json();
+              const serverMemory = updated.data || updated;
+              await this.cache.markSynced(pending.id, serverMemory);
+              syncResults.success++;
+            } else {
+              syncResults.failed++;
+            }
+          } else if (pending._pending === 'delete') {
+            // Delete memory on server
+            const deleteResponse = await fetch(`${apiUrl}/memories/${pending.id}`, {
+              method: 'DELETE',
+              headers,
+            });
+
+            if (deleteResponse.ok) {
+              await this.cache.removePending(pending.id);
+              syncResults.success++;
+            } else {
+              syncResults.failed++;
+            }
+          }
+        } catch (pendingErr) {
+          syncResults.failed++;
+          this.output.appendLine(`[LanOnasis] Error syncing pending item: ${pendingErr}`);
+        }
+      }
+
+      if (pendingQueue.length > 0) {
+        this.output.appendLine(`[LanOnasis] Sync results: ${syncResults.success} succeeded, ${syncResults.failed} failed`);
+      }
+
+      // Step 2: Fetch fresh data from API
+      const response = await fetch(`${apiUrl}/memories?limit=100`, { headers });
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
@@ -315,7 +390,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
 
       webview.postMessage({
         type: 'lanonasis:sync:complete',
-        payload: { memories, status: this.cache.getStatus() }
+        payload: { memories, status: this.cache.getStatus(), syncResults }
       });
     } catch (err) {
       // Only mark as offline for network errors, not API errors (404, 401, etc.)
@@ -348,21 +423,27 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         payload: { results: localResults, query }
       });
 
-      // Then try API semantic search
+      // Then try API semantic search using POST per OpenAPI spec
       const apiKey = await this.getStoredApiKey();
       if (apiKey) {
         const apiUrl = getApiUrl();
-        const response = await fetch(`${apiUrl}/memory/search?q=${encodeURIComponent(query)}&limit=10`, {
+        const response = await fetch(`${apiUrl}/memories/search`, {
+          method: 'POST',
           headers: {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
           },
+          body: JSON.stringify({
+            query,
+            limit: 10,
+            threshold: 0.7,
+          }),
         });
 
         if (response.ok) {
           const data = await response.json();
-          // API returns { data: [...] } or { success: true, data: [...] }
-          const apiResults = (data.data || data.memories || data || []) as CachedMemory[];
+          // API returns { data: { results: [...] } } per OpenAPI spec
+          const apiResults = (data.data?.results || data.results || data.data || []) as CachedMemory[];
           webview.postMessage({
             type: 'lanonasis:ai:search:api',
             payload: { results: apiResults, query }
@@ -384,12 +465,18 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         if (Date.now() <= expiresAt - 5 * 60 * 1000) {
           return tokens.access_token;
         }
+        // Token expired - log it
+        this.output.appendLine('[LanOnasis] OAuth token expired');
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      this.output.appendLine(`[LanOnasis] Failed to parse OAuth tokens: ${err}`);
+    }
 
     try {
       return await this.context.secrets.get(STORAGE_KEYS.API_KEY);
-    } catch { /* ignore */ }
+    } catch (err) {
+      this.output.appendLine(`[LanOnasis] Failed to get API key: ${err}`);
+    }
 
     return undefined;
   }
@@ -551,10 +638,14 @@ export function activate(context: vscode.ExtensionContext) {
         const tokens: TokenResponse = JSON.parse(tokensJson);
         return tokens.access_token;
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      output.appendLine(`[LanOnasis] Chat: Failed to get OAuth token: ${err}`);
+    }
     try {
       return await context.secrets.get(STORAGE_KEYS.API_KEY);
-    } catch { /* ignore */ }
+    } catch (err) {
+      output.appendLine(`[LanOnasis] Chat: Failed to get API key: ${err}`);
+    }
     return undefined;
   };
 

@@ -3,7 +3,7 @@
  * Uses LanonasisContext for memory CRUD operations
  */
 import { useState, useMemo, useCallback } from 'react';
-import { useLanonasisContext, type MemoryEntry, type CreateMemoryRequest } from '../context/LanonasisContext';
+import { useLanonasisContext, type MemoryEntry, type CreateMemoryRequest, type UpdateMemoryData } from '../context/LanonasisContext';
 
 // Map MemoryEntry to the Memory type used in UI components
 export interface Memory {
@@ -39,6 +39,7 @@ export const useMemories = (_isAuthenticated?: boolean) => {
         fetchMemories,
         searchMemories: searchApi,
         createMemory: createApi,
+        updateMemory: updateApi,
         deleteMemory: deleteApi,
     } = useLanonasisContext();
 
@@ -81,6 +82,22 @@ export const useMemories = (_isAuthenticated?: boolean) => {
         }
     }, [isAuthenticated, createApi]);
 
+    const updateMemory = useCallback(async (id: string, data: Partial<UpdateMemoryData>): Promise<Memory | undefined> => {
+        if (!isAuthenticated) return undefined;
+        try {
+            const updated = await updateApi(id, {
+                title: data.title,
+                content: data.content,
+                memory_type: data.memory_type,
+                tags: data.tags,
+            });
+            return updated ? mapMemoryEntry(updated) : undefined;
+        } catch (err) {
+            console.error('Failed to update memory:', err);
+            return undefined;
+        }
+    }, [isAuthenticated, updateApi]);
+
     const deleteMemory = useCallback(async (id: string) => {
         if (!isAuthenticated) return;
         await deleteApi(id);
@@ -100,7 +117,7 @@ export const useMemories = (_isAuthenticated?: boolean) => {
         error: memoryError,
         searchMemories,
         createMemory,
-        updateMemory: async () => undefined, // Not implemented yet
+        updateMemory,
         deleteMemory,
         refetch,
     };
