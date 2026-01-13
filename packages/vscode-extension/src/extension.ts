@@ -47,6 +47,8 @@ const OAUTH_CONFIG = {
   scope: 'memories:read memories:write memories:delete profile',
 } as const;
 
+let memoryCacheInstance: MemoryCache | null = null;
+
 class VSCodeOAuthFlow {
   private pendingAuth: {
     codeVerifier: string;
@@ -185,7 +187,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     this.output.appendLine('[LanOnasis] Initializing sidebar webview');
     webview.html = this.getWebviewHtml(webview);
 
-    webview.onDidReceiveMessage((message) => {
+    webview.onDidReceiveMessage((message: any) => {
       if (!message || typeof message !== 'object') return;
 
       if (message.type === 'lanonasis:webview-ready') {
@@ -222,7 +224,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       }
 
       if (message.type === 'lanonasis:clipboard:read') {
-        void vscode.env.clipboard.readText().then((text) => {
+        void vscode.env.clipboard.readText().then((text: string) => {
           webview.postMessage({ type: 'lanonasis:clipboard:read:result', payload: { text } });
         });
         return;
@@ -311,62 +313,86 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         try {
           if (pending._pending === 'create') {
             // POST /functions/v1/memory-create
-            const createResponse = await fetch(`${apiUrl}/functions/v1/memory-create`, {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({
-                title: pending.title,
-                content: pending.content,
-                memory_type: pending.memory_type,
-                tags: pending.tags,
-              }),
-            });
+            const createController = new AbortController();
+            const createTimeout = setTimeout(() => createController.abort(), 30000);
 
-            if (createResponse.ok) {
-              const created = await createResponse.json();
-              const serverMemory = created.data || created.memory || created;
-              await this.cache.markSynced(pending._localId || pending.id, serverMemory);
-              syncResults.success++;
-              this.output.appendLine(`[LanOnasis] Synced new memory: ${pending.title}`);
-            } else {
-              syncResults.failed++;
-              this.output.appendLine(`[LanOnasis] Failed to sync memory: ${pending.title} (${createResponse.status})`);
+            try {
+              const createResponse = await fetch(`${apiUrl}/functions/v1/memory-create`, {
+                method: 'POST',
+                headers,
+                signal: createController.signal,
+                body: JSON.stringify({
+                  title: pending.title,
+                  content: pending.content,
+                  memory_type: pending.memory_type,
+                  tags: pending.tags,
+                }),
+              });
+
+              if (createResponse.ok) {
+                const created = await createResponse.json();
+                const serverMemory = created.data || created.memory || created;
+                await this.cache.markSynced(pending._localId || pending.id, serverMemory);
+                syncResults.success++;
+                this.output.appendLine(`[LanOnasis] Synced new memory: ${pending.title}`);
+              } else {
+                syncResults.failed++;
+                this.output.appendLine(`[LanOnasis] Failed to sync memory: ${pending.title} (${createResponse.status})`);
+              }
+            } finally {
+              clearTimeout(createTimeout);
             }
           } else if (pending._pending === 'update') {
             // POST /functions/v1/memory-update with id in body
-            const updateResponse = await fetch(`${apiUrl}/functions/v1/memory-update`, {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({
-                id: pending.id,
-                title: pending.title,
-                content: pending.content,
-                memory_type: pending.memory_type,
-                tags: pending.tags,
-              }),
-            });
+            const updateController = new AbortController();
+            const updateTimeout = setTimeout(() => updateController.abort(), 30000);
 
-            if (updateResponse.ok) {
-              const updated = await updateResponse.json();
-              const serverMemory = updated.data || updated.memory || updated;
-              await this.cache.markSynced(pending.id, serverMemory);
-              syncResults.success++;
-            } else {
-              syncResults.failed++;
+            try {
+              const updateResponse = await fetch(`${apiUrl}/functions/v1/memory-update`, {
+                method: 'POST',
+                headers,
+                signal: updateController.signal,
+                body: JSON.stringify({
+                  id: pending.id,
+                  title: pending.title,
+                  content: pending.content,
+                  memory_type: pending.memory_type,
+                  tags: pending.tags,
+                }),
+              });
+
+              if (updateResponse.ok) {
+                const updated = await updateResponse.json();
+                const serverMemory = updated.data || updated.memory || updated;
+                await this.cache.markSynced(pending.id, serverMemory);
+                syncResults.success++;
+              } else {
+                syncResults.failed++;
+              }
+            } finally {
+              clearTimeout(updateTimeout);
             }
           } else if (pending._pending === 'delete') {
             // POST /functions/v1/memory-delete with id in body
-            const deleteResponse = await fetch(`${apiUrl}/functions/v1/memory-delete`, {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({ id: pending.id }),
-            });
+            const deleteController = new AbortController();
+            const deleteTimeout = setTimeout(() => deleteController.abort(), 30000);
 
-            if (deleteResponse.ok) {
-              await this.cache.removePending(pending.id);
-              syncResults.success++;
-            } else {
-              syncResults.failed++;
+            try {
+              const deleteResponse = await fetch(`${apiUrl}/functions/v1/memory-delete`, {
+                method: 'POST',
+                headers,
+                signal: deleteController.signal,
+                body: JSON.stringify({ id: pending.id }),
+              });
+
+              if (deleteResponse.ok) {
+                await this.cache.removePending(pending.id);
+                syncResults.success++;
+              } else {
+                syncResults.failed++;
+              }
+            } finally {
+              clearTimeout(deleteTimeout);
             }
           }
         } catch (pendingErr) {
@@ -621,6 +647,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Initialize memory cache
   const cache = new MemoryCache(context, output);
+  memoryCacheInstance = cache;
 
   const oauthFlow = new VSCodeOAuthFlow(output);
 
@@ -735,7 +762,12 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
+  context.subscriptions.push({ dispose: () => cache.stopConnectivityCheck() });
+
   output.appendLine('[LanOnasis] Extension activated');
 }
 
-export function deactivate() { }
+export function deactivate() {
+  memoryCacheInstance?.stopConnectivityCheck();
+  memoryCacheInstance = null;
+}

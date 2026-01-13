@@ -240,10 +240,10 @@ export class MemoryChatParticipant {
       const apiKey = await this.getApiKey();
       if (!apiKey) return;
 
-      const response = await fetch(`${this.apiUrl}/memory`, {
+      const response = await fetch(`${this.apiUrl}/functions/v1/memory-create`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'X-API-Key': apiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -255,7 +255,8 @@ export class MemoryChatParticipant {
       });
 
       if (response.ok) {
-        const serverMemory = await response.json();
+        const data = await response.json();
+        const serverMemory = data.data || data.memory || data;
         await this.cache.markSynced(memory.id, serverMemory);
         this.output.appendLine(`[ChatParticipant] Memory synced: ${memory.title}`);
       }

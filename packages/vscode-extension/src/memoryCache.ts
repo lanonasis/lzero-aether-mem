@@ -6,6 +6,9 @@
 
 import * as vscode from 'vscode';
 
+const SUPABASE_ORIGIN = 'https://lanonasis.supabase.co';
+const SYSTEM_HEALTH_URL = `${SUPABASE_ORIGIN}/functions/v1/system-health`;
+
 export interface CachedMemory {
   id: string;
   title: string;
@@ -53,11 +56,11 @@ export class MemoryCache {
       const cached = this.context.globalState.get<CachedMemory[]>(CACHE_KEYS.MEMORIES, []);
       const pending = this.context.globalState.get<CachedMemory[]>(CACHE_KEYS.PENDING_QUEUE, []);
       const lastSync = this.context.globalState.get<number | null>(CACHE_KEYS.LAST_SYNC, null);
-      
+
       this.memories = cached;
       this.pendingQueue = pending;
       this.lastSyncAt = lastSync;
-      
+
       this.output.appendLine(`[MemoryCache] Loaded ${this.memories.length} cached memories, ${this.pendingQueue.length} pending`);
     } catch (err) {
       this.output.appendLine(`[MemoryCache] Load error: ${err}`);
@@ -95,7 +98,7 @@ export class MemoryCache {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-        const response = await fetch('https://lanonasis.supabase.co/functions/v1/system-health', {
+        const response = await fetch(SYSTEM_HEALTH_URL, {
           method: 'GET',
           signal: controller.signal,
         });
@@ -161,7 +164,7 @@ export class MemoryCache {
   public async addLocal(memory: Omit<CachedMemory, 'id' | 'created_at' | 'updated_at'>): Promise<CachedMemory> {
     const localId = `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const now = new Date().toISOString();
-    
+
     const newMemory: CachedMemory = {
       ...memory,
       id: localId,
@@ -175,7 +178,7 @@ export class MemoryCache {
     this.memories.unshift(newMemory);
     this.pendingQueue.push(newMemory);
     await this.saveToStorage();
-    
+
     this.output.appendLine(`[MemoryCache] Added local memory: ${newMemory.title}`);
     return newMemory;
   }
@@ -214,25 +217,28 @@ export class MemoryCache {
    */
   public async queueUpdate(id: string, updates: Partial<CachedMemory>): Promise<void> {
     const idx = this.memories.findIndex(m => m.id === id);
-    if (idx !== -1) {
-      this.memories[idx] = {
-        ...this.memories[idx],
-        ...updates,
-        updated_at: new Date().toISOString(),
-        _pending: 'update',
-        _cachedAt: Date.now(),
-      };
-
-      // Add to pending queue if not already there
-      const pendingIdx = this.pendingQueue.findIndex(m => m.id === id);
-      if (pendingIdx !== -1) {
-        this.pendingQueue[pendingIdx] = this.memories[idx];
-      } else {
-        this.pendingQueue.push(this.memories[idx]);
-      }
-
-      await this.saveToStorage();
+    if (idx === -1) {
+      this.output.appendLine(`[MemoryCache] queueUpdate: memory not found for id ${id}`);
+      return;
     }
+
+    this.memories[idx] = {
+      ...this.memories[idx],
+      ...updates,
+      updated_at: new Date().toISOString(),
+      _pending: 'update',
+      _cachedAt: Date.now(),
+    };
+
+    // Add to pending queue if not already there
+    const pendingIdx = this.pendingQueue.findIndex(m => m.id === id);
+    if (pendingIdx !== -1) {
+      this.pendingQueue[pendingIdx] = this.memories[idx];
+    } else {
+      this.pendingQueue.push(this.memories[idx]);
+    }
+
+    await this.saveToStorage();
   }
 
   /**
@@ -266,7 +272,7 @@ export class MemoryCache {
    */
   public searchLocal(query: string): CachedMemory[] {
     const q = query.toLowerCase();
-    return this.memories.filter(m => 
+    return this.memories.filter(m =>
       m.title.toLowerCase().includes(q) ||
       m.content.toLowerCase().includes(q) ||
       m.tags.some(t => t.toLowerCase().includes(q))
@@ -280,7 +286,7 @@ export class MemoryCache {
    */
   public semanticSearchLocal(query: string): CachedMemory[] {
     const q = query.toLowerCase();
-    
+
     // Extract intent keywords
     const findPatterns = [
       /find\s+(?:my\s+)?(.+)/i,
