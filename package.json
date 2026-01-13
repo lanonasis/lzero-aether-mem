@@ -73,8 +73,8 @@
     "esbuild": "0.27.1"
   },
   "dependencies": {
+    "@lanonasis/mem-intel-sdk": "^1.1.0",
     "@lanonasis/memory-client": "^2.0.0",
-    "@lanonasis/mem-intel-sdk": "^1.0.0",
     "@lanonasis/oauth-client": "^1.2.1",
     "@neondatabase/serverless": "^1.0.2",
     "@radix-ui/react-accordion": "^1.2.2",

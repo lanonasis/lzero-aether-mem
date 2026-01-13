@@ -181,7 +181,7 @@ function normalizeMemory(memory: any): Memory {
     id: memory.id || `unknown_${Date.now()}`,
     title: memory.title || '',
     content: memory.content || '',
-    type: memory.type || memory.memory_type || 'note',
+    type: memory.type || memory.memory_type || 'workflow',
     tags: Array.isArray(memory.tags) ? memory.tags : [],
     createdAt: memory.createdAt || memory.created_at || new Date().toISOString(),
     updatedAt: memory.updatedAt || memory.updated_at || new Date().toISOString(),
@@ -359,7 +359,7 @@ class MemoryClient {
     const payload = {
       title: input.title,
       content: input.content,
-      type: input.type || 'note',
+      type: input.type || 'workflow',
       tags: input.tags || [],
     };
 
