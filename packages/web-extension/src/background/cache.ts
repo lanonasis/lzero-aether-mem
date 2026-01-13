@@ -33,6 +33,13 @@ export interface SyncStatus {
   isSyncing: boolean;
 }
 
+interface CachedEmbedding {
+  id: string;
+  embedding: number[];
+  contentHash: string;
+  createdAt: number;
+}
+
 interface MemoryDB extends DBSchema {
   memories: {
     key: string;
@@ -42,6 +49,10 @@ interface MemoryDB extends DBSchema {
       'by-pending': string;
     };
   };
+  embeddings: {
+    key: string;
+    value: CachedEmbedding;
+  };
   meta: {
     key: string;
     value: unknown;
@@ -49,8 +60,8 @@ interface MemoryDB extends DBSchema {
 }
 
 const DB_NAME = 'l0-memory-cache';
-const DB_VERSION = 1;
-const API_URL = 'https://api.lanonasis.com';
+const DB_VERSION = 2;
+const API_URL = 'https://lanonasis.supabase.co';
 
 export class MemoryCache {
   private db: IDBPDatabase<MemoryDB> | null = null;
@@ -61,14 +72,21 @@ export class MemoryCache {
 
   async init(): Promise<void> {
     this.db = await openDB<MemoryDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        // Memories store
-        const memoriesStore = db.createObjectStore('memories', { keyPath: 'id' });
-        memoriesStore.createIndex('by-created', 'created_at');
-        memoriesStore.createIndex('by-pending', '_pending');
+      upgrade(db, oldVersion) {
+        // Version 1: memories and meta stores
+        if (oldVersion < 1) {
+          const memoriesStore = db.createObjectStore('memories', { keyPath: 'id' });
+          memoriesStore.createIndex('by-created', 'created_at');
+          memoriesStore.createIndex('by-pending', '_pending');
+          db.createObjectStore('meta');
+        }
 
-        // Meta store for sync status, etc.
-        db.createObjectStore('meta');
+        // Version 2: add embeddings store for on-device AI
+        if (oldVersion < 2) {
+          if (!db.objectStoreNames.contains('embeddings')) {
+            db.createObjectStore('embeddings', { keyPath: 'id' });
+          }
+        }
       },
     });
 
@@ -375,9 +393,76 @@ export class MemoryCache {
     return this.searchLocalAsync(query);
   }
 
+  // ============================================
+  // Embedding Storage (for on-device AI)
+  // ============================================
+
+  /**
+   * Get cached embedding for a memory
+   */
+  async getEmbedding(memoryId: string): Promise<number[] | null> {
+    if (!this.db) await this.init();
+    const cached = await this.db!.get('embeddings', memoryId);
+    return cached?.embedding || null;
+  }
+
+  /**
+   * Store embedding for a memory
+   */
+  async storeEmbedding(memoryId: string, embedding: number[], contentHash: string): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.put('embeddings', {
+      id: memoryId,
+      embedding,
+      contentHash,
+      createdAt: Date.now(),
+    });
+  }
+
+  /**
+   * Get all cached embeddings
+   */
+  async getAllEmbeddings(): Promise<Map<string, number[]>> {
+    if (!this.db) await this.init();
+    const all = await this.db!.getAll('embeddings');
+    const map = new Map<string, number[]>();
+    for (const item of all) {
+      map.set(item.id, item.embedding);
+    }
+    return map;
+  }
+
+  /**
+   * Check if embedding is stale (content changed)
+   */
+  async isEmbeddingStale(memoryId: string, currentContentHash: string): Promise<boolean> {
+    if (!this.db) await this.init();
+    const cached = await this.db!.get('embeddings', memoryId);
+    if (!cached) return true;
+    return cached.contentHash !== currentContentHash;
+  }
+
+  /**
+   * Delete embedding for a memory
+   */
+  async deleteEmbedding(memoryId: string): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.delete('embeddings', memoryId);
+  }
+
+  /**
+   * Clear all embeddings
+   */
+  async clearEmbeddings(): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.clear('embeddings');
+    console.log('[MemoryCache] Embeddings cache cleared');
+  }
+
   async clear(): Promise<void> {
     if (!this.db) await this.init();
     await this.db!.clear('memories');
+    await this.db!.clear('embeddings');
     await this.db!.clear('meta');
     this.lastSyncAt = null;
 
@@ -388,3 +473,5 @@ export class MemoryCache {
     }
   }
 }
+
+export type { CachedEmbedding };

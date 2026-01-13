@@ -3,7 +3,7 @@
  * Connects to the real MaaS API with offline support and local AI
  */
 
-import { Memory, CreateMemoryInput, MemoryType, User, ApiKey } from '../types';
+import { Memory, CreateMemoryInput, User, ApiKey } from '../types';
 
 // ============================================
 // Configuration
@@ -263,8 +263,6 @@ class MemoryClient {
    * List all memories
    */
   async list(query?: string): Promise<Memory[]> {
-    const cacheKey = `memories:${query || 'all'}`;
-
     // ALWAYS load from cache first for instant UI
     const cached = this.cache.get<Memory[]>('memories:all') || [];
 

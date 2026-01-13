@@ -5,10 +5,10 @@
  * This is adapted from client/src/packages/web-extension/RichPanel.tsx
  */
 
-import React, { useState, useEffect } from 'react';
-import { 
-  Search, 
-  Terminal, 
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  Search,
+  Terminal,
   SendHorizontal,
   LogOut,
   Settings,
@@ -22,8 +22,11 @@ import {
   BookOpen,
   GitBranch,
   Terminal as TerminalIcon,
+  Cpu,
+  Zap,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useSemanticSearch } from '../hooks/useSemanticSearch';
 
 interface Memory {
   id: string;
@@ -167,6 +170,24 @@ export const SidePanel: React.FC = () => {
     lastSyncAt: null,
   });
 
+  // On-device AI semantic search
+  const {
+    isAIReady,
+    isAILoading,
+    loadProgress,
+    error: aiError,
+    deviceInfo,
+    search: semanticSearch,
+    generateEmbeddings,
+  } = useSemanticSearch();
+
+  // Generate embeddings when memories load and AI is ready
+  useEffect(() => {
+    if (isAIReady && memories.length > 0) {
+      generateEmbeddings(memories);
+    }
+  }, [isAIReady, memories, generateEmbeddings]);
+
   useEffect(() => {
     // Check auth status
     chrome.runtime.sendMessage({ type: 'GET_AUTH_STATUS' }, (response) => {
@@ -196,7 +217,7 @@ export const SidePanel: React.FC = () => {
     });
   }, []);
 
-  const handleSearch = (query: string) => {
+  const handleSearch = useCallback(async (query: string) => {
     if (!query.trim()) {
       chrome.runtime.sendMessage({ type: 'GET_MEMORIES' }, (response) => {
         if (Array.isArray(response)) {
@@ -206,6 +227,33 @@ export const SidePanel: React.FC = () => {
       return;
     }
 
+    // Use on-device AI semantic search when available
+    if (isAIReady) {
+      try {
+        // Get all memories first (we need them for local AI search)
+        chrome.runtime.sendMessage({ type: 'GET_MEMORIES' }, async (response) => {
+          if (Array.isArray(response)) {
+            const results = await semanticSearch(query, response);
+            // Map results back to Memory type (strip score/searchMethod)
+            const memResults: Memory[] = results.map(r => ({
+              id: r.id,
+              title: r.title,
+              content: r.content,
+              memory_type: r.memory_type,
+              tags: r.tags,
+              created_at: r.created_at,
+              _pending: r._pending,
+            }));
+            setMemories(memResults);
+          }
+        });
+        return;
+      } catch (err) {
+        console.error('[SidePanel] AI search failed, falling back to API:', err);
+      }
+    }
+
+    // Fallback to API/keyword search via background
     chrome.runtime.sendMessage(
       { type: 'SEARCH_MEMORIES', payload: { query } },
       (response) => {
@@ -214,7 +262,7 @@ export const SidePanel: React.FC = () => {
         }
       }
     );
-  };
+  }, [isAIReady, semanticSearch]);
 
   const handleLogin = () => {
     setIsConnecting(true);
@@ -375,6 +423,43 @@ export const SidePanel: React.FC = () => {
                 )}
               </div>
 
+              {/* AI Status */}
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20">
+                {isAILoading ? (
+                  <>
+                    <Loader2 className="h-3 w-3 text-purple-400 animate-spin" />
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-purple-400 font-medium">Loading AI...</span>
+                        <span className="text-[10px] text-purple-300">{loadProgress}%</span>
+                      </div>
+                      <div className="h-1 bg-purple-900/30 rounded-full mt-1 overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300"
+                          style={{ width: `${loadProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : isAIReady ? (
+                  <>
+                    <Zap className="h-3 w-3 text-green-400" />
+                    <span className="text-xs text-green-400 font-medium">On-Device AI Ready</span>
+                    {deviceInfo && (
+                      <span className="ml-auto text-[9px] text-gray-500">{deviceInfo}</span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Cpu className="h-3 w-3 text-gray-500" />
+                    <span className="text-xs text-gray-500">AI Initializing...</span>
+                    {aiError && (
+                      <span className="ml-auto text-[9px] text-red-400" title={aiError}>⚠</span>
+                    )}
+                  </>
+                )}
+              </div>
+
               {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#888888]" />
@@ -480,7 +565,15 @@ export const SidePanel: React.FC = () => {
         </div>
         {isAuthenticated && (
           <div className="flex justify-between items-center px-1 mt-2">
-            <span className="text-[9px] text-[#666666]">AI Orchestrator Active</span>
+            <span className="text-[9px] text-[#666666]">
+              {isAIReady ? (
+                <span className="text-green-500">⚡ AI Search Active</span>
+              ) : isAILoading ? (
+                <span className="text-purple-400">Loading AI ({loadProgress}%)</span>
+              ) : (
+                'AI Orchestrator Active'
+              )}
+            </span>
             <span className="text-[9px] text-[#666666]">v0.1.0</span>
           </div>
         )}

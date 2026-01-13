@@ -13,7 +13,7 @@ import {
   ReactNode,
 } from "react";
 import { LanonasisClient, LanonasisConfig, SyncStatus } from "./index";
-import { Memory, CreateMemoryInput, User, MemoryType } from "../types";
+import { Memory, CreateMemoryInput, User } from "../types";
 
 // Lazy load the AI engine to avoid blocking initial render
 let LocalEmbeddingEngine: any = null;

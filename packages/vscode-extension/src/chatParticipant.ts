@@ -142,18 +142,26 @@ export class MemoryChatParticipant {
       const apiKey = await this.getApiKey();
       if (!apiKey) return [];
 
-      const response = await fetch(`${this.apiUrl}/memory/search?q=${encodeURIComponent(query)}&limit=5`, {
+      // Use POST /functions/v1/memory-search (Supabase edge function)
+      const response = await fetch(`${this.apiUrl}/functions/v1/memory-search`, {
+        method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'X-API-Key': apiKey,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({
+          query,
+          limit: 5,
+          threshold: 0.7,
+        }),
       });
 
       if (!response.ok) return [];
 
       const data = await response.json();
-      // API returns { data: [...] } or { success: true, data: [...] }
-      return (data.data || data.memories || data || []) as CachedMemory[];
+      // API returns { data: { results: [...] } } or { results: [...] }
+      const results = data.data?.results || data.results || data.data || data || [];
+      return results as CachedMemory[];
     } catch (err) {
       this.output.appendLine(`[ChatParticipant] API search error: ${err}`);
       return [];
@@ -232,10 +240,10 @@ export class MemoryChatParticipant {
       const apiKey = await this.getApiKey();
       if (!apiKey) return;
 
-      const response = await fetch(`${this.apiUrl}/memory`, {
+      const response = await fetch(`${this.apiUrl}/functions/v1/memory-create`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'X-API-Key': apiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -247,7 +255,8 @@ export class MemoryChatParticipant {
       });
 
       if (response.ok) {
-        const serverMemory = await response.json();
+        const data = await response.json();
+        const serverMemory = data.data || data.memory || data;
         await this.cache.markSynced(memory.id, serverMemory);
         this.output.appendLine(`[ChatParticipant] Memory synced: ${memory.title}`);
       }

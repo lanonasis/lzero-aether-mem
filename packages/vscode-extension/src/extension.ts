@@ -17,20 +17,21 @@ const STORAGE_KEYS = {
   OAUTH_TOKENS: 'lanonasis.tokens',
 } as const;
 
-// API configuration - returns the full API path (with /api/v1)
+// API configuration - Supabase edge functions direct URL
+const SUPABASE_URL = 'https://lanonasis.supabase.co';
+
 const getApiUrl = (): string => {
   const config = vscode.workspace.getConfiguration('lzero');
-  const baseUrl = config.get<string>('apiUrl') || 'https://api.lanonasis.com';
-  // Normalize: if user already included /api/v1, use it; otherwise add it
-  return baseUrl.includes('/api/v1') ? baseUrl : `${baseUrl}/api/v1`;
+  // Allow override via settings, default to direct Supabase
+  return config.get<string>('apiUrl') || SUPABASE_URL;
 };
 
 // Get base URL without /api/v1 (for memory-client SDK which adds it internally)
 const getApiBaseUrl = (): string => {
   const config = vscode.workspace.getConfiguration('lzero');
-  const configUrl = config.get<string>('apiUrl') || 'https://api.lanonasis.com';
-  // Strip /api/v1 suffix if present
-  return configUrl.replace(/\/api\/v1\/?$/, '');
+  const configUrl = config.get<string>('apiUrl') || SUPABASE_URL;
+  // Strip /api/v1 suffix if present (for SDK compatibility)
+  return configUrl.replace(/\/api\/v1\/?$/, '').replace(/\/functions\/v1\/?$/, '');
 };
 
 const VALID_API_KEY_PREFIXES = ['lano_', 'lns_'] as const;
@@ -45,6 +46,8 @@ const OAUTH_CONFIG = {
   redirectUri: 'vscode://lanonasis.lzero-memory/callback',
   scope: 'memories:read memories:write memories:delete profile',
 } as const;
+
+let memoryCacheInstance: MemoryCache | null = null;
 
 class VSCodeOAuthFlow {
   private pendingAuth: {
@@ -184,7 +187,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     this.output.appendLine('[LanOnasis] Initializing sidebar webview');
     webview.html = this.getWebviewHtml(webview);
 
-    webview.onDidReceiveMessage((message) => {
+    webview.onDidReceiveMessage((message: any) => {
       if (!message || typeof message !== 'object') return;
 
       if (message.type === 'lanonasis:webview-ready') {
@@ -221,7 +224,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       }
 
       if (message.type === 'lanonasis:clipboard:read') {
-        void vscode.env.clipboard.readText().then((text) => {
+        void vscode.env.clipboard.readText().then((text: string) => {
           webview.postMessage({ type: 'lanonasis:clipboard:read:result', payload: { text } });
         });
         return;
@@ -296,26 +299,128 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       }
 
       const apiUrl = getApiUrl();
-      const response = await fetch(`${apiUrl}/memory?limit=100`, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      // Use X-API-Key header for Supabase edge functions
+      const headers = {
+        'X-API-Key': apiKey,
+        'Content-Type': 'application/json',
+      };
+
+      // Step 1: Push pending changes to API (using Supabase edge functions)
+      const pendingQueue = this.cache.getPendingQueue();
+      const syncResults: { success: number; failed: number } = { success: 0, failed: 0 };
+
+      for (const pending of pendingQueue) {
+        try {
+          if (pending._pending === 'create') {
+            // POST /functions/v1/memory-create
+            const createController = new AbortController();
+            const createTimeout = setTimeout(() => createController.abort(), 30000);
+
+            try {
+              const createResponse = await fetch(`${apiUrl}/functions/v1/memory-create`, {
+                method: 'POST',
+                headers,
+                signal: createController.signal,
+                body: JSON.stringify({
+                  title: pending.title,
+                  content: pending.content,
+                  memory_type: pending.memory_type,
+                  tags: pending.tags,
+                }),
+              });
+
+              if (createResponse.ok) {
+                const created = await createResponse.json();
+                const serverMemory = created.data || created.memory || created;
+                await this.cache.markSynced(pending._localId || pending.id, serverMemory);
+                syncResults.success++;
+                this.output.appendLine(`[LanOnasis] Synced new memory: ${pending.title}`);
+              } else {
+                syncResults.failed++;
+                this.output.appendLine(`[LanOnasis] Failed to sync memory: ${pending.title} (${createResponse.status})`);
+              }
+            } finally {
+              clearTimeout(createTimeout);
+            }
+          } else if (pending._pending === 'update') {
+            // POST /functions/v1/memory-update with id in body
+            const updateController = new AbortController();
+            const updateTimeout = setTimeout(() => updateController.abort(), 30000);
+
+            try {
+              const updateResponse = await fetch(`${apiUrl}/functions/v1/memory-update`, {
+                method: 'POST',
+                headers,
+                signal: updateController.signal,
+                body: JSON.stringify({
+                  id: pending.id,
+                  title: pending.title,
+                  content: pending.content,
+                  memory_type: pending.memory_type,
+                  tags: pending.tags,
+                }),
+              });
+
+              if (updateResponse.ok) {
+                const updated = await updateResponse.json();
+                const serverMemory = updated.data || updated.memory || updated;
+                await this.cache.markSynced(pending.id, serverMemory);
+                syncResults.success++;
+              } else {
+                syncResults.failed++;
+              }
+            } finally {
+              clearTimeout(updateTimeout);
+            }
+          } else if (pending._pending === 'delete') {
+            // POST /functions/v1/memory-delete with id in body
+            const deleteController = new AbortController();
+            const deleteTimeout = setTimeout(() => deleteController.abort(), 30000);
+
+            try {
+              const deleteResponse = await fetch(`${apiUrl}/functions/v1/memory-delete`, {
+                method: 'POST',
+                headers,
+                signal: deleteController.signal,
+                body: JSON.stringify({ id: pending.id }),
+              });
+
+              if (deleteResponse.ok) {
+                await this.cache.removePending(pending.id);
+                syncResults.success++;
+              } else {
+                syncResults.failed++;
+              }
+            } finally {
+              clearTimeout(deleteTimeout);
+            }
+          }
+        } catch (pendingErr) {
+          syncResults.failed++;
+          this.output.appendLine(`[LanOnasis] Error syncing pending item: ${pendingErr}`);
+        }
+      }
+
+      if (pendingQueue.length > 0) {
+        this.output.appendLine(`[LanOnasis] Sync results: ${syncResults.success} succeeded, ${syncResults.failed} failed`);
+      }
+
+      // Step 2: Fetch fresh data from API - GET /functions/v1/memory-list
+      const response = await fetch(`${apiUrl}/functions/v1/memory-list?limit=100`, { headers });
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
 
       const data = await response.json();
-      // API returns { data: [...] } or { success: true, data: [...] }
-      const memories = (data.data || data.memories || data || []) as CachedMemory[];
+      // API returns { data: { memories: [...] } } or { memories: [...] }
+      const memories = (data.data?.memories || data.memories || data.data || data || []) as CachedMemory[];
       await this.cache.updateFromApi(memories);
       this.cache.setOnline(true);
 
       webview.postMessage({
         type: 'lanonasis:sync:complete',
-        payload: { memories, status: this.cache.getStatus() }
+        payload: { memories, status: this.cache.getStatus(), syncResults }
       });
     } catch (err) {
       // Only mark as offline for network errors, not API errors (404, 401, etc.)
@@ -348,21 +453,27 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         payload: { results: localResults, query }
       });
 
-      // Then try API semantic search
+      // Then try API semantic search using Supabase edge function
       const apiKey = await this.getStoredApiKey();
       if (apiKey) {
         const apiUrl = getApiUrl();
-        const response = await fetch(`${apiUrl}/memory/search?q=${encodeURIComponent(query)}&limit=10`, {
+        const response = await fetch(`${apiUrl}/functions/v1/memory-search`, {
+          method: 'POST',
           headers: {
-            'Authorization': `Bearer ${apiKey}`,
+            'X-API-Key': apiKey,
             'Content-Type': 'application/json',
           },
+          body: JSON.stringify({
+            query,
+            limit: 10,
+            threshold: 0.7,
+          }),
         });
 
         if (response.ok) {
           const data = await response.json();
-          // API returns { data: [...] } or { success: true, data: [...] }
-          const apiResults = (data.data || data.memories || data || []) as CachedMemory[];
+          // API returns { data: { results: [...] } } or { results: [...] }
+          const apiResults = (data.data?.results || data.results || data.data || []) as CachedMemory[];
           webview.postMessage({
             type: 'lanonasis:ai:search:api',
             payload: { results: apiResults, query }
@@ -384,12 +495,18 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         if (Date.now() <= expiresAt - 5 * 60 * 1000) {
           return tokens.access_token;
         }
+        // Token expired - log it
+        this.output.appendLine('[LanOnasis] OAuth token expired');
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      this.output.appendLine(`[LanOnasis] Failed to parse OAuth tokens: ${err}`);
+    }
 
     try {
       return await this.context.secrets.get(STORAGE_KEYS.API_KEY);
-    } catch { /* ignore */ }
+    } catch (err) {
+      this.output.appendLine(`[LanOnasis] Failed to get API key: ${err}`);
+    }
 
     return undefined;
   }
@@ -530,6 +647,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Initialize memory cache
   const cache = new MemoryCache(context, output);
+  memoryCacheInstance = cache;
 
   const oauthFlow = new VSCodeOAuthFlow(output);
 
@@ -551,10 +669,14 @@ export function activate(context: vscode.ExtensionContext) {
         const tokens: TokenResponse = JSON.parse(tokensJson);
         return tokens.access_token;
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      output.appendLine(`[LanOnasis] Chat: Failed to get OAuth token: ${err}`);
+    }
     try {
       return await context.secrets.get(STORAGE_KEYS.API_KEY);
-    } catch { /* ignore */ }
+    } catch (err) {
+      output.appendLine(`[LanOnasis] Chat: Failed to get API key: ${err}`);
+    }
     return undefined;
   };
 
@@ -640,7 +762,12 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
+  context.subscriptions.push({ dispose: () => cache.stopConnectivityCheck() });
+
   output.appendLine('[LanOnasis] Extension activated');
 }
 
-export function deactivate() { }
+export function deactivate() {
+  memoryCacheInstance?.stopConnectivityCheck();
+  memoryCacheInstance = null;
+}

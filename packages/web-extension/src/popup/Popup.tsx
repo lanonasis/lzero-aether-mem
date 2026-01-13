@@ -4,7 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Search, RefreshCw, Settings, LogOut, ExternalLink } from 'lucide-react';
+import { Search, RefreshCw, Settings, LogOut, ExternalLink, Zap, Loader2 } from 'lucide-react';
+import { useSemanticSearch } from '../hooks/useSemanticSearch';
 
 interface Memory {
   id: string;
@@ -31,6 +32,9 @@ export const Popup: React.FC = () => {
     isSyncing: false,
   });
   const [isLoading, setIsLoading] = useState(true);
+
+  // On-device AI status
+  const { isAIReady, isAILoading, loadProgress } = useSemanticSearch();
 
   useEffect(() => {
     // Check auth status
@@ -129,7 +133,18 @@ export const Popup: React.FC = () => {
           <span className="font-semibold text-sm">L0 Memory</span>
         </div>
         <div className="flex items-center gap-1">
-          <div 
+          {/* AI Status */}
+          {isAILoading ? (
+            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-purple-500/10 rounded" title={`Loading AI: ${loadProgress}%`}>
+              <Loader2 className="h-3 w-3 text-purple-400 animate-spin" />
+            </div>
+          ) : isAIReady ? (
+            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-green-500/10 rounded" title="On-Device AI Ready">
+              <Zap className="h-3 w-3 text-green-400" />
+            </div>
+          ) : null}
+          {/* Online Status */}
+          <div
             className={`h-2 w-2 rounded-full ${syncStatus.isOnline ? 'bg-green-500' : 'bg-red-500'}`}
             title={syncStatus.isOnline ? 'Online' : 'Offline'}
           />

@@ -6,6 +6,9 @@
 
 import * as vscode from 'vscode';
 
+const SUPABASE_ORIGIN = 'https://lanonasis.supabase.co';
+const SYSTEM_HEALTH_URL = `${SUPABASE_ORIGIN}/functions/v1/system-health`;
+
 export interface CachedMemory {
   id: string;
   title: string;
@@ -53,11 +56,11 @@ export class MemoryCache {
       const cached = this.context.globalState.get<CachedMemory[]>(CACHE_KEYS.MEMORIES, []);
       const pending = this.context.globalState.get<CachedMemory[]>(CACHE_KEYS.PENDING_QUEUE, []);
       const lastSync = this.context.globalState.get<number | null>(CACHE_KEYS.LAST_SYNC, null);
-      
+
       this.memories = cached;
       this.pendingQueue = pending;
       this.lastSyncAt = lastSync;
-      
+
       this.output.appendLine(`[MemoryCache] Loaded ${this.memories.length} cached memories, ${this.pendingQueue.length} pending`);
     } catch (err) {
       this.output.appendLine(`[MemoryCache] Load error: ${err}`);
@@ -75,9 +78,53 @@ export class MemoryCache {
   }
 
   private setupNetworkListener(): void {
-    // VS Code doesn't have direct network status API, so we infer from fetch failures
-    // For now, assume online and update on API failures
+    // VS Code doesn't have window.navigator.onLine, so we use a periodic health check
+    // and infer network state from API response success/failure
     this.isOnline = true;
+
+    // Periodic connectivity check every 30 seconds when extension is active
+    this.startConnectivityCheck();
+  }
+
+  private connectivityCheckInterval: NodeJS.Timeout | null = null;
+
+  private startConnectivityCheck(): void {
+    // Don't start multiple intervals
+    if (this.connectivityCheckInterval) return;
+
+    this.connectivityCheckInterval = setInterval(async () => {
+      try {
+        // Use a lightweight health check endpoint
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        const response = await fetch(SYSTEM_HEALTH_URL, {
+          method: 'GET',
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        const wasOffline = !this.isOnline;
+        this.isOnline = response.ok;
+
+        if (wasOffline && this.isOnline) {
+          this.output.appendLine('[MemoryCache] Network restored - online');
+        }
+      } catch (err) {
+        if (this.isOnline) {
+          this.output.appendLine('[MemoryCache] Network check failed - marking offline');
+        }
+        this.isOnline = false;
+      }
+    }, 30000); // Check every 30 seconds
+  }
+
+  public stopConnectivityCheck(): void {
+    if (this.connectivityCheckInterval) {
+      clearInterval(this.connectivityCheckInterval);
+      this.connectivityCheckInterval = null;
+    }
   }
 
   public getStatus(): SyncStatus {
@@ -117,7 +164,7 @@ export class MemoryCache {
   public async addLocal(memory: Omit<CachedMemory, 'id' | 'created_at' | 'updated_at'>): Promise<CachedMemory> {
     const localId = `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const now = new Date().toISOString();
-    
+
     const newMemory: CachedMemory = {
       ...memory,
       id: localId,
@@ -131,7 +178,7 @@ export class MemoryCache {
     this.memories.unshift(newMemory);
     this.pendingQueue.push(newMemory);
     await this.saveToStorage();
-    
+
     this.output.appendLine(`[MemoryCache] Added local memory: ${newMemory.title}`);
     return newMemory;
   }
@@ -152,8 +199,72 @@ export class MemoryCache {
     }
 
     // Remove from pending queue
-    this.pendingQueue = this.pendingQueue.filter(m => m._localId !== localId);
+    this.pendingQueue = this.pendingQueue.filter(m => m._localId !== localId && m.id !== localId);
     await this.saveToStorage();
+  }
+
+  /**
+   * Remove a pending item (after successful delete sync)
+   */
+  public async removePending(id: string): Promise<void> {
+    this.pendingQueue = this.pendingQueue.filter(m => m.id !== id && m._localId !== id);
+    this.memories = this.memories.filter(m => m.id !== id);
+    await this.saveToStorage();
+  }
+
+  /**
+   * Queue a memory update for sync
+   */
+  public async queueUpdate(id: string, updates: Partial<CachedMemory>): Promise<void> {
+    const idx = this.memories.findIndex(m => m.id === id);
+    if (idx === -1) {
+      this.output.appendLine(`[MemoryCache] queueUpdate: memory not found for id ${id}`);
+      return;
+    }
+
+    this.memories[idx] = {
+      ...this.memories[idx],
+      ...updates,
+      updated_at: new Date().toISOString(),
+      _pending: 'update',
+      _cachedAt: Date.now(),
+    };
+
+    // Add to pending queue if not already there
+    const pendingIdx = this.pendingQueue.findIndex(m => m.id === id);
+    if (pendingIdx !== -1) {
+      this.pendingQueue[pendingIdx] = this.memories[idx];
+    } else {
+      this.pendingQueue.push(this.memories[idx]);
+    }
+
+    await this.saveToStorage();
+  }
+
+  /**
+   * Queue a memory delete for sync
+   */
+  public async queueDelete(id: string): Promise<void> {
+    const memory = this.memories.find(m => m.id === id);
+    if (memory) {
+      // If it's a local-only memory that hasn't been synced, just remove it
+      if (memory._localId && memory._pending === 'create') {
+        this.memories = this.memories.filter(m => m.id !== id);
+        this.pendingQueue = this.pendingQueue.filter(m => m.id !== id);
+      } else {
+        // Mark for deletion and add to pending queue
+        const deleteMemory = { ...memory, _pending: 'delete' as const };
+        this.memories = this.memories.filter(m => m.id !== id);
+
+        const pendingIdx = this.pendingQueue.findIndex(m => m.id === id);
+        if (pendingIdx !== -1) {
+          this.pendingQueue[pendingIdx] = deleteMemory;
+        } else {
+          this.pendingQueue.push(deleteMemory);
+        }
+      }
+      await this.saveToStorage();
+    }
   }
 
   /**
@@ -161,7 +272,7 @@ export class MemoryCache {
    */
   public searchLocal(query: string): CachedMemory[] {
     const q = query.toLowerCase();
-    return this.memories.filter(m => 
+    return this.memories.filter(m =>
       m.title.toLowerCase().includes(q) ||
       m.content.toLowerCase().includes(q) ||
       m.tags.some(t => t.toLowerCase().includes(q))
@@ -175,7 +286,7 @@ export class MemoryCache {
    */
   public semanticSearchLocal(query: string): CachedMemory[] {
     const q = query.toLowerCase();
-    
+
     // Extract intent keywords
     const findPatterns = [
       /find\s+(?:my\s+)?(.+)/i,
