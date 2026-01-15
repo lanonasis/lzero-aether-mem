@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { format } from 'date-fns';
-import { Copy, Check, Hash, FileText } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
-import { Memory } from '../../../../shared/types';
+import React, { useState } from "react";
+import { motion } from "framer-motion";
+import { format } from "date-fns";
+import { Copy, Check, Hash, FileText } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { Memory } from "../../../../shared/types";
 
 declare global {
   interface Window {
@@ -16,15 +16,21 @@ declare global {
 
 const formatMemoryDate = (memory: Memory) => {
   const rawDate = memory.date ?? memory.createdAt ?? memory.updatedAt;
-  if (!rawDate) return '—';
+  if (!rawDate) return "—";
 
   const parsed = rawDate instanceof Date ? rawDate : new Date(rawDate);
-  if (Number.isNaN(parsed.getTime())) return '—';
+  if (Number.isNaN(parsed.getTime())) return "—";
 
-  return format(parsed, 'MMM d');
+  return format(parsed, "MMM d");
 };
 
-export const MemoryCard = ({ memory }: { memory: Memory }) => {
+export const MemoryCard = ({
+  memory,
+  onOpen,
+}: {
+  memory: Memory;
+  onOpen?: (memory: Memory) => void;
+}) => {
   const [isHovered, setIsHovered] = useState(false);
   const [copied, setCopied] = useState(false);
   const Icon = memory.icon || FileText;
@@ -32,14 +38,17 @@ export const MemoryCard = ({ memory }: { memory: Memory }) => {
 
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const text = memory.content ?? '';
+    const text = memory.content ?? "";
 
-    if (window.vscode && typeof window.vscode.postMessage === 'function') {
+    if (window.vscode && typeof window.vscode.postMessage === "function") {
       window.vscode.postMessage({
-        type: 'lanonasis:clipboard:write',
+        type: "lanonasis:clipboard:write",
         payload: { text },
       });
-    } else if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    } else if (
+      navigator.clipboard &&
+      typeof navigator.clipboard.writeText === "function"
+    ) {
       navigator.clipboard.writeText(text).catch(() => {
         // Ignore clipboard errors in plain web preview
       });
@@ -54,8 +63,9 @@ export const MemoryCard = ({ memory }: { memory: Memory }) => {
       initial={{ opacity: 0, x: -5 }}
       animate={{ opacity: 1, x: 0 }}
       className={cn(
-        'group relative flex flex-col gap-1.5 rounded-sm p-2 hover:bg-[var(--vscode-list-hoverBackground)] transition-colors duration-100 cursor-pointer border border-transparent hover:border-[var(--vscode-focusBorder)]',
+        "group relative flex flex-col gap-1.5 rounded-sm p-2 hover:bg-[var(--vscode-list-hoverBackground)] transition-colors duration-100 cursor-pointer border border-transparent hover:border-[var(--vscode-focusBorder)]"
       )}
+      onClick={() => onOpen?.(memory)}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       data-testid={`memory-card-${memory.id}`}
@@ -92,9 +102,7 @@ export const MemoryCard = ({ memory }: { memory: Memory }) => {
 
       <div className="flex items-center gap-3 text-[11px] text-[var(--vscode-descriptionForeground)] pl-5.5">
         <div className="flex items-center gap-1 opacity-60">
-          <span data-testid="text-memory-date">
-            {formattedDate}
-          </span>
+          <span data-testid="text-memory-date">{formattedDate}</span>
         </div>
         {memory.tags?.map((tag: string) => (
           <div

@@ -25,6 +25,7 @@ export const useMemories = (_isAuthenticated?: boolean) => {
     fetchMemories,
     searchMemories: searchApi,
     createMemory: createApi,
+    updateMemory: updateApi,
     deleteMemory: deleteApi,
   } = useLanonasisContext();
 
@@ -72,6 +73,22 @@ export const useMemories = (_isAuthenticated?: boolean) => {
     await deleteApi(id);
   }, [isAuthenticated, deleteApi]);
 
+  const updateMemory = useCallback(async (id: string, data: Partial<CreateMemoryRequest>) => {
+    if (!isAuthenticated) return undefined;
+    try {
+      const updated = await updateApi(id, {
+        title: data.title,
+        content: data.content,
+        memory_type: (data.memory_type as any) || 'note',
+        tags: data.tags || [],
+      });
+      return updated ? mapMemoryEntry(updated) : undefined;
+    } catch (err) {
+      console.error('Failed to update memory:', err);
+      return undefined;
+    }
+  }, [isAuthenticated, updateApi]);
+
   const refetch = useCallback(async () => {
     if (!isAuthenticated) return;
     await fetchMemories();
@@ -86,7 +103,7 @@ export const useMemories = (_isAuthenticated?: boolean) => {
     error: memoryError,
     searchMemories,
     createMemory,
-    updateMemory: async () => undefined, // Not implemented yet
+    updateMemory,
     deleteMemory,
     refetch,
   };

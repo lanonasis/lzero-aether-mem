@@ -109,6 +109,11 @@
           "default": "https://api.lanonasis.com",
           "description": "Base URL for the L0 Memory API (without /api/v1 suffix)."
         },
+        "lzero.dashboardUrl": {
+          "type": "string",
+          "default": "https://lanonasis.com/dashboard",
+          "description": "Dashboard URL for API key management and profile access."
+        },
         "lzero.retainContextWhenHidden": {
           "type": "boolean",
           "default": false,

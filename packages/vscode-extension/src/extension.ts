@@ -26,6 +26,11 @@ const getApiUrl = (): string => {
   return config.get<string>('apiUrl') || SUPABASE_URL;
 };
 
+const getDashboardUrl = (): string => {
+  const config = vscode.workspace.getConfiguration('lzero');
+  return config.get<string>('dashboardUrl') || 'https://lanonasis.com/dashboard';
+};
+
 // Get base URL without /api/v1 (for memory-client SDK which adds it internally)
 const getApiBaseUrl = (): string => {
   const config = vscode.workspace.getConfiguration('lzero');
@@ -282,6 +287,14 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
 
       if (message.type === 'lanonasis:open-settings') {
         void vscode.commands.executeCommand('workbench.action.openSettings', 'lzero');
+        return;
+      }
+
+      if (message.type === 'lanonasis:open-dashboard') {
+        const section = message.payload?.section as string | undefined;
+        const baseUrl = getDashboardUrl();
+        const targetUrl = section ? `${baseUrl}#${section}` : baseUrl;
+        void vscode.env.openExternal(vscode.Uri.parse(targetUrl));
         return;
       }
 

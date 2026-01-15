@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Search,
   Plus,
@@ -11,6 +11,9 @@ import {
   LogOut,
   User,
   Key,
+  Pencil,
+  Trash2,
+  X,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -27,7 +30,6 @@ import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { useAuth } from "./hooks/useAuth";
 import { useMemories } from "./hooks/useMemories";
-import { useApiKeys } from "./hooks/useApiKeys";
 import { MemoryCard } from "./components/MemoryCard";
 import { SearchBar } from "./components/SearchBar";
 import { ChatInterface } from "./components/ChatInterface";
@@ -35,6 +37,77 @@ import { ApiKeyManager } from "./components/ApiKeyManager";
 import { ErrorBoundary } from "@/services/ErrorBoundary";
 import { L0Logo } from "@/components/L0Logo";
 import { Input } from "@/components/ui/input";
+import type { Memory, MemoryType } from "../shared/types";
+
+const MEMORY_TYPES: MemoryType[] = [
+  "note",
+  "docs",
+  "code",
+  "todo",
+  "workflow",
+  "snippet",
+  "idea",
+  "status",
+];
+
+const formatDateShort = (dateValue?: string | Date | number | null) => {
+  if (!dateValue) return "—";
+  const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+};
+
+const formatDateTime = (dateValue?: string | Date | number | null) => {
+  if (!dateValue) return "—";
+  const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
+const tagsToText = (tags?: string[]) =>
+  tags && tags.length > 0 ? tags.join(", ") : "";
+const parseTags = (value: string) =>
+  value
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+
+const toMemoryRequestType = (
+  type: MemoryType
+):
+  | "context"
+  | "project"
+  | "knowledge"
+  | "reference"
+  | "personal"
+  | "workflow" => {
+  switch (type) {
+    case "workflow":
+    case "todo":
+    case "status":
+      return "workflow";
+    case "docs":
+    case "code":
+    case "snippet":
+    case "idea":
+    case "note":
+    default:
+      return "knowledge";
+  }
+};
+
+interface MemoryEditDraft {
+  title: string;
+  content: string;
+  type: MemoryType;
+  tags: string;
+}
 
 interface WelcomeViewProps {
   onLoginOAuth: () => void;
@@ -187,6 +260,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
     logout,
     isLoading: authLoading,
     error: authError,
+    user,
   } = useAuth();
   const {
     searchQuery,
@@ -194,14 +268,29 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
     filteredMemories,
     isLoading: memoriesLoading,
     createMemory,
+    updateMemory,
+    deleteMemory,
     refetch,
   } = useMemories(isAuthenticated);
-  const { apiKeys, isLoading: keysLoading } = useApiKeys(isAuthenticated);
   const [chatInput, setChatInput] = useState(initialChatInput);
   const [showApiKeys, setShowApiKeys] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(true);
   const [isMemoriesOpen, setIsMemoriesOpen] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editDraft, setEditDraft] = useState<MemoryEditDraft>({
+    title: "",
+    content: "",
+    type: "note",
+    tags: "",
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const userDisplayName = user?.name || user?.email || null;
+  const isLocalMode = !isAuthenticated;
 
   useEffect(() => {
     if (initialChatInput !== undefined) {
@@ -213,11 +302,14 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
     // For now, create a memory from the chat input or a placeholder
     const content = chatInput.trim() || "New memory";
     try {
-      await createMemory({
+      const created = await createMemory({
         title: content.slice(0, 50) + (content.length > 50 ? "..." : ""),
         content,
         memory_type: "knowledge",
       });
+      if (created) {
+        setLastSyncAt(Date.now());
+      }
       setChatInput("");
     } catch (err) {
       console.error("Failed to create memory:", err);
@@ -228,8 +320,61 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
     setIsSyncing(true);
     try {
       await refetch();
+      setLastSyncAt(Date.now());
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const openMemory = (memory: Memory) => {
+    setSelectedMemory(memory);
+    setEditDraft({
+      title: memory.title || "",
+      content: memory.content || "",
+      type: memory.type || "note",
+      tags: tagsToText(memory.tags),
+    });
+    setIsEditing(false);
+  };
+
+  const closeMemory = () => {
+    setSelectedMemory(null);
+    setIsEditing(false);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedMemory) return;
+    setIsSaving(true);
+    try {
+      const updated = await updateMemory(selectedMemory.id, {
+        title: editDraft.title.trim() || selectedMemory.title,
+        content: editDraft.content.trim() || selectedMemory.content,
+        memory_type: toMemoryRequestType(editDraft.type),
+        tags: parseTags(editDraft.tags),
+      });
+      if (updated) {
+        setSelectedMemory(updated);
+        setLastSyncAt(Date.now());
+      }
+      setIsEditing(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (!selectedMemory) return;
+    const confirmed = window.confirm(
+      `Delete "${selectedMemory.title}"? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    setIsSaving(true);
+    try {
+      await deleteMemory(selectedMemory.id);
+      setSelectedMemory(null);
+      setLastSyncAt(Date.now());
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -248,6 +393,32 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
             </div>
 
             <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 text-[10px] text-[var(--vscode-descriptionForeground)] mr-1">
+                <div
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    isAuthenticated ? "bg-green-500" : "bg-yellow-500"
+                  }`}
+                  title={isAuthenticated ? "Online" : "Local"}
+                />
+                <span>{isAuthenticated ? "Online" : "Local"}</span>
+              </div>
+              <span className="text-[10px] text-[var(--vscode-descriptionForeground)] opacity-80">
+                {isAuthenticated
+                  ? isSyncing
+                    ? "Syncing..."
+                    : lastSyncAt
+                    ? `Synced ${formatDateShort(lastSyncAt)}`
+                    : "Not synced"
+                  : "Local mode"}
+              </span>
+              {userDisplayName && (
+                <span
+                  className="text-[10px] text-[var(--vscode-descriptionForeground)] max-w-[120px] truncate"
+                  title={userDisplayName}
+                >
+                  {userDisplayName}
+                </span>
+              )}
               {isAuthenticated ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -310,6 +481,19 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
 
           <ScrollArea className="flex-1">
             <div className="flex flex-col min-h-full">
+              {isLocalMode && (
+                <div className="px-4 py-2 text-[11px] flex items-center justify-between bg-blue-500/10 text-blue-300 border-b border-blue-500/20">
+                  <span>Local mode — connect for sync and AI features.</span>
+                  <Button
+                    size="sm"
+                    className="h-6"
+                    onClick={loginWithOAuth}
+                    disabled={authLoading}
+                  >
+                    Connect
+                  </Button>
+                </div>
+              )}
               {/* Memory Assistant Section */}
               <Collapsible
                 open={isAssistantOpen}
@@ -334,7 +518,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                   <div className="min-h-[80px] p-4 text-[13px] text-[var(--vscode-descriptionForeground)] flex items-center justify-center text-center italic opacity-80">
                     {isAuthenticated
                       ? "Ready to assist. Ask me to recall context or refine prompts."
-                      : "Please connect to enable AI assistance."}
+                      : "Local mode: connect to enable AI assistance."}
                   </div>
                 </CollapsibleContent>
               </Collapsible>
@@ -367,6 +551,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                       size="icon"
                       className="h-5 w-5 hover:bg-[var(--vscode-list-hoverBackground)] rounded-sm"
                       data-testid="btn-search"
+                      onClick={() => searchInputRef.current?.focus()}
                     >
                       <Search className="h-3.5 w-3.5 text-[var(--vscode-icon-foreground)]" />
                     </Button>
@@ -375,6 +560,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                       size="icon"
                       className="h-5 w-5 hover:bg-[var(--vscode-list-hoverBackground)] rounded-sm"
                       data-testid="btn-refresh"
+                      onClick={handleSync}
                     >
                       <RefreshCw className="h-3.5 w-3.5 text-[var(--vscode-icon-foreground)]" />
                     </Button>
@@ -387,6 +573,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                       <SearchBar
                         value={searchQuery}
                         onChange={setSearchQuery}
+                        inputRef={searchInputRef}
                       />
 
                       <div className="flex gap-2 mb-4">
@@ -417,7 +604,11 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
 
                       <div className="space-y-0.5">
                         {filteredMemories.map((memory) => (
-                          <MemoryCard key={memory.id} memory={memory} />
+                          <MemoryCard
+                            key={memory.id}
+                            memory={memory}
+                            onOpen={openMemory}
+                          />
                         ))}
                       </div>
                     </div>
@@ -442,6 +633,188 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
             isAuthenticated={isAuthenticated}
             onAttach={onAttachFromClipboard}
           />
+
+          {selectedMemory && (
+            <div
+              className="absolute inset-0 z-40"
+              style={{ backgroundColor: "rgba(0, 0, 0, 0.35)" }}
+            >
+              <div className="absolute inset-0" onClick={closeMemory} />
+              <div className="relative h-full w-full p-3">
+                <div className="flex h-full flex-col rounded-sm border border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <div className="text-[10px] uppercase tracking-wide text-[var(--vscode-descriptionForeground)] opacity-70">
+                        Memory Detail
+                      </div>
+                      <h3 className="text-[14px] font-semibold text-[var(--vscode-editor-foreground)]">
+                        {selectedMemory.title}
+                      </h3>
+                      <div className="text-[11px] text-[var(--vscode-descriptionForeground)]">
+                        {formatDateTime(
+                          selectedMemory.updatedAt || selectedMemory.createdAt
+                        )}
+                        {" • "}
+                        {selectedMemory.type}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Edit memory"
+                        onClick={() => setIsEditing(true)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Delete memory"
+                        onClick={handleDeleteSelected}
+                        disabled={isSaving}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Close"
+                        onClick={closeMemory}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto mt-3">
+                    {isEditing ? (
+                      <div className="flex flex-col gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-[var(--vscode-descriptionForeground)]">
+                            Title
+                          </label>
+                          <Input
+                            value={editDraft.title}
+                            onChange={(e) =>
+                              setEditDraft((prev) => ({
+                                ...prev,
+                                title: e.target.value,
+                              }))
+                            }
+                            className="h-8 text-[13px]"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-[var(--vscode-descriptionForeground)]">
+                            Type
+                          </label>
+                          <select
+                            value={editDraft.type}
+                            onChange={(e) =>
+                              setEditDraft((prev) => ({
+                                ...prev,
+                                type: e.target.value as MemoryType,
+                              }))
+                            }
+                            className="vscode-input h-8 w-full rounded-sm border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] px-2 text-[13px] text-[var(--vscode-input-foreground)]"
+                          >
+                            {MEMORY_TYPES.map((type) => (
+                              <option key={type} value={type}>
+                                {type}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-[var(--vscode-descriptionForeground)]">
+                            Tags (comma separated)
+                          </label>
+                          <Input
+                            value={editDraft.tags}
+                            onChange={(e) =>
+                              setEditDraft((prev) => ({
+                                ...prev,
+                                tags: e.target.value,
+                              }))
+                            }
+                            className="h-8 text-[13px]"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] text-[var(--vscode-descriptionForeground)]">
+                            Content
+                          </label>
+                          <textarea
+                            value={editDraft.content}
+                            onChange={(e) =>
+                              setEditDraft((prev) => ({
+                                ...prev,
+                                content: e.target.value,
+                              }))
+                            }
+                            className="vscode-input w-full min-h-[140px] rounded-sm border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] p-2 text-[13px] text-[var(--vscode-input-foreground)] resize-none"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        <div
+                          className="text-[13px] text-[var(--vscode-editor-foreground)]"
+                          style={{ whiteSpace: "pre-wrap" }}
+                        >
+                          {selectedMemory.content}
+                        </div>
+                        {selectedMemory.tags?.length > 0 && (
+                          <div
+                            className="flex gap-1"
+                            style={{ flexWrap: "wrap" }}
+                          >
+                            {selectedMemory.tags.map((tag) => (
+                              <span
+                                key={tag}
+                                className="px-1.5 py-0.5 rounded bg-[var(--vscode-badge-background)]/10 text-[11px] text-[var(--vscode-editor-foreground)]"
+                              >
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-3 border-t border-[var(--vscode-panel-border)] mt-3">
+                    {isEditing ? (
+                      <div className="flex gap-2">
+                        <Button
+                          className="flex-1 h-7"
+                          onClick={handleSaveEdit}
+                          disabled={isSaving}
+                        >
+                          {isSaving ? "Saving..." : "Save Changes"}
+                        </Button>
+                        <Button
+                          className="flex-1 h-7"
+                          variant="secondary"
+                          onClick={() => setIsEditing(false)}
+                          disabled={isSaving}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between text-[11px] text-[var(--vscode-descriptionForeground)]">
+                        <span>
+                          Updated {formatDateTime(selectedMemory.updatedAt)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* API Key Manager Modal */}
           <ApiKeyManager

@@ -56,6 +56,10 @@ interface LanonasisContextValue extends AuthState {
   fetchMemories: () => Promise<void>;
   searchMemories: (query: string) => Promise<MemoryEntry[]>;
   createMemory: (data: CreateMemoryRequest) => Promise<MemoryEntry | null>;
+  updateMemory: (
+    id: string,
+    data: Partial<CreateMemoryRequest>
+  ) => Promise<MemoryEntry | null>;
   deleteMemory: (id: string) => Promise<void>;
 }
 
@@ -375,6 +379,31 @@ export function LanonasisProvider({
     [memoryClient]
   );
 
+  const updateMemory = useCallback(
+    async (
+      id: string,
+      data: Partial<CreateMemoryRequest>
+    ): Promise<MemoryEntry | null> => {
+      if (!memoryClient) return null;
+
+      try {
+        const response = await memoryClient.updateMemory(id, data);
+        if (response.error) {
+          throw new Error(response.error);
+        }
+        const updated = response.data as MemoryEntry | undefined;
+        if (updated) {
+          setMemories((prev) => prev.map((m) => (m.id === id ? updated : m)));
+        }
+        return updated || null;
+      } catch (err) {
+        console.error("[LanonasisContext] Update memory error:", err);
+        throw err;
+      }
+    },
+    [memoryClient]
+  );
+
   const deleteMemory = useCallback(
     async (id: string) => {
       if (!memoryClient) return;
@@ -477,6 +506,7 @@ export function LanonasisProvider({
     fetchMemories,
     searchMemories,
     createMemory,
+    updateMemory,
     deleteMemory,
   };
 

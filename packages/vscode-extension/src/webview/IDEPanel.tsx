@@ -31,6 +31,13 @@ import type {
 
 // Types for cache and sync
 interface CachedMemory extends MemoryEntry {
+  id: string;
+  title: string;
+  content: string;
+  memory_type: string;
+  tags: string[];
+  created_at?: string;
+  updated_at?: string;
   _pending?: "create" | "update" | "delete";
   _localId?: string;
 }
@@ -302,7 +309,8 @@ const formatDateTime = (dateStr?: string) => {
   }
 };
 
-const tagsToText = (tags?: string[]) => (tags && tags.length > 0 ? tags.join(", ") : "");
+const tagsToText = (tags?: string[]) =>
+  tags && tags.length > 0 ? tags.join(", ") : "";
 
 const parseTags = (value: string) =>
   value
@@ -352,7 +360,8 @@ const WelcomeView: React.FC<WelcomeViewProps> = ({
           Connect to sync memories
         </h2>
         <p className="text-[12px] text-[var(--vscode-descriptionForeground)] leading-relaxed">
-          You can still work locally, but connecting unlocks sync and full AI search.
+          You can still work locally, but connecting unlocks sync and full AI
+          search.
         </p>
 
         {error && (
@@ -512,24 +521,39 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({
 interface OfflineStatusProps {
   syncStatus: SyncStatus;
   onSync: () => void;
+  isAuthenticated: boolean;
+  hasLocalMemories: boolean;
+  onConnect?: () => void;
 }
 
 const OfflineStatusBanner: React.FC<OfflineStatusProps> = ({
   syncStatus,
   onSync,
+  isAuthenticated,
+  hasLocalMemories,
+  onConnect,
 }) => {
-  if (syncStatus.isOnline && syncStatus.pendingCount === 0) return null;
+  const showLocal = !isAuthenticated;
+  if (!showLocal && syncStatus.isOnline && syncStatus.pendingCount === 0)
+    return null;
 
   return (
     <div
       className={`px-3 py-2 text-[11px] flex items-center justify-between ${
-        syncStatus.isOnline
+        showLocal
+          ? "bg-blue-500/10 text-blue-300 border-b border-blue-500/20"
+          : syncStatus.isOnline
           ? "bg-yellow-500/10 text-yellow-400 border-b border-yellow-500/20"
           : "bg-red-500/10 text-red-400 border-b border-red-500/20"
       }`}
     >
       <div className="flex items-center gap-2">
-        {!syncStatus.isOnline ? (
+        {showLocal ? (
+          <>
+            <span className="opacity-80">{icons.globe}</span>
+            <span>Local mode{hasLocalMemories ? "" : " (no cache yet)"}</span>
+          </>
+        ) : !syncStatus.isOnline ? (
           <>
             <svg
               width="12"
@@ -567,15 +591,25 @@ const OfflineStatusBanner: React.FC<OfflineStatusProps> = ({
           </>
         )}
       </div>
-      {syncStatus.pendingCount > 0 && syncStatus.isOnline && (
-        <button
-          onClick={onSync}
-          disabled={syncStatus.isSyncing}
-          className="text-[10px] px-2 py-0.5 rounded bg-yellow-500/20 hover:bg-yellow-500/30 transition-colors disabled:opacity-50"
-        >
-          {syncStatus.isSyncing ? "Syncing..." : "Sync now"}
-        </button>
-      )}
+      {showLocal
+        ? onConnect && (
+            <button
+              onClick={onConnect}
+              className="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 hover:bg-blue-500/30 transition-colors"
+            >
+              Connect
+            </button>
+          )
+        : syncStatus.pendingCount > 0 &&
+          syncStatus.isOnline && (
+            <button
+              onClick={onSync}
+              disabled={syncStatus.isSyncing}
+              className="text-[10px] px-2 py-0.5 rounded bg-yellow-500/20 hover:bg-yellow-500/30 transition-colors disabled:opacity-50"
+            >
+              {syncStatus.isSyncing ? "Syncing..." : "Sync now"}
+            </button>
+          )}
     </div>
   );
 };
@@ -681,7 +715,11 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
   authMethod = "none",
 }) => {
   // Memory hooks from @lanonasis/memory-client/react
-  const { memories, loading: memoriesLoading, refresh } = useMemories({
+  const {
+    memories,
+    loading: memoriesLoading,
+    refresh,
+  } = useMemories({
     limit: 200,
     order: "desc",
   });
@@ -709,8 +747,12 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
     pendingCount: 0,
     isSyncing: false,
   });
-  const [errorNotification, setErrorNotification] = useState<string | null>(null);
-  const [selectedMemory, setSelectedMemory] = useState<CachedMemory | null>(null);
+  const [errorNotification, setErrorNotification] = useState<string | null>(
+    null
+  );
+  const [selectedMemory, setSelectedMemory] = useState<CachedMemory | null>(
+    null
+  );
   const [isEditingMemory, setIsEditingMemory] = useState(false);
   const [editDraft, setEditDraft] = useState<MemoryEditDraft>({
     title: "",
@@ -747,8 +789,8 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
       ? "API key"
       : "OAuth"
     : hasLocalMemories
-      ? "Local cache"
-      : "Not connected";
+    ? "Local cache"
+    : "Not connected";
   const userDisplayName = userName || userEmail || null;
   const selectedIsLocal =
     !!selectedMemory &&
@@ -775,12 +817,13 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
       }
       if (message.type === "lanonasis:sync:complete") {
         setCachedMemories(message.payload?.memories || []);
-        setSyncStatus((prev) =>
-          message.payload?.status || {
-            ...prev,
-            isSyncing: false,
-            isOnline: true,
-          }
+        setSyncStatus(
+          (prev) =>
+            message.payload?.status || {
+              ...prev,
+              isSyncing: false,
+              isOnline: true,
+            }
         );
       }
       if (message.type === "lanonasis:sync:error") {
@@ -793,11 +836,16 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
           isOnline: isNetworkError ? false : prev.isOnline,
         }));
         // Show error to user
-        setErrorNotification(isNetworkError ? "Network error - working offline" : errorMessage);
+        setErrorNotification(
+          isNetworkError ? "Network error - working offline" : errorMessage
+        );
       }
 
       // Handle auth errors
-      if (message.type === "lanonasis:auth:result" && !message.payload?.success) {
+      if (
+        message.type === "lanonasis:auth:result" &&
+        !message.payload?.success
+      ) {
         const errorMessage = message.payload?.error || "Authentication failed";
         setErrorNotification(errorMessage);
       }
@@ -805,16 +853,25 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
       // Handle AI search results
       if (message.type === "lanonasis:ai:search:local") {
         const results = message.payload?.results || [];
-        if (results.length > 0) {
-          // Update the last assistant message with local results
-          setChatMessages((prev) => {
-            const last = prev[prev.length - 1];
-            if (last?.role === "assistant") {
-              return [...prev.slice(0, -1), { ...last, memories: results }];
-            }
-            return prev;
-          });
-        }
+        const query = message.payload?.query || "";
+        // Update the last assistant message with local results
+        setChatMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant") {
+            return [
+              ...prev.slice(0, -1),
+              {
+                ...last,
+                content:
+                  results.length > 0
+                    ? `Found ${results.length} local memories:`
+                    : `No local matches for "${query}". Try saving more context or connect for full search.`,
+                memories: results,
+              },
+            ];
+          }
+          return prev;
+        });
         setIsAISearching(false);
       }
       if (message.type === "lanonasis:ai:search:api") {
@@ -829,14 +886,18 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
             const newMemories = results.filter(
               (m: CachedMemory) => !existingIds.has(m.id)
             );
-            const allMemories = [...(last.memories || []), ...newMemories].slice(0, 5);
+            const allMemories = [
+              ...(last.memories || []),
+              ...newMemories,
+            ].slice(0, 5);
             return [
               ...prev.slice(0, -1),
               {
                 ...last,
-                content: allMemories.length > 0
-                  ? `Found ${allMemories.length} relevant memories:`
-                  : `No memories found for "${query}"`,
+                content:
+                  allMemories.length > 0
+                    ? `Found ${allMemories.length} relevant memories:`
+                    : `No memories found for "${query}"`,
                 memories: allMemories,
               },
             ];
@@ -858,7 +919,9 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
       }
 
       if (message.type === "lanonasis:cache:updated") {
-        const updatedMemory = message.payload?.memory as CachedMemory | undefined;
+        const updatedMemory = message.payload?.memory as
+          | CachedMemory
+          | undefined;
         if (updatedMemory) {
           setCachedMemories((prev) =>
             prev.map((memory) =>
@@ -869,7 +932,11 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
             )
           );
           setSelectedMemory((prev) =>
-            prev && prev.id === updatedMemory.id ? updatedMemory : prev
+            prev &&
+            (prev.id === updatedMemory.id ||
+              prev._localId === updatedMemory._localId)
+              ? updatedMemory
+              : prev
           );
         }
         if (message.payload?.status) {
@@ -940,16 +1007,17 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
 
   const useCacheFirst = isLocalMode || syncStatus.pendingCount > 0;
   const baseMemories = useCacheFirst ? cachedMemories : memories;
-  const searchDisplay = canUseApi && searchResults.length > 0
-    ? (searchResults as CachedMemory[])
-    : localSearchResults;
+  const searchDisplay =
+    canUseApi && searchResults.length > 0
+      ? (searchResults as CachedMemory[])
+      : localSearchResults;
 
   const displayMemories =
     searchQuery.length > 2
       ? searchDisplay
       : baseMemories.length > 0
-        ? baseMemories
-        : cachedMemories;
+      ? baseMemories
+      : cachedMemories;
 
   const handleCreate = async () => {
     const content = chatInput.trim() || searchQuery.trim();
@@ -1015,7 +1083,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
   // Parse user intent from natural language
   const parseIntent = (
     input: string
-  ): { action: "search" | "create" | "help"; query: string } => {
+  ): { action: "search" | "create" | "help" | "list"; query: string } => {
     const lower = input.toLowerCase().trim();
 
     // Help intent
@@ -1035,6 +1103,17 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
       if (match) {
         return { action: "create", query: match[1] || input };
       }
+    }
+
+    // List intent
+    const listPatterns = [
+      /^list$/i,
+      /^list\s+(?:my\s+)?(?:memories|notes)$/i,
+      /^show\s+(?:my\s+)?(?:memories|notes)$/i,
+      /^recent\s+(?:memories|notes)$/i,
+    ];
+    if (listPatterns.some((pattern) => pattern.test(input))) {
+      return { action: "list", query: "" };
     }
 
     // Default: search intent
@@ -1095,7 +1174,10 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
     setIsSavingMemory(true);
     try {
       if (canUseApi) {
-        const result = await memoryClient.updateMemory(selectedMemory.id, payload);
+        const result = await memoryClient.updateMemory(
+          selectedMemory.id,
+          payload
+        );
         if (result?.error) {
           throw new Error(result.error);
         }
@@ -1240,7 +1322,9 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
           const confirmMessage: ChatMessage = {
             id: `assistant_${Date.now()}`,
             role: "assistant",
-            content: `✅ Memory saved: "${intent.query.slice(0, 50)}${intent.query.length > 50 ? "..." : ""}"`,
+            content: `✅ Memory saved: "${intent.query.slice(0, 50)}${
+              intent.query.length > 50 ? "..." : ""
+            }"`,
             timestamp: Date.now(),
           };
           setChatMessages((prev) => [...prev, confirmMessage]);
@@ -1261,10 +1345,33 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
       const confirmMessage: ChatMessage = {
         id: `assistant_${Date.now()}`,
         role: "assistant",
-        content: `✅ Memory saved locally (will sync when online): "${intent.query.slice(0, 50)}${intent.query.length > 50 ? "..." : ""}"`,
+        content: `✅ Memory saved locally (will sync when online): "${intent.query.slice(
+          0,
+          50
+        )}${intent.query.length > 50 ? "..." : ""}"`,
         timestamp: Date.now(),
       };
       setChatMessages((prev) => [...prev, confirmMessage]);
+      return;
+    }
+
+    if (intent.action === "list") {
+      const listSource =
+        canUseApi && memories.length > 0
+          ? (memories as CachedMemory[])
+          : cachedMemories;
+      const preview = listSource.slice(0, 5);
+      const listMessage: ChatMessage = {
+        id: `assistant_${Date.now()}`,
+        role: "assistant",
+        content:
+          preview.length > 0
+            ? `Here are your recent memories:`
+            : "I don't have any memories yet. Try saving one!",
+        memories: preview,
+        timestamp: Date.now(),
+      };
+      setChatMessages((prev) => [...prev, listMessage]);
       return;
     }
 
@@ -1292,7 +1399,10 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
     } else {
       // Fallback for non-vscode context (e.g., browser testing)
       try {
-        const results = await search(intent.query);
+        await search(intent.query);
+        const results = cachedMemories.filter((memory) =>
+          matchesQuery(memory, intent.query)
+        );
         setChatMessages((prev) => {
           const last = prev[prev.length - 1];
           if (last?.role === "assistant") {
@@ -1324,7 +1434,9 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
         {/* Error Notification Banner */}
         {errorNotification && (
           <div className="absolute top-0 left-0 right-0 z-50 px-3 py-2 bg-red-900/90 border-b border-red-700 flex items-center justify-between">
-            <span className="text-[11px] text-red-200">{errorNotification}</span>
+            <span className="text-[11px] text-red-200">
+              {errorNotification}
+            </span>
             <button
               onClick={() => setErrorNotification(null)}
               className="text-red-200 hover:text-white text-xs ml-2"
@@ -1349,7 +1461,13 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 text-[10px] text-[var(--vscode-descriptionForeground)]">
               <div
-                className={`h-1.5 w-1.5 rounded-full ${isAuthenticated ? (syncStatus.isOnline ? "bg-green-500" : "bg-red-500") : "bg-yellow-500"}`}
+                className={`h-1.5 w-1.5 rounded-full ${
+                  isAuthenticated
+                    ? syncStatus.isOnline
+                      ? "bg-green-500"
+                      : "bg-red-500"
+                    : "bg-yellow-500"
+                }`}
                 title={
                   isAuthenticated
                     ? syncStatus.isOnline
@@ -1359,12 +1477,32 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                 }
               />
               <span>
-                {isAuthenticated ? (syncStatus.isOnline ? "Online" : "Offline") : "Local"}
+                {isAuthenticated
+                  ? syncStatus.isOnline
+                    ? "Online"
+                    : "Offline"
+                  : "Local"}
               </span>
             </div>
             <span className="text-[10px] text-[var(--vscode-descriptionForeground)] opacity-80">
               {authLabel}
             </span>
+            {isLocalMode && (
+              <span className="text-[10px] text-blue-300/90">Local mode</span>
+            )}
+            {isAuthenticated && (
+              <span className="text-[10px] text-[var(--vscode-descriptionForeground)] opacity-80">
+                {syncStatus.isSyncing
+                  ? "Syncing..."
+                  : syncStatus.pendingCount > 0
+                  ? `${syncStatus.pendingCount} pending`
+                  : syncStatus.lastSyncAt
+                  ? `Synced ${formatDateShort(
+                      new Date(syncStatus.lastSyncAt).toISOString()
+                    )}`
+                  : "Not synced"}
+              </span>
+            )}
             {userDisplayName && (
               <span
                 className="text-[10px] text-[var(--vscode-descriptionForeground)] max-w-[120px] truncate"
@@ -1395,9 +1533,13 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
         </div>
 
         {/* Offline/Pending Status Banner */}
-        {isAuthenticated && (
-          <OfflineStatusBanner syncStatus={syncStatus} onSync={handleSync} />
-        )}
+        <OfflineStatusBanner
+          syncStatus={syncStatus}
+          onSync={handleSync}
+          isAuthenticated={isAuthenticated}
+          hasLocalMemories={hasLocalMemories}
+          onConnect={handleOpenSettings}
+        />
 
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto">
@@ -1427,9 +1569,14 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                       </p>
                     </>
                   ) : (
-                    <p className="italic opacity-80">
-                      Ask to search cached memories or save new ones.
-                    </p>
+                    <>
+                      <p className="italic opacity-80">
+                        Local mode: search cached memories or save new ones.
+                      </p>
+                      <p className="text-[11px] mt-1 opacity-60">
+                        Connect for full AI search and sync.
+                      </p>
+                    </>
                   )}
                 </div>
               ) : (
@@ -1467,7 +1614,11 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
 
           {/* Memories Section */}
           <SectionHeader
-            title={`Memories${syncStatus.pendingCount > 0 ? ` (${syncStatus.pendingCount} pending)` : ""}`}
+            title={`Memories${
+              syncStatus.pendingCount > 0
+                ? ` (${syncStatus.pendingCount} pending)`
+                : ""
+            }`}
             isOpen={isMemoriesOpen}
             onToggle={() => setIsMemoriesOpen(!isMemoriesOpen)}
             actions={
@@ -1529,10 +1680,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                     disabled={createLoading}
                   >
                     {createLoading ? (
-                      <svg
-                        className="animate-spin h-3 w-3"
-                        viewBox="0 0 24 24"
-                      >
+                      <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
                         <circle
                           className="opacity-25"
                           cx="12"
@@ -1551,26 +1699,28 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                     ) : (
                       icons.plus
                     )}
-                    {createLoading ? "Creating..." : canUseApi ? "Create" : "Save Local"}
+                    {createLoading
+                      ? "Creating..."
+                      : canUseApi
+                      ? "Create"
+                      : "Save Local"}
                   </Button>
                   <Button
                     className="flex-1 h-7 gap-1.5"
                     variant="secondary"
                     onClick={handleSync}
-                    disabled={!isAuthenticated || isSyncing || syncStatus.isSyncing}
+                    disabled={
+                      !isAuthenticated || isSyncing || syncStatus.isSyncing
+                    }
                   >
                     <span
                       className={
-                        isSyncing || syncStatus.isSyncing
-                          ? "animate-spin"
-                          : ""
+                        isSyncing || syncStatus.isSyncing ? "animate-spin" : ""
                       }
                     >
                       {icons.refresh}
                     </span>
-                    {isSyncing || syncStatus.isSyncing
-                      ? "Syncing..."
-                      : "Sync"}
+                    {isSyncing || syncStatus.isSyncing ? "Syncing..." : "Sync"}
                   </Button>
                 </div>
 
@@ -1585,8 +1735,8 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                       {searchQuery
                         ? "No memories found"
                         : cachedMemories.length > 0
-                          ? "Loading from cache..."
-                          : "No memories yet. Create one!"}
+                        ? "Loading from cache..."
+                        : "No memories yet. Create one!"}
                     </div>
                   ) : (
                     displayMemories.map((memory) => (
@@ -1641,9 +1791,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
               <Button
                 size="icon"
                 className="h-6 w-6"
-                disabled={
-                  !chatInput.trim() || isAISearching
-                }
+                disabled={!chatInput.trim() || isAISearching}
                 onClick={handleSendChat}
                 title="Send (Enter)"
               >
@@ -1689,12 +1837,16 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                       {selectedMemory.title}
                     </h3>
                     <div className="text-[11px] text-[var(--vscode-descriptionForeground)]">
-                      {formatDateTime(selectedMemory.updated_at || selectedMemory.created_at)}
+                      {formatDateTime(
+                        selectedMemory.updated_at || selectedMemory.created_at
+                      )}
                       {" • "}
                       {selectedMemory.memory_type}
                       {" • "}
                       {selectedIsLocal ? "Local" : "Synced"}
-                      {selectedMemory._pending ? ` (${selectedMemory._pending})` : ""}
+                      {selectedMemory._pending
+                        ? ` (${selectedMemory._pending})`
+                        : ""}
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
@@ -1813,7 +1965,10 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                         {selectedMemory.content}
                       </div>
                       {selectedMemory.tags?.length > 0 && (
-                        <div className="flex gap-1" style={{ flexWrap: "wrap" }}>
+                        <div
+                          className="flex gap-1"
+                          style={{ flexWrap: "wrap" }}
+                        >
                           {selectedMemory.tags.map((tag) => (
                             <span
                               key={tag}
@@ -1853,9 +2008,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                         Updated {formatDateTime(selectedMemory.updated_at)}
                       </span>
                       {selectedMemory._pending && (
-                        <span className="text-yellow-400">
-                          Pending sync
-                        </span>
+                        <span className="text-yellow-400">Pending sync</span>
                       )}
                     </div>
                   )}
@@ -1892,25 +2045,35 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                     <div className="text-[10px] uppercase tracking-wide text-[var(--vscode-descriptionForeground)] opacity-70">
                       Connection
                     </div>
-                  <div className="text-[12px] text-[var(--vscode-editor-foreground)]">
-                    Status: {isAuthenticated ? (syncStatus.isOnline ? "Online" : "Offline") : "Local"}
-                  </div>
-                  <div className="text-[12px] text-[var(--vscode-editor-foreground)]">
-                    Auth: {authLabel}
-                  </div>
-                  {(userName || userEmail) && (
                     <div className="text-[12px] text-[var(--vscode-editor-foreground)]">
-                      User: {userName || userEmail}
+                      Status:{" "}
+                      {isAuthenticated
+                        ? syncStatus.isOnline
+                          ? "Online"
+                          : "Offline"
+                        : "Local"}
                     </div>
-                  )}
-                  {userName && userEmail && (
-                    <div className="text-[12px] text-[var(--vscode-descriptionForeground)]">
-                      Email: {userEmail}
+                    <div className="text-[12px] text-[var(--vscode-editor-foreground)]">
+                      Auth: {authLabel}
                     </div>
-                  )}
-                  <div className="text-[12px] text-[var(--vscode-editor-foreground)]">
-                    Last sync: {syncStatus.lastSyncAt ? formatDateTime(new Date(syncStatus.lastSyncAt).toISOString()) : "—"}
-                  </div>
+                    {(userName || userEmail) && (
+                      <div className="text-[12px] text-[var(--vscode-editor-foreground)]">
+                        User: {userName || userEmail}
+                      </div>
+                    )}
+                    {userName && userEmail && (
+                      <div className="text-[12px] text-[var(--vscode-descriptionForeground)]">
+                        Email: {userEmail}
+                      </div>
+                    )}
+                    <div className="text-[12px] text-[var(--vscode-editor-foreground)]">
+                      Last sync:{" "}
+                      {syncStatus.lastSyncAt
+                        ? formatDateTime(
+                            new Date(syncStatus.lastSyncAt).toISOString()
+                          )
+                        : "—"}
+                    </div>
                     <div className="text-[12px] text-[var(--vscode-editor-foreground)]">
                       Pending changes: {syncStatus.pendingCount}
                     </div>
@@ -1981,6 +2144,19 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                         </Button>
                       </div>
                     )}
+
+                    <Button
+                      className="w-full h-7"
+                      variant="secondary"
+                      onClick={() =>
+                        window.vscode?.postMessage({
+                          type: "lanonasis:open-dashboard",
+                          payload: { section: "api-keys" },
+                        })
+                      }
+                    >
+                      Manage API Keys in Dashboard
+                    </Button>
                   </div>
 
                   <div className="rounded-sm border border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)] p-3 space-y-2">
