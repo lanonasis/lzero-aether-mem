@@ -129,6 +129,7 @@
     "watch": "node esbuild.config.mjs --watch",
     "dev": "node esbuild.config.mjs --watch",
     "lint": "echo 'No lint configured for vscode-extension'",
+    "test": "vitest run",
     "typecheck": "tsc -p . --noEmit",
     "clean": "rm -rf out media/sidebar-react.* media/style.css",
     "package": "npm run build && npm run build:webview && vsce package",
@@ -148,6 +149,7 @@
   "dependencies": {
     "@lanonasis/memory-client": "^2.0.0",
     "@lanonasis/oauth-client": "^1.2.1",
-    "@lanonasis/security-sdk": "^1.0.3"
+    "@lanonasis/security-sdk": "^1.0.3",
+    "vitest": "^4.0.17"
   }
 }
