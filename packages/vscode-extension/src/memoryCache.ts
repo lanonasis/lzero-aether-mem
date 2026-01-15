@@ -144,6 +144,17 @@ export class MemoryCache {
     return [...this.pendingQueue];
   }
 
+  public getMemoryById(id: string): CachedMemory | undefined {
+    return this.memories.find(m => m.id === id || m._localId === id);
+  }
+
+  public async clearAll(): Promise<void> {
+    this.memories = [];
+    this.pendingQueue = [];
+    this.lastSyncAt = null;
+    await this.saveToStorage();
+  }
+
   /**
    * Update cache with fresh data from API
    */
@@ -222,11 +233,13 @@ export class MemoryCache {
       return;
     }
 
+    const existingPending = this.memories[idx]._pending;
+
     this.memories[idx] = {
       ...this.memories[idx],
       ...updates,
       updated_at: new Date().toISOString(),
-      _pending: 'update',
+      _pending: existingPending === 'create' ? 'create' : 'update',
       _cachedAt: Date.now(),
     };
 

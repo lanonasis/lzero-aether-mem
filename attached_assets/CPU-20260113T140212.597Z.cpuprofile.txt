@@ -1,0 +1,1326 @@
+{
+	"nodes": [
+		{
+			"id": 1,
+			"callFrame": {
+				"functionName": "(root)",
+				"scriptId": "0",
+				"url": "",
+				"lineNumber": -1,
+				"columnNumber": -1
+			},
+			"hitCount": 0,
+			"children": [
+				2,
+				25,
+				26,
+				27,
+				31,
+				35,
+				42,
+				72,
+				124,
+				161,
+				288,
+				355,
+				421,
+				479,
+				484
+			]
+		},
+		{
+			"id": 2,
+			"callFrame": {
+				"functionName": "processTimers",
+				"scriptId": "10",
+				"url": "node:internal/timers",
+				"lineNumber": 507,
+				"columnNumber": 24
+			},
+			"hitCount": 0,
+			"children": [
+				3
+			]
+		},
+		{
+			"id": 3,
+			"callFrame": {
+				"functionName": "listOnTimeout",
+				"scriptId": "10",
+				"url": "node:internal/timers",
+				"lineNumber": 527,
+				"columnNumber": 24
+			},
+			"hitCount": 1,
+			"children": [
+				4,
+				299,
+				482
+			],
+			"positionTicks": [
+				{
+					"line": 11,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 4,
+			"callFrame": {
+				"functionName": "",
+				"scriptId": "375",
+				"url": "piiRemoved/extension.js",
+				"lineNumber": 1,
+				"columnNumber": 4974239
+			},
+			"hitCount": 0,
+			"children": [
+				5
+			]
+		},
+		{
+			"id": 5,
+			"callFrame": {
+				"functionName": "",
+				"scriptId": "375",
+				"url": "piiRemoved/extension.js",
+				"lineNumber": 1,
+				"columnNumber": 3339599
+			},
+			"hitCount": 1,
+			"children": [
+				6
+			],
+			"positionTicks": [
+				{
+					"line": 2,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 6,
+			"callFrame": {
+				"functionName": "unary",
+				"scriptId": "375",
+				"url": "piiRemoved/extension.js",
+				"lineNumber": 1,
+				"columnNumber": 3025657
+			},
+			"hitCount": 1,
+			"children": [
+				7,
+				172
+			],
+			"positionTicks": [
+				{
+					"line": 2,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 7,
+			"callFrame": {
+				"functionName": "s",
+				"scriptId": "375",
+				"url": "piiRemoved/extension.js",
+				"lineNumber": 1,
+				"columnNumber": 2247786
+			},
+			"hitCount": 0,
+			"children": [
+				8,
+				279
+			]
+		},
+		{
+			"id": 8,
+			"callFrame": {
+				"functionName": "",
+				"scriptId": "375",
+				"url": "piiRemoved/extension.js",
+				"lineNumber": 1,
+				"columnNumber": 270349
+			},
+			"hitCount": 2,
+			"children": [
+				9
+			],
+			"positionTicks": [
+				{
+					"line": 2,
+					"ticks": 2
+				}
+			]
+		},
+		{
+			"id": 9,
+			"callFrame": {
+				"functionName": "next",
+				"scriptId": "375",
+				"url": "piiRemoved/extension.js",
+				"lineNumber": 1,
+				"columnNumber": 3026040
+			},
+			"hitCount": 1,
+			"children": [
+				10,
+				175
+			],
+			"positionTicks": [
+				{
+					"line": 2,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 10,
+			"callFrame": {
+				"functionName": "Z.A.httpVersion.e",
+				"scriptId": "375",
+				"url": "piiRemoved/extension.js",
+				"lineNumber": 1,
+				"columnNumber": 3228907
+			},
+			"hitCount": 1,
+			"children": [
+				11,
+				283
+			],
+			"positionTicks": [
+				{
+					"line": 2,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 11,
+			"callFrame": {
+				"functionName": "",
+				"scriptId": "375",
+				"url": "piiRemoved/extension.js",
+				"lineNumber": 1,
+				"columnNumber": 3228951
+			},
+			"hitCount": 0,
+			"children": [
+				12
+			]
+		},
+		{
+			"id": 12,
+			"callFrame": {
+				"functionName": "",
+				"scriptId": "375",
+				"url": "piiRemoved/extension.js",
+				"lineNumber": 1,
+				"columnNumber": 3228986
+			},
+			"hitCount": 2,
+			"children": [
+				13,
+				234,
+				242
+			],
+			"positionTicks": [
+				{
+					"line": 2,
+					"ticks": 2
+				}
+			]
+		},
+		{
+			"id": 13,
+			"callFrame": {
+				"functionName": "patched",
+				"scriptId": "217",
+				"url": "piiRemoved/index.js",
+				"lineNumber": 327,
+				"columnNumber": 24
+			},
+			"hitCount": 0,
+			"children": [
+				14,
+				178,
+				193,
+				461
+			]
+		},
+		{
+			"id": 14,
+			"callFrame": {
+				"functionName": "addCertificatesV1",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 210,
+				"columnNumber": 20065
+			},
+			"hitCount": 0,
+			"children": [
+				15
+			]
+		},
+		{
+			"id": 15,
+			"callFrame": {
+				"functionName": "dhe",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 210,
+				"columnNumber": 24064
+			},
+			"hitCount": 0,
+			"children": [
+				16
+			]
+		},
+		{
+			"id": 16,
+			"callFrame": {
+				"functionName": "Kn",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 210,
+				"columnNumber": 26893
+			},
+			"hitCount": 1,
+			"children": [
+				17,
+				191
+			],
+			"positionTicks": [
+				{
+					"line": 211,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 17,
+			"callFrame": {
+				"functionName": "inspect",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 113,
+				"columnNumber": 4573
+			},
+			"hitCount": 1,
+			"children": [
+				18,
+				373,
+				376,
+				393
+			],
+			"positionTicks": [
+				{
+					"line": 114,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 18,
+			"callFrame": {
+				"functionName": "inspect",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 14370
+			},
+			"hitCount": 0,
+			"children": [
+				19
+			]
+		},
+		{
+			"id": 19,
+			"callFrame": {
+				"functionName": "getOverrideValue",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 7541
+			},
+			"hitCount": 1,
+			"children": [
+				20,
+				287
+			],
+			"positionTicks": [
+				{
+					"line": 113,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 20,
+			"callFrame": {
+				"functionName": "j",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 8904
+			},
+			"hitCount": 7,
+			"children": [
+				21
+			],
+			"positionTicks": [
+				{
+					"line": 29,
+					"ticks": 1
+				},
+				{
+					"line": 113,
+					"ticks": 1
+				},
+				{
+					"line": 113,
+					"ticks": 1
+				},
+				{
+					"line": 29,
+					"ticks": 1
+				},
+				{
+					"line": 113,
+					"ticks": 1
+				},
+				{
+					"line": 113,
+					"ticks": 2
+				}
+			]
+		},
+		{
+			"id": 21,
+			"callFrame": {
+				"functionName": "s",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 8934
+			},
+			"hitCount": 0,
+			"children": [
+				22
+			]
+		},
+		{
+			"id": 22,
+			"callFrame": {
+				"functionName": "ut",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 28,
+				"columnNumber": 24083
+			},
+			"hitCount": 0,
+			"children": [
+				23
+			]
+		},
+		{
+			"id": 23,
+			"callFrame": {
+				"functionName": "",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 28,
+				"columnNumber": 24207
+			},
+			"hitCount": 2,
+			"children": [
+				24
+			],
+			"positionTicks": [
+				{
+					"line": 29,
+					"ticks": 2
+				}
+			]
+		},
+		{
+			"id": 24,
+			"callFrame": {
+				"functionName": "ut",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 28,
+				"columnNumber": 24083
+			},
+			"hitCount": 2,
+			"children": [
+				241
+			],
+			"positionTicks": [
+				{
+					"line": 29,
+					"ticks": 2
+				}
+			]
+		},
+		{
+			"id": 241,
+			"callFrame": {
+				"functionName": "",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 28,
+				"columnNumber": 24207
+			},
+			"hitCount": 2,
+			"children": [
+				460
+			],
+			"positionTicks": [
+				{
+					"line": 29,
+					"ticks": 2
+				}
+			]
+		},
+		{
+			"id": 460,
+			"callFrame": {
+				"functionName": "ut",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 28,
+				"columnNumber": 24083
+			},
+			"hitCount": 1,
+			"positionTicks": [
+				{
+					"line": 29,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 287,
+			"callFrame": {
+				"functionName": "K_",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 107,
+				"columnNumber": 13391
+			},
+			"hitCount": 1,
+			"positionTicks": [
+				{
+					"line": 108,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 373,
+			"callFrame": {
+				"functionName": "get default",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 12488
+			},
+			"hitCount": 0,
+			"children": [
+				374
+			]
+		},
+		{
+			"id": 374,
+			"callFrame": {
+				"functionName": "get q",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 12354
+			},
+			"hitCount": 0,
+			"children": [
+				375
+			]
+		},
+		{
+			"id": 375,
+			"callFrame": {
+				"functionName": "inspect",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 7043
+			},
+			"hitCount": 1,
+			"positionTicks": [
+				{
+					"line": 113,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 376,
+			"callFrame": {
+				"functionName": "get user",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 13008
+			},
+			"hitCount": 0,
+			"children": [
+				377
+			]
+		},
+		{
+			"id": 377,
+			"callFrame": {
+				"functionName": "get w",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 12880
+			},
+			"hitCount": 0,
+			"children": [
+				378
+			]
+		},
+		{
+			"id": 378,
+			"callFrame": {
+				"functionName": "inspect",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 7043
+			},
+			"hitCount": 1,
+			"positionTicks": [
+				{
+					"line": 113,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 393,
+			"callFrame": {
+				"functionName": "get value",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 7078
+			},
+			"hitCount": 0,
+			"children": [
+				394
+			]
+		},
+		{
+			"id": 394,
+			"callFrame": {
+				"functionName": "getValue",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 6989
+			},
+			"hitCount": 0,
+			"children": [
+				395
+			]
+		},
+		{
+			"id": 395,
+			"callFrame": {
+				"functionName": "K_",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 107,
+				"columnNumber": 13391
+			},
+			"hitCount": 1,
+			"positionTicks": [
+				{
+					"line": 108,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 191,
+			"callFrame": {
+				"functionName": "getConfiguration",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 113,
+				"columnNumber": 3540
+			},
+			"hitCount": 2,
+			"children": [
+				192
+			],
+			"positionTicks": [
+				{
+					"line": 114,
+					"ticks": 2
+				}
+			]
+		},
+		{
+			"id": 192,
+			"callFrame": {
+				"functionName": "vr",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 28,
+				"columnNumber": 24908
+			},
+			"hitCount": 11,
+			"children": [
+				240
+			],
+			"positionTicks": [
+				{
+					"line": 29,
+					"ticks": 11
+				}
+			]
+		},
+		{
+			"id": 240,
+			"callFrame": {
+				"functionName": "",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 28,
+				"columnNumber": 24963
+			},
+			"hitCount": 4,
+			"children": [
+				372
+			],
+			"positionTicks": [
+				{
+					"line": 29,
+					"ticks": 3
+				},
+				{
+					"line": 29,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 372,
+			"callFrame": {
+				"functionName": "get",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 113,
+				"columnNumber": 5391
+			},
+			"hitCount": 2,
+			"children": [
+				474
+			],
+			"positionTicks": [
+				{
+					"line": 114,
+					"ticks": 1
+				},
+				{
+					"line": 114,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 474,
+			"callFrame": {
+				"functionName": "t",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 113,
+				"columnNumber": 5365
+			},
+			"hitCount": 1,
+			"positionTicks": [
+				{
+					"line": 114,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 178,
+			"callFrame": {
+				"functionName": "getProxySupport",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 210,
+				"columnNumber": 19883
+			},
+			"hitCount": 0,
+			"children": [
+				179
+			]
+		},
+		{
+			"id": 179,
+			"callFrame": {
+				"functionName": "Kn",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 210,
+				"columnNumber": 26893
+			},
+			"hitCount": 0,
+			"children": [
+				180,
+				183
+			]
+		},
+		{
+			"id": 180,
+			"callFrame": {
+				"functionName": "getConfiguration",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 113,
+				"columnNumber": 3540
+			},
+			"hitCount": 1,
+			"children": [
+				181
+			],
+			"positionTicks": [
+				{
+					"line": 114,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 181,
+			"callFrame": {
+				"functionName": "vr",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 28,
+				"columnNumber": 24908
+			},
+			"hitCount": 8,
+			"children": [
+				182
+			],
+			"positionTicks": [
+				{
+					"line": 29,
+					"ticks": 8
+				}
+			]
+		},
+		{
+			"id": 182,
+			"callFrame": {
+				"functionName": "",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 28,
+				"columnNumber": 24963
+			},
+			"hitCount": 3,
+			"children": [
+				236
+			],
+			"positionTicks": [
+				{
+					"line": 29,
+					"ticks": 1
+				},
+				{
+					"line": 29,
+					"ticks": 2
+				}
+			]
+		},
+		{
+			"id": 236,
+			"callFrame": {
+				"functionName": "get",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 113,
+				"columnNumber": 5391
+			},
+			"hitCount": 1,
+			"children": [
+				284
+			],
+			"positionTicks": [
+				{
+					"line": 114,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 284,
+			"callFrame": {
+				"functionName": "t",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 113,
+				"columnNumber": 5365
+			},
+			"hitCount": 2,
+			"positionTicks": [
+				{
+					"line": 114,
+					"ticks": 2
+				}
+			]
+		},
+		{
+			"id": 183,
+			"callFrame": {
+				"functionName": "inspect",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 113,
+				"columnNumber": 4573
+			},
+			"hitCount": 2,
+			"children": [
+				184,
+				238
+			],
+			"positionTicks": [
+				{
+					"line": 114,
+					"ticks": 2
+				}
+			]
+		},
+		{
+			"id": 184,
+			"callFrame": {
+				"functionName": "inspect",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 14370
+			},
+			"hitCount": 0,
+			"children": [
+				185,
+				473
+			]
+		},
+		{
+			"id": 185,
+			"callFrame": {
+				"functionName": "getOverrideValue",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 7541
+			},
+			"hitCount": 0,
+			"children": [
+				186,
+				285
+			]
+		},
+		{
+			"id": 186,
+			"callFrame": {
+				"functionName": "j",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 8904
+			},
+			"hitCount": 4,
+			"children": [
+				187
+			],
+			"positionTicks": [
+				{
+					"line": 113,
+					"ticks": 1
+				},
+				{
+					"line": 113,
+					"ticks": 3
+				}
+			]
+		},
+		{
+			"id": 187,
+			"callFrame": {
+				"functionName": "s",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 8934
+			},
+			"hitCount": 0,
+			"children": [
+				188
+			]
+		},
+		{
+			"id": 188,
+			"callFrame": {
+				"functionName": "ut",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 28,
+				"columnNumber": 24083
+			},
+			"hitCount": 0,
+			"children": [
+				189
+			]
+		},
+		{
+			"id": 189,
+			"callFrame": {
+				"functionName": "",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 28,
+				"columnNumber": 24207
+			},
+			"hitCount": 1,
+			"children": [
+				190
+			],
+			"positionTicks": [
+				{
+					"line": 29,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 190,
+			"callFrame": {
+				"functionName": "ut",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 28,
+				"columnNumber": 24083
+			},
+			"hitCount": 1,
+			"children": [
+				237
+			],
+			"positionTicks": [
+				{
+					"line": 29,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 237,
+			"callFrame": {
+				"functionName": "",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 28,
+				"columnNumber": 24207
+			},
+			"hitCount": 1,
+			"positionTicks": [
+				{
+					"line": 29,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 285,
+			"callFrame": {
+				"functionName": "K_",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 107,
+				"columnNumber": 13391
+			},
+			"hitCount": 1,
+			"children": [
+				286
+			],
+			"positionTicks": [
+				{
+					"line": 108,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 286,
+			"callFrame": {
+				"functionName": "n",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 107,
+				"columnNumber": 13409
+			},
+			"hitCount": 1,
+			"positionTicks": [
+				{
+					"line": 108,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 473,
+			"callFrame": {
+				"functionName": "w",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 18057
+			},
+			"hitCount": 1,
+			"positionTicks": [
+				{
+					"line": 113,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 238,
+			"callFrame": {
+				"functionName": "get workspace",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 13536
+			},
+			"hitCount": 0,
+			"children": [
+				239
+			]
+		},
+		{
+			"id": 239,
+			"callFrame": {
+				"functionName": "n",
+				"scriptId": "147",
+				"url": "piiRemoved/extensionHostProcess.js",
+				"lineNumber": 112,
+				"columnNumber": 12266
+			},
+			"hitCount": 1,
+			"positionTicks": [
+				{
+					"line": 113,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 193,
+			"callFrame": {
+				"functionName": "request",
+				"scriptId": "191",
+				"url": "node:http",
+				"lineNumber": 100,
+				"columnNumber": 16
+			},
+			"hitCount": 0,
+			"children": [
+				194
+			]
+		},
+		{
+			"id": 194,
+			"callFrame": {
+				"functionName": "ClientRequest",
+				"scriptId": "193",
+				"url": "node:_http_client",
+				"lineNumber": 137,
+				"columnNumber": 22
+			},
+			"hitCount": 3,
+			"children": [
+				379,
+				396
+			],
+			"positionTicks": [
+				{
+					"line": 138,
+					"ticks": 3
+				}
+			]
+		},
+		{
+			"id": 379,
+			"callFrame": {
+				"functionName": "setHeader",
+				"scriptId": "197",
+				"url": "node:_http_outgoing",
+				"lineNumber": 697,
+				"columnNumber": 56
+			},
+			"hitCount": 1,
+			"positionTicks": [
+				{
+					"line": 709,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 396,
+			"callFrame": {
+				"functionName": "addRequest",
+				"scriptId": "192",
+				"url": "node:_http_agent",
+				"lineNumber": 235,
+				"columnNumber": 48
+			},
+			"hitCount": 0,
+			"children": [
+				397,
+				464
+			]
+		},
+		{
+			"id": 397,
+			"callFrame": {
+				"functionName": "normalizeServerName",
+				"scriptId": "192",
+				"url": "node:_http_agent",
+				"lineNumber": 334,
+				"columnNumber": 28
+			},
+			"hitCount": 0,
+			"children": [
+				398
+			]
+		},
+		{
+			"id": 398,
+			"callFrame": {
+				"functionName": "calculateServerName",
+				"scriptId": "192",
+				"url": "node:_http_agent",
+				"lineNumber": 339,
+				"columnNumber": 28
+			},
+			"hitCount": 0,
+			"children": [
+				399
+			]
+		},
+		{
+			"id": 399,
+			"callFrame": {
+				"functionName": "isIP",
+				"scriptId": "75",
+				"url": "node:internal/net",
+				"lineNumber": 46,
+				"columnNumber": 13
+			},
+			"hitCount": 0,
+			"children": [
+				400
+			]
+		},
+		{
+			"id": 400,
+			"callFrame": {
+				"functionName": "isIPv4",
+				"scriptId": "75",
+				"url": "node:internal/net",
+				"lineNumber": 32,
+				"columnNumber": 15
+			},
+			"hitCount": 1,
+			"positionTicks": [
+				{
+					"line": 37,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 464,
+			"callFrame": {
+				"functionName": "createSocket",
+				"scriptId": "327",
+				"url": "piiRemoved/index.js",
+				"lineNumber": 123,
+				"columnNumber": 16
+			},
+			"hitCount": 1,
+			"positionTicks": [
+				{
+					"line": 124,
+					"ticks": 1
+				}
+			]
+		},
+		{
+			"id": 461,
+			"callFrame": {
+				"functionName": "createPacProxyAgent",
+				"scriptId": "318",
+				"url": "piiRemoved/agent.js",
+				"lineNumber": 216,
+				"columnNumber": 28
+			},
+			"hitCount": 0,
+			"children": [
+				462
+			]
+		},
+	Could not read source map for file:///Users/onasis/.windsurf/extensions/dbaeumer.vscode-eslint-3.0.20-universal/client/out/extension.js: ENOENT: no such file or directory, open '/Users/onasis/.windsurf/extensions/dbaeumer.vscode-eslint-3.0.20-universal/client/out/extension.js.map'
+2
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/node_modules/@vscode/proxy-agent/out/index.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/node_modules/@vscode/proxy-agent/out/index.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/node_modules/agent-base/dist/index.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/node_modules/agent-base/dist/index.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/out/bootstrap-fork.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/core/bootstrap-fork.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/out/vs/workbench/api/node/extensionHostProcess.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/core/vs/workbench/api/node/extensionHostProcess.js.map'
+2
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/node_modules/vscode-regexpp/index.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/node_modules/vscode-regexpp/index.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/node_modules/@vscode/proxy-agent/out/agent.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/node_modules/@vscode/proxy-agent/out/agent.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/node_modules/undici/lib/llhttp/utils.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/node_modules/undici/lib/llhttp/utils.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/node_modules/http-proxy-agent/dist/index.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/node_modules/http-proxy-agent/dist/index.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/node_modules/ip-address/dist/common.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/node_modules/ip-address/dist/common.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/node_modules/socks/build/common/helpers.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/node_modules/socks/build/common/helpers.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/node_modules/ip-address/dist/v6/regular-expressions.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/node_modules/ip-address/dist/v6/regular-expressions.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/extensions/markdown-math/dist/extension.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/extensions/markdown-math/dist/extension.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/extensions/npm/dist/npmMain.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/extensions/npm/dist/npmMain.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/extensions/merge-conflict/dist/mergeConflictMain.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/extensions/merge-conflict/dist/mergeConflictMain.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/extensions/terminal-suggest/dist/terminalSuggestMain.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/extensions/terminal-suggest/dist/terminalSuggestMain.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/extensions/json-language-features/client/dist/node/jsonClientMain.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/extensions/json-language-features/client/dist/node/jsonClientMain.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/node_modules/ip-address/dist/ipv4.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/node_modules/ip-address/dist/ipv4.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/node_modules/agent-base/dist/helpers.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/node_modules/agent-base/dist/helpers.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/node_modules/smart-buffer/build/smartbuffer.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/node_modules/smart-buffer/build/smartbuffer.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/extensions/git/dist/main.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/extensions/git/dist/main.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/extensions/github/dist/698.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/extensions/github/dist/698.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/node_modules/smart-buffer/build/utils.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/node_modules/smart-buffer/build/utils.js.map'
+Could not read source map for file:///Applications/Windsurf.app/Contents/Resources/app/extensions/extension-editing/dist/extensionEditingMain.js: ENOENT: no such file or directory, open '/sourcemaps/a77a6f1ab4e1d962d95224a31c70a27f0bceb168/extensions/extension-editing/dist/extensionEditingMain.js.map'
+
+ 
+$ echo 434b076a-6470-417b-85ea-efbb6799e868
+ 
+ 
+ 
+ 
+ 

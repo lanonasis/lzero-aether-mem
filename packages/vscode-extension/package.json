@@ -2,7 +2,7 @@
   "name": "lzero-memory",
   "displayName": "L0 Memory",
   "description": "L0 / LanOnasis Memory-as-a-Service companion for VS Code (Desktop & Web)",
-  "version": "0.3.1",
+  "version": "0.4.1",
   "publisher": "lanonasis",
   "private": true,
   "repository": {
@@ -34,7 +34,12 @@
   "main": "./out/extension.js",
   "browser": "./out/extension.web.js",
   "activationEvents": [
-    "onUri"
+    "onUri",
+    "onView:lzero.memorySidebar",
+    "onCommand:lzeroMemory.authenticate",
+    "onCommand:lzeroMemory.createMemoryFromSelection",
+    "onCommand:lzeroMemory.syncMemories",
+    "onCommand:lzeroMemory.searchMemories"
   ],
   "contributes": {
     "viewsContainers": {
@@ -130,7 +135,7 @@
     "@types/vscode": "^1.85.0",
     "@vitejs/plugin-react": "^5.1.1",
     "autoprefixer": "^10.4.22",
-    "esbuild": "^0.27.1",
+    "esbuild": "^0.27.2",
     "postcss": "^8.5.6",
     "typescript": "^5.9.3",
     "vite": "^7.2.6"

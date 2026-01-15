@@ -289,14 +289,12 @@ const MobileMemoryCard = ({
   };
 
   const typeColors: Record<MemoryType, string> = {
-    code: 'from-blue-500/20 to-cyan-500/20 border-blue-500/30',
-    docs: 'from-purple-500/20 to-pink-500/20 border-purple-500/30',
-    todo: 'from-yellow-500/20 to-orange-500/20 border-yellow-500/30',
-    note: 'from-gray-500/20 to-slate-500/20 border-gray-500/30',
-    snippet: 'from-green-500/20 to-emerald-500/20 border-green-500/30',
+    context: 'from-blue-500/20 to-cyan-500/20 border-blue-500/30',
+    project: 'from-purple-500/20 to-pink-500/20 border-purple-500/30',
+    knowledge: 'from-yellow-500/20 to-orange-500/20 border-yellow-500/30',
+    reference: 'from-gray-500/20 to-slate-500/20 border-gray-500/30',
+    personal: 'from-green-500/20 to-emerald-500/20 border-green-500/30',
     workflow: 'from-indigo-500/20 to-violet-500/20 border-indigo-500/30',
-    status: 'from-teal-500/20 to-cyan-500/20 border-teal-500/30',
-    idea: 'from-pink-500/20 to-rose-500/20 border-pink-500/30',
   };
 
   return (
@@ -307,7 +305,7 @@ const MobileMemoryCard = ({
       onClick={onSelect}
       className={cn(
         'p-4 rounded-2xl border bg-gradient-to-br transition-all duration-200 active:scale-[0.98]',
-        typeColors[memory.type] || typeColors.note,
+        typeColors[memory.type] || typeColors.personal,
         onSelect && 'cursor-pointer'
       )}
     >
@@ -374,7 +372,7 @@ const QuickCaptureSheet = ({
   onCreate: (content: string, type: MemoryType) => Promise<void>;
 }) => {
   const [content, setContent] = useState('');
-  const [type, setType] = useState<MemoryType>('note');
+  const [type, setType] = useState<MemoryType>('personal');
   const [isCreating, setIsCreating] = useState(false);
   const { embed, isReady: aiReady } = useLocalAI();
 
@@ -385,7 +383,7 @@ const QuickCaptureSheet = ({
     try {
       await onCreate(content, type);
       setContent('');
-      setType('note');
+      setType('personal');
       onClose();
       
       // Success haptic
@@ -398,11 +396,12 @@ const QuickCaptureSheet = ({
   };
 
   const types: { value: MemoryType; label: string; emoji: string }[] = [
-    { value: 'note', label: 'Note', emoji: '📝' },
-    { value: 'idea', label: 'Idea', emoji: '💡' },
-    { value: 'code', label: 'Code', emoji: '💻' },
-    { value: 'todo', label: 'Todo', emoji: '✅' },
-    { value: 'snippet', label: 'Snippet', emoji: '✂️' },
+    { value: 'personal', label: 'Personal', emoji: '📝' },
+    { value: 'knowledge', label: 'Knowledge', emoji: '💡' },
+    { value: 'project', label: 'Project', emoji: '💻' },
+    { value: 'workflow', label: 'Workflow', emoji: '✅' },
+    { value: 'reference', label: 'Reference', emoji: '✂️' },
+    { value: 'context', label: 'Context', emoji: '☁️' },
   ];
 
   return (

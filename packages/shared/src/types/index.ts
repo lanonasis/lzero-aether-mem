@@ -9,6 +9,26 @@ import { LucideIcon } from 'lucide-react';
 // Core Memory Types
 // ============================================
 
+import {
+  MemoryTypeValue as MemoryType,
+  PatternAnalysis,
+  TagSuggestion,
+  RelatedMemory,
+  DuplicatePair,
+  Insight,
+  MemoryHealth,
+} from "@lanonasis/mem-intel-sdk";
+
+export type {
+  MemoryType,
+  PatternAnalysis,
+  TagSuggestion,
+  RelatedMemory,
+  DuplicatePair,
+  Insight,
+  MemoryHealth,
+};
+
 export interface Memory {
   id: string;
   title: string;
@@ -28,15 +48,7 @@ export interface Memory {
   icon?: LucideIcon;
 }
 
-export type MemoryType = 
-  | 'code'
-  | 'docs'
-  | 'todo'
-  | 'note'
-  | 'snippet'
-  | 'workflow'
-  | 'status'
-  | 'idea';
+
 
 export interface CreateMemoryInput {
   title: string;

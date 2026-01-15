@@ -35,6 +35,17 @@ function App() {
   const [apiUrl, setApiUrl] = useState("https://api.lanonasis.com");
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<{
+    id?: string;
+    name?: string;
+    email?: string;
+  } | null>(null);
+  const authMethod =
+    apiKey && (apiKey.startsWith("lano_") || apiKey.startsWith("lns_"))
+      ? "apiKey"
+      : apiKey
+        ? "oauth"
+        : "none";
 
   // Restore lightweight UI state (non-secret) from VS Code persisted state
   useEffect(() => {
@@ -67,6 +78,10 @@ function App() {
       ) {
         const newApiUrl = message.payload?.apiUrl as string | undefined;
         const newApiKey = message.payload?.apiKey as string | undefined;
+        const user = message.payload?.user as
+          | { id?: string; name?: string; email?: string }
+          | null
+          | undefined;
 
         if (newApiUrl) {
           setApiUrl(newApiUrl);
@@ -76,6 +91,9 @@ function App() {
           setAuthLoading(false);
           setAuthError(null);
           console.log("[Webview] API key received from host");
+        }
+        if (user !== undefined) {
+          setUserProfile(user);
         }
         return;
       }
@@ -188,11 +206,14 @@ function App() {
         initialChatInput={injectedChat}
         onAttachFromClipboard={handleAttachFromClipboard}
         isAuthenticated={!!apiKey}
+        authMethod={authMethod}
         onLoginOAuth={handleLoginOAuth}
         onLoginApiKey={handleLoginApiKey}
         onLogout={handleLogout}
         authLoading={authLoading}
         authError={authError}
+        userName={userProfile?.name || null}
+        userEmail={userProfile?.email || null}
       />
     </MemoryProvider>
   );
