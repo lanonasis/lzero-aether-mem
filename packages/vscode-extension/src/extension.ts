@@ -26,6 +26,23 @@ const getApiUrl = (): string => {
   return config.get<string>('apiUrl') || SUPABASE_URL;
 };
 
+const getEdgeFunctionsUrl = (): string => {
+  const config = vscode.workspace.getConfiguration('lzero');
+  const configured = config.get<string>('apiUrl') || SUPABASE_URL;
+
+  if (configured.includes('supabase.co')) {
+    return configured.replace(/\/functions\/v1\/?$/, '');
+  }
+
+  if (configured.includes('/functions/v1')) {
+    return configured.replace(/\/functions\/v1\/?$/, '');
+  }
+
+  // If apiUrl points to the public API (e.g. https://api.lanonasis.com),
+  // fall back to the Supabase edge base for function calls.
+  return SUPABASE_URL;
+};
+
 const getDashboardUrl = (): string => {
   const config = vscode.workspace.getConfiguration('lzero');
   return config.get<string>('dashboardUrl') || 'https://lanonasis.com/dashboard';
@@ -411,7 +428,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      const apiUrl = getApiUrl();
+      const apiUrl = getEdgeFunctionsUrl();
       // Use X-API-Key header for Supabase edge functions
       const headers = {
         'X-API-Key': apiKey,
@@ -569,7 +586,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       // Then try API semantic search using Supabase edge function
       const apiKey = await this.getStoredApiKey();
       if (apiKey) {
-        const apiUrl = getApiUrl();
+        const apiUrl = getEdgeFunctionsUrl();
         const response = await fetch(`${apiUrl}/functions/v1/memory-search`, {
           method: 'POST',
           headers: {

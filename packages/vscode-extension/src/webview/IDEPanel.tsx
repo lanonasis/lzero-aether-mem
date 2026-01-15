@@ -1234,7 +1234,14 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
 
     setIsSavingMemory(true);
     try {
-      if (canUseApi) {
+      if (selectedIsLocal) {
+        if (window.vscode) {
+          window.vscode.postMessage({
+            type: "lanonasis:cache:delete",
+            payload: { id: selectedMemory.id },
+          });
+        }
+      } else if (canUseApi) {
         const result = await memoryClient.deleteMemory(selectedMemory.id);
         if (result?.error) {
           throw new Error(result.error);
