@@ -39,10 +39,10 @@
   "author": "Lanonasis (Seye Derick)",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.24.0",
+    "@modelcontextprotocol/sdk": "^1.25.2",
     "@supabase/supabase-js": "^2.53.0",
     "dotenv": "^17.2.1",
-    "express": "^4.21.2",
+    "express": "^4.21.5",
     "openai": "^4.76.1",
     "zod": "^3.24.4"
   },

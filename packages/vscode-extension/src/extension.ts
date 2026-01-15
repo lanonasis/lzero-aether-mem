@@ -40,6 +40,68 @@ function isValidApiKeyFormat(apiKey: string): boolean {
   return VALID_API_KEY_PREFIXES.some(prefix => apiKey.startsWith(prefix));
 }
 
+interface UserProfile {
+  id?: string;
+  name?: string;
+  email?: string;
+}
+
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const parts = token.split('.');
+  if (parts.length < 2) return null;
+  const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+  try {
+    let json = '';
+    if (typeof Buffer !== 'undefined') {
+      json = Buffer.from(padded, 'base64').toString('utf8');
+    } else if (typeof atob === 'function') {
+      const binary = atob(padded);
+      if (typeof TextDecoder !== 'undefined') {
+        const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+        json = new TextDecoder().decode(bytes);
+      } else {
+        json = binary;
+      }
+    } else {
+      return null;
+    }
+    return JSON.parse(json) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function getUserProfileFromToken(token?: string): UserProfile | null {
+  if (!token || !token.includes('.')) return null;
+  const payload = decodeJwtPayload(token);
+  if (!payload) return null;
+
+  const email =
+    typeof payload.email === 'string'
+      ? payload.email
+      : typeof payload.user_email === 'string'
+        ? payload.user_email
+        : typeof payload.upn === 'string'
+          ? payload.upn
+          : undefined;
+  const givenName = typeof payload.given_name === 'string' ? payload.given_name : undefined;
+  const familyName = typeof payload.family_name === 'string' ? payload.family_name : undefined;
+  const fullName = [givenName, familyName].filter(Boolean).join(' ');
+  const name =
+    typeof payload.name === 'string'
+      ? payload.name
+      : typeof payload.preferred_username === 'string'
+        ? payload.preferred_username
+        : typeof payload.nickname === 'string'
+          ? payload.nickname
+          : fullName || undefined;
+  const id = typeof payload.sub === 'string' ? payload.sub : undefined;
+
+  if (!email && !name && !id) return null;
+  return { id, name, email };
+}
+
 const OAUTH_CONFIG = {
   clientId: 'vscode-extension',
   authBaseUrl: 'https://auth.lanonasis.com',
@@ -269,6 +331,44 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
             });
           });
         }
+        return;
+      }
+
+      if (message.type === 'lanonasis:cache:update') {
+        const id = message.payload?.id as string | undefined;
+        const updates = message.payload?.updates as Partial<CachedMemory> | undefined;
+        if (id && updates) {
+          void this.cache.queueUpdate(id, updates).then(() => {
+            const updated = this.cache.getMemoryById(id);
+            webview.postMessage({
+              type: 'lanonasis:cache:updated',
+              payload: { memory: updated, status: this.cache.getStatus() }
+            });
+          });
+        }
+        return;
+      }
+
+      if (message.type === 'lanonasis:cache:delete') {
+        const id = message.payload?.id as string | undefined;
+        if (id) {
+          void this.cache.queueDelete(id).then(() => {
+            webview.postMessage({
+              type: 'lanonasis:cache:deleted',
+              payload: { id, status: this.cache.getStatus() }
+            });
+          });
+        }
+        return;
+      }
+
+      if (message.type === 'lanonasis:cache:clear') {
+        void this.cache.clearAll().then(() => {
+          webview.postMessage({
+            type: 'lanonasis:cache:cleared',
+            payload: { status: this.cache.getStatus() }
+          });
+        });
         return;
       }
 
@@ -518,6 +618,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     // Send base URL to webview (memory-client SDK adds /api/v1 internally)
     const apiUrl = getApiBaseUrl();
     let authCredential: string | undefined;
+    let userProfile: UserProfile | null = null;
 
     try {
       const tokensJson = await this.context.secrets.get(STORAGE_KEYS.OAUTH_TOKENS);
@@ -538,6 +639,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
           const expiresAt = issuedAt + (tokens.expires_in * 1000);
           if (Date.now() <= expiresAt - 5 * 60 * 1000) {
             authCredential = tokens.access_token;
+            userProfile = getUserProfileFromToken(tokens.access_token);
             this.output.appendLine('[LanOnasis] Found valid OAuth token');
           }
         }
@@ -558,7 +660,10 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       }
     }
 
-    webview.postMessage({ type: 'lanonasis:config:init', payload: { apiUrl, apiKey: authCredential } });
+    webview.postMessage({
+      type: 'lanonasis:config:init',
+      payload: { apiUrl, apiKey: authCredential, user: userProfile },
+    });
   }
 
   private async handleOAuthLogin(webview: vscode.Webview): Promise<void> {
@@ -570,7 +675,10 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       await this.context.secrets.store(STORAGE_KEYS.OAUTH_TOKENS, JSON.stringify(tokensWithTimestamp));
 
       webview.postMessage({ type: 'lanonasis:auth:result', payload: { success: true } });
-      webview.postMessage({ type: 'lanonasis:config:update', payload: { apiKey: tokens.access_token } });
+      webview.postMessage({
+        type: 'lanonasis:config:update',
+        payload: { apiKey: tokens.access_token, user: getUserProfileFromToken(tokens.access_token) },
+      });
       await vscode.window.showInformationMessage('LanOnasis: Connected via OAuth!');
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -588,7 +696,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
 
       await this.context.secrets.store(STORAGE_KEYS.API_KEY, apiKey);
       webview.postMessage({ type: 'lanonasis:auth:result', payload: { success: true } });
-      webview.postMessage({ type: 'lanonasis:config:update', payload: { apiKey } });
+      webview.postMessage({ type: 'lanonasis:config:update', payload: { apiKey, user: null } });
       await vscode.window.showInformationMessage('LanOnasis: Connected!');
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -600,7 +708,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     try {
       await this.context.secrets.delete(STORAGE_KEYS.API_KEY);
       await this.context.secrets.delete(STORAGE_KEYS.OAUTH_TOKENS);
-      webview.postMessage({ type: 'lanonasis:config:update', payload: { apiKey: null } });
+      webview.postMessage({ type: 'lanonasis:config:update', payload: { apiKey: null, user: null } });
       await vscode.window.showInformationMessage('LanOnasis: Logged out');
     } catch (error) {
       this.output.appendLine('[LanOnasis] Logout error: ' + String(error));
