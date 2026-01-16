@@ -1,0 +1,239 @@
+import * as vscode from 'vscode';
+import { ApiKeyService, ApiKey, Project } from '../services/ApiKeyService';
+
+export class ApiKeyTreeItem extends vscode.TreeItem {
+    public readonly apiKey: ApiKey;
+
+    constructor(
+        apiKey: ApiKey,
+        collapsibleState: vscode.TreeItemCollapsibleState,
+    ) {
+        super(apiKey.name, collapsibleState);
+
+        this.apiKey = apiKey;
+        this.tooltip = `${apiKey.name}\nType: ${apiKey.keyType}\nEnvironment: ${apiKey.environment}\nAccess Level: ${apiKey.accessLevel}`;
+        this.description = `${apiKey.environment} • ${apiKey.keyType}`;
+        this.contextValue = 'apiKey';
+
+        this.iconPath = this.getIconForKeyType(apiKey.keyType);
+
+        if (apiKey.expiresAt) {
+            const expiresAt = new Date(apiKey.expiresAt);
+            const now = new Date();
+            const daysUntilExpiry = Math.floor((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+            if (daysUntilExpiry <= 7) {
+                this.description += ` ⚠️ Expires in ${daysUntilExpiry} days`;
+            }
+        }
+    }
+
+    private getIconForKeyType(keyType: string): vscode.ThemeIcon {
+        const iconMap: Record<string, string> = {
+            api_key: 'key',
+            database_url: 'database',
+            oauth_token: 'account',
+            certificate: 'certificate',
+            ssh_key: 'terminal',
+            webhook_secret: 'webhook',
+            encryption_key: 'shield',
+        };
+
+        return new vscode.ThemeIcon(iconMap[keyType] || 'key');
+    }
+}
+
+export class ProjectTreeItem extends vscode.TreeItem {
+    public readonly project: Project;
+
+    constructor(
+        project: Project,
+        collapsibleState: vscode.TreeItemCollapsibleState,
+    ) {
+        super(project.name, collapsibleState);
+
+        this.project = project;
+        this.tooltip = `${project.name}\n${project.description || 'No description'}\nOrganization: ${project.organizationId}`;
+        this.description = project.description ? project.description.substring(0, 50) + '...' : 'No description';
+        this.contextValue = 'project';
+        this.iconPath = new vscode.ThemeIcon('folder');
+    }
+}
+
+export class ApiKeyTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<vscode.TreeItem | undefined | null | void> = new vscode.EventEmitter<vscode.TreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<vscode.TreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+
+    private projects: Project[] = [];
+    private apiKeys: Record<string, ApiKey[]> = {};
+    private authenticated = false;
+
+    constructor(
+        private readonly apiKeyService: ApiKeyService,
+        private readonly output: vscode.OutputChannel,
+    ) { }
+
+    refresh(resetCache: boolean = false): void {
+        if (resetCache) {
+            this.clearCache();
+        }
+        this._onDidChangeTreeData.fire();
+    }
+
+    setAuthenticated(authenticated: boolean): void {
+        this.authenticated = authenticated;
+
+        if (!authenticated) {
+            this.clear();
+        } else {
+            this.clear();
+            this.refresh();
+        }
+    }
+
+    clear(): void {
+        this.clearCache();
+        this._onDidChangeTreeData.fire();
+    }
+
+    getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
+        return element;
+    }
+
+    async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
+        if (!this.authenticated) {
+            const authItem = new vscode.TreeItem('Not authenticated', vscode.TreeItemCollapsibleState.None);
+            authItem.description = 'Click to authenticate';
+            authItem.iconPath = new vscode.ThemeIcon('key');
+            authItem.contextValue = 'notAuthenticated';
+            authItem.command = {
+                command: 'lzeroMemory.authenticate',
+                title: 'Authenticate',
+                arguments: ['oauth']
+            };
+            return [authItem];
+        }
+
+        try {
+            if (!element) {
+                this.projects = await this.apiKeyService.getProjects();
+
+                if (this.projects.length === 0) {
+                    const emptyItem = new vscode.TreeItem('No projects found', vscode.TreeItemCollapsibleState.None);
+                    emptyItem.description = 'Click + to create a project';
+                    emptyItem.iconPath = new vscode.ThemeIcon('info');
+                    emptyItem.contextValue = 'empty';
+                    return [emptyItem];
+                }
+
+                return this.projects.map(project =>
+                    new ProjectTreeItem(project, vscode.TreeItemCollapsibleState.Collapsed)
+                );
+            }
+
+            if (element instanceof ProjectTreeItem) {
+                const projectId = element.project.id;
+                if (!this.apiKeys[projectId]) {
+                    this.apiKeys[projectId] = await this.apiKeyService.getApiKeys(projectId);
+                }
+
+                if (this.apiKeys[projectId].length === 0) {
+                    const emptyItem = new vscode.TreeItem('No API keys in this project', vscode.TreeItemCollapsibleState.None);
+                    emptyItem.description = 'Right-click project to create a key';
+                    emptyItem.iconPath = new vscode.ThemeIcon('info');
+                    emptyItem.contextValue = 'empty';
+                    return [emptyItem];
+                }
+
+                return this.apiKeys[projectId].map(apiKey =>
+                    new ApiKeyTreeItem(apiKey, vscode.TreeItemCollapsibleState.None)
+                );
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            this.output.appendLine(`[ApiKeyTreeProvider] Error loading API keys: ${errorMessage}`);
+            const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+
+            if (errorMsg.includes('401') || errorMsg.includes('No token') || errorMsg.includes('AUTH_TOKEN_MISSING')) {
+                const authItem = new vscode.TreeItem('Authentication required', vscode.TreeItemCollapsibleState.None);
+                authItem.description = 'Click to authenticate';
+                authItem.iconPath = new vscode.ThemeIcon('warning');
+                authItem.contextValue = 'authRequired';
+                authItem.command = {
+                    command: 'lzeroMemory.authenticate',
+                    title: 'Authenticate',
+                    arguments: ['oauth']
+                };
+                authItem.tooltip = `Authentication error: ${errorMsg}`;
+                return [authItem];
+            }
+
+            if (errorMsg.includes('405') || errorMsg.includes('404') || errorMsg.includes('Not Found')) {
+                const notAvailableItem = new vscode.TreeItem('API Key Management', vscode.TreeItemCollapsibleState.None);
+                notAvailableItem.description = 'Not available on this server';
+                notAvailableItem.iconPath = new vscode.ThemeIcon('info');
+                notAvailableItem.contextValue = 'notAvailable';
+                notAvailableItem.tooltip = 'The API key management endpoints are not available on the current server.';
+                return [notAvailableItem];
+            }
+
+            const errorItem = new vscode.TreeItem('Error loading data', vscode.TreeItemCollapsibleState.None);
+            errorItem.description = errorMsg.length > 50 ? errorMsg.substring(0, 50) + '...' : errorMsg;
+            errorItem.iconPath = new vscode.ThemeIcon('error');
+            errorItem.contextValue = 'error';
+            errorItem.tooltip = errorMsg;
+            return [errorItem];
+        }
+
+        return [];
+    }
+
+    async addProject(project: Project): Promise<void> {
+        this.projects.push(project);
+        this.refresh();
+    }
+
+    async updateProject(updatedProject: Project): Promise<void> {
+        const index = this.projects.findIndex(p => p.id === updatedProject.id);
+        if (index !== -1) {
+            this.projects[index] = updatedProject;
+            this.refresh();
+        }
+    }
+
+    async removeProject(projectId: string): Promise<void> {
+        this.projects = this.projects.filter(p => p.id !== projectId);
+        delete this.apiKeys[projectId];
+        this.refresh();
+    }
+
+    async addApiKey(projectId: string, apiKey: ApiKey): Promise<void> {
+        if (!this.apiKeys[projectId]) {
+            this.apiKeys[projectId] = [];
+        }
+        this.apiKeys[projectId].push(apiKey);
+        this.refresh();
+    }
+
+    async updateApiKey(projectId: string, updatedApiKey: ApiKey): Promise<void> {
+        if (this.apiKeys[projectId]) {
+            const index = this.apiKeys[projectId].findIndex(k => k.id === updatedApiKey.id);
+            if (index !== -1) {
+                this.apiKeys[projectId][index] = updatedApiKey;
+                this.refresh();
+            }
+        }
+    }
+
+    async removeApiKey(projectId: string, apiKeyId: string): Promise<void> {
+        if (this.apiKeys[projectId]) {
+            this.apiKeys[projectId] = this.apiKeys[projectId].filter(k => k.id !== apiKeyId);
+            this.refresh();
+        }
+    }
+
+    private clearCache(): void {
+        this.projects = [];
+        this.apiKeys = {};
+    }
+}

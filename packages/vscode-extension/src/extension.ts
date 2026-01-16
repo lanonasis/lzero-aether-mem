@@ -1,21 +1,13 @@
 import * as vscode from 'vscode';
-import { generateRandomString, sha256Base64Url } from './crypto';
 import { MemoryCache, CachedMemory } from './memoryCache';
 import { MemoryChatParticipant } from './chatParticipant';
-
-interface TokenResponse {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-  refresh_token?: string;
-  scope?: string;
-  issued_at?: number;
-}
-
-const STORAGE_KEYS = {
-  API_KEY: 'lanonasis.apiKey',
-  OAUTH_TOKENS: 'lanonasis.tokens',
-} as const;
+import { SecureApiKeyService } from './services/SecureApiKeyService';
+import { MemoryService } from './services/MemoryService';
+import { ApiKeyService, ApiKey, Project, CreateApiKeyRequest } from './services/ApiKeyService';
+import { MemoryTreeProvider } from './providers/MemoryTreeProvider';
+import { ApiKeyTreeProvider, ApiKeyTreeItem, ProjectTreeItem } from './providers/ApiKeyTreeProvider';
+import { runDiagnostics, formatDiagnosticResults } from './utils/diagnostics';
+import type { MemoryEntry, MemorySearchResult } from './types/memory-aligned';
 
 // API configuration - Supabase edge functions direct URL
 const SUPABASE_URL = 'https://lanonasis.supabase.co';
@@ -124,125 +116,7 @@ function getUserProfileFromToken(token?: string): UserProfile | null {
   return { id, name, email };
 }
 
-const OAUTH_CONFIG = {
-  clientId: 'vscode-extension',
-  authBaseUrl: 'https://auth.lanonasis.com',
-  redirectUri: 'vscode://lanonasis.lzero-memory/callback',
-  scope: 'memories:read memories:write memories:delete profile',
-} as const;
-
 let memoryCacheInstance: MemoryCache | null = null;
-
-class VSCodeOAuthFlow {
-  private pendingAuth: {
-    codeVerifier: string;
-    state: string;
-    resolve: (code: string) => void;
-    reject: (error: Error) => void;
-  } | null = null;
-
-  constructor(private readonly output: vscode.OutputChannel) { }
-
-  private async generateCodeChallenge(verifier: string): Promise<string> {
-    return sha256Base64Url(verifier);
-  }
-
-  private buildAuthorizationUrl(codeChallenge: string, state: string): string {
-    const params = new URLSearchParams({
-      client_id: OAUTH_CONFIG.clientId,
-      response_type: 'code',
-      redirect_uri: OAUTH_CONFIG.redirectUri,
-      scope: OAUTH_CONFIG.scope,
-      code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
-      state: state,
-    });
-    return OAUTH_CONFIG.authBaseUrl + '/oauth/authorize?' + params.toString();
-  }
-
-  private async exchangeCodeForTokens(code: string, codeVerifier: string): Promise<TokenResponse> {
-    const response = await fetch(OAUTH_CONFIG.authBaseUrl + '/oauth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        grant_type: 'authorization_code',
-        code,
-        client_id: OAUTH_CONFIG.clientId,
-        redirect_uri: OAUTH_CONFIG.redirectUri,
-        code_verifier: codeVerifier,
-      }),
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error_description || data.error || 'Token exchange failed');
-    }
-    return data as TokenResponse;
-  }
-
-  public handleCallback(uri: vscode.Uri): void {
-    if (!this.pendingAuth) {
-      this.output.appendLine('[LanOnasis] Received OAuth callback but no pending auth');
-      return;
-    }
-
-    const params = new URLSearchParams(uri.query);
-    const code = params.get('code');
-    const state = params.get('state');
-    const error = params.get('error');
-
-    if (error) {
-      const errorDesc = params.get('error_description') || error;
-      this.pendingAuth.reject(new Error(errorDesc));
-      this.pendingAuth = null;
-      return;
-    }
-
-    if (state !== this.pendingAuth.state) {
-      this.pendingAuth.reject(new Error('State mismatch'));
-      this.pendingAuth = null;
-      return;
-    }
-
-    if (!code) {
-      this.pendingAuth.reject(new Error('No authorization code received'));
-      this.pendingAuth = null;
-      return;
-    }
-
-    this.pendingAuth.resolve(code);
-  }
-
-  public async authenticate(): Promise<TokenResponse> {
-    const codeVerifier = generateRandomString(43);
-    const codeChallenge = await this.generateCodeChallenge(codeVerifier);
-    const state = generateRandomString(32);
-    const authUrl = this.buildAuthorizationUrl(codeChallenge, state);
-
-    const codePromise = new Promise<string>((resolve, reject) => {
-      this.pendingAuth = { codeVerifier, state, resolve, reject };
-      setTimeout(() => {
-        if (this.pendingAuth) {
-          this.pendingAuth.reject(new Error('OAuth flow timed out'));
-          this.pendingAuth = null;
-        }
-      }, 5 * 60 * 1000);
-    });
-
-    this.output.appendLine('[LanOnasis] Opening browser for OAuth...');
-    const opened = await vscode.env.openExternal(vscode.Uri.parse(authUrl));
-    if (!opened) {
-      this.pendingAuth = null;
-      throw new Error('Failed to open browser');
-    }
-
-    const code = await codePromise;
-    this.output.appendLine('[LanOnasis] Exchanging code for tokens...');
-    const tokens = await this.exchangeCodeForTokens(code, codeVerifier);
-    this.pendingAuth = null;
-    return tokens;
-  }
-}
 
 class MemorySidebarProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'lzero.memorySidebar';
@@ -251,7 +125,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly output: vscode.OutputChannel,
-    private readonly oauthFlow: VSCodeOAuthFlow,
+    private readonly secureApiKeyService: SecureApiKeyService,
     private readonly cache: MemoryCache,
   ) { }
 
@@ -422,18 +296,13 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     webview.postMessage({ type: 'lanonasis:sync:start' });
 
     try {
-      const apiKey = await this.getStoredApiKey();
-      if (!apiKey) {
+      const headers = await this.getEdgeAuthHeaders();
+      if (!headers) {
         webview.postMessage({ type: 'lanonasis:sync:error', payload: { error: 'Not authenticated' } });
         return;
       }
 
       const apiUrl = getEdgeFunctionsUrl();
-      // Use X-API-Key header for Supabase edge functions
-      const headers = {
-        'X-API-Key': apiKey,
-        'Content-Type': 'application/json',
-      };
 
       // Step 1: Push pending changes to API (using Supabase edge functions)
       const pendingQueue = this.cache.getPendingQueue();
@@ -585,14 +454,12 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
 
       // Then try API semantic search using Supabase edge function
       const apiKey = await this.getStoredApiKey();
-      if (apiKey) {
+      const headers = await this.getEdgeAuthHeaders();
+      if (headers) {
         const apiUrl = getEdgeFunctionsUrl();
         const response = await fetch(`${apiUrl}/functions/v1/memory-search`, {
           method: 'POST',
-          headers: {
-            'X-API-Key': apiKey,
-            'Content-Type': 'application/json',
-          },
+          headers,
           body: JSON.stringify({
             query,
             limit: 10,
@@ -617,28 +484,36 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
 
   private async getStoredApiKey(): Promise<string | undefined> {
     try {
-      const tokensJson = await this.context.secrets.get(STORAGE_KEYS.OAUTH_TOKENS);
-      if (tokensJson) {
-        const tokens: TokenResponse = JSON.parse(tokensJson);
-        const issuedAt = tokens.issued_at ?? Date.now();
-        const expiresAt = issuedAt + (tokens.expires_in * 1000);
-        if (Date.now() <= expiresAt - 5 * 60 * 1000) {
-          return tokens.access_token;
-        }
-        // Token expired - log it
-        this.output.appendLine('[LanOnasis] OAuth token expired');
-      }
+      const credentials = await this.secureApiKeyService.getStoredCredentials();
+      return credentials?.token;
     } catch (err) {
-      this.output.appendLine(`[LanOnasis] Failed to parse OAuth tokens: ${err}`);
+      this.output.appendLine(`[LanOnasis] Failed to get credentials: ${err}`);
+      return undefined;
     }
+  }
 
+  private async getEdgeAuthHeaders(): Promise<Record<string, string> | null> {
     try {
-      return await this.context.secrets.get(STORAGE_KEYS.API_KEY);
-    } catch (err) {
-      this.output.appendLine(`[LanOnasis] Failed to get API key: ${err}`);
-    }
+      const credentials = await this.secureApiKeyService.getStoredCredentials();
+      if (!credentials) {
+        return null;
+      }
 
-    return undefined;
+      if (credentials.type === 'oauth') {
+        return {
+          Authorization: `Bearer ${credentials.token}`,
+          'Content-Type': 'application/json',
+        };
+      }
+
+      return {
+        'X-API-Key': credentials.token,
+        'Content-Type': 'application/json',
+      };
+    } catch (err) {
+      this.output.appendLine(`[LanOnasis] Failed to build auth headers: ${err}`);
+      return null;
+    }
   }
 
   private async sendConfigToWebview(webview: vscode.Webview): Promise<void> {
@@ -651,43 +526,14 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     let userProfile: UserProfile | null = null;
 
     try {
-      const tokensJson = await this.context.secrets.get(STORAGE_KEYS.OAUTH_TOKENS);
-      if (tokensJson) {
-        const tokens: TokenResponse = JSON.parse(tokensJson);
-
-        // Clear tokens if they have old scopes (memory:* or api_keys:manage)
-        const hasOldScopes = tokens.scope && (
-          tokens.scope.includes('memory:') ||
-          tokens.scope.includes('api_keys:manage')
-        );
-
-        if (hasOldScopes) {
-          this.output.appendLine('[LanOnasis] Clearing cached tokens with old scopes');
-          await this.context.secrets.delete(STORAGE_KEYS.OAUTH_TOKENS);
-        } else {
-          const issuedAt = tokens.issued_at ?? Date.now();
-          const expiresAt = issuedAt + (tokens.expires_in * 1000);
-          if (Date.now() <= expiresAt - 5 * 60 * 1000) {
-            authCredential = tokens.access_token;
-            userProfile = getUserProfileFromToken(tokens.access_token);
-            this.output.appendLine('[LanOnasis] Found valid OAuth token');
-          }
-        }
+      const credentials = await this.secureApiKeyService.getStoredCredentials();
+      if (credentials?.token) {
+        authCredential = credentials.token;
+        userProfile = getUserProfileFromToken(credentials.token);
+        this.output.appendLine('[LanOnasis] Found stored credentials');
       }
     } catch (err) {
       this.output.appendLine('[LanOnasis] Token error: ' + String(err));
-    }
-
-    if (!authCredential) {
-      try {
-        const apiKey = await this.context.secrets.get(STORAGE_KEYS.API_KEY);
-        if (apiKey) {
-          authCredential = apiKey;
-          this.output.appendLine('[LanOnasis] Found API key');
-        }
-      } catch (err) {
-        this.output.appendLine('[LanOnasis] API key error: ' + String(err));
-      }
     }
 
     webview.postMessage({
@@ -698,16 +544,13 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
 
   private async handleOAuthLogin(webview: vscode.Webview): Promise<void> {
     try {
-      const tokens = await this.oauthFlow.authenticate();
-      if (!tokens?.access_token) throw new Error('No tokens received');
-
-      const tokensWithTimestamp = { ...tokens, issued_at: Date.now() };
-      await this.context.secrets.store(STORAGE_KEYS.OAUTH_TOKENS, JSON.stringify(tokensWithTimestamp));
+      const token = await this.secureApiKeyService.authenticateWithOAuthFlow();
+      if (!token) throw new Error('No tokens received');
 
       webview.postMessage({ type: 'lanonasis:auth:result', payload: { success: true } });
       webview.postMessage({
         type: 'lanonasis:config:update',
-        payload: { apiKey: tokens.access_token, user: getUserProfileFromToken(tokens.access_token) },
+        payload: { apiKey: token, user: getUserProfileFromToken(token) },
       });
       await vscode.window.showInformationMessage('LanOnasis: Connected via OAuth!');
     } catch (error) {
@@ -724,7 +567,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      await this.context.secrets.store(STORAGE_KEYS.API_KEY, apiKey);
+      await this.secureApiKeyService.storeApiKeyDirect(apiKey);
       webview.postMessage({ type: 'lanonasis:auth:result', payload: { success: true } });
       webview.postMessage({ type: 'lanonasis:config:update', payload: { apiKey, user: null } });
       await vscode.window.showInformationMessage('LanOnasis: Connected!');
@@ -736,8 +579,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
 
   private async handleLogout(webview: vscode.Webview): Promise<void> {
     try {
-      await this.context.secrets.delete(STORAGE_KEYS.API_KEY);
-      await this.context.secrets.delete(STORAGE_KEYS.OAUTH_TOKENS);
+      await this.secureApiKeyService.deleteApiKey();
       webview.postMessage({ type: 'lanonasis:config:update', payload: { apiKey: null, user: null } });
       await vscode.window.showInformationMessage('LanOnasis: Logged out');
     } catch (error) {
@@ -774,9 +616,48 @@ function getNonce(): string {
   return text;
 }
 
-export function activate(context: vscode.ExtensionContext) {
+function hasViewId(context: vscode.ExtensionContext, viewId: string): boolean {
+  const views = context.extension?.packageJSON?.contributes?.views;
+  if (!views || typeof views !== 'object') {
+    return false;
+  }
+
+  return Object.values(views).some((viewList) =>
+    Array.isArray(viewList) && viewList.some((view) => view?.id === viewId)
+  );
+}
+
+/**
+ * Entry point for the LanOnasis Memory VS Code extension.
+ *
+ * This function is called by VS Code when the extension is activated. It is
+ * responsible for:
+ * - Creating the shared output channel used for logging extension activity.
+ * - Initializing the {@link SecureApiKeyService} and starting any required
+ *   asynchronous setup (for example, loading or migrating stored credentials).
+ * - Constructing core services such as {@link MemoryService} and
+ *   {@link ApiKeyService}, which provide access to remote APIs and memory data.
+ * - Reading relevant workspace configuration (e.g. `lzero.retainContextWhenHidden`).
+ * - Initializing the in-memory cache and any tree or webview providers used
+ *   by the extension UI.
+ * - Registering commands, views, participants, and other VS Code contributions
+ *   on the provided extension context.
+ *
+ * The activation logic should remain fast and idempotent, as it runs on every
+ * activation of the extension and must not block the VS Code UI.
+ *
+ * @param context VS Code extension context providing workspace-global services,
+ *                subscriptions, global state, and access to the secrets store.
+ */
+export async function activate(context: vscode.ExtensionContext) {
   const output = vscode.window.createOutputChannel('LanOnasis Memory');
   output.appendLine('[LanOnasis] Extension activating...');
+
+  const secureApiKeyService = new SecureApiKeyService(context, output);
+  void secureApiKeyService.initialize();
+
+  const memoryService = new MemoryService(secureApiKeyService, output, getEdgeFunctionsUrl());
+  const apiKeyService = new ApiKeyService(secureApiKeyService, output);
 
   // Read retainContextWhenHidden setting (default false)
   const retainContextWhenHidden = vscode.workspace
@@ -787,35 +668,50 @@ export function activate(context: vscode.ExtensionContext) {
   const cache = new MemoryCache(context, output);
   memoryCacheInstance = cache;
 
-  const oauthFlow = new VSCodeOAuthFlow(output);
+  const provider = new MemorySidebarProvider(context, output, secureApiKeyService, cache);
 
-  const uriHandler = vscode.window.registerUriHandler({
-    handleUri(uri: vscode.Uri) {
-      output.appendLine('[LanOnasis] URI callback: ' + uri.path);
-      if (uri.path === '/callback') oauthFlow.handleCallback(uri);
-    },
-  });
-  context.subscriptions.push(uriHandler);
+  const memoryTreeProvider = new MemoryTreeProvider(memoryService);
+  const apiKeyTreeProvider = new ApiKeyTreeProvider(apiKeyService, output);
 
-  const provider = new MemorySidebarProvider(context, output, oauthFlow, cache);
+  const hasMemoriesView = hasViewId(context, 'lzeroMemories');
+  const hasApiKeysView = hasViewId(context, 'lzeroApiKeys');
+
+  if (hasMemoriesView) {
+    context.subscriptions.push(
+      vscode.window.registerTreeDataProvider('lzeroMemories', memoryTreeProvider),
+    );
+  } else {
+    output.appendLine('[LanOnasis] View id lzeroMemories is not registered. Skipping tree provider.');
+  }
+
+  if (hasApiKeysView) {
+    context.subscriptions.push(
+      vscode.window.registerTreeDataProvider('lzeroApiKeys', apiKeyTreeProvider),
+    );
+  } else {
+    output.appendLine('[LanOnasis] View id lzeroApiKeys is not registered. Skipping tree provider.');
+  }
+
+  void vscode.commands.executeCommand('setContext', 'lzero.enableApiKeyManagement',
+    vscode.workspace.getConfiguration('lzero').get<boolean>('enableApiKeyManagement', true)
+  );
+  void vscode.commands.executeCommand('setContext', 'lzero.authenticated', false);
+
+  const applyAuthenticationState = async (authenticated: boolean) => {
+    await vscode.commands.executeCommand('setContext', 'lzero.authenticated', authenticated);
+    await memoryTreeProvider.setAuthenticated(authenticated);
+    apiKeyTreeProvider.setAuthenticated(authenticated);
+  };
 
   // Initialize Chat Participant (@memory)
   const getApiKey = async (): Promise<string | undefined> => {
     try {
-      const tokensJson = await context.secrets.get(STORAGE_KEYS.OAUTH_TOKENS);
-      if (tokensJson) {
-        const tokens: TokenResponse = JSON.parse(tokensJson);
-        return tokens.access_token;
-      }
+      const credentials = await secureApiKeyService.getStoredCredentials();
+      return credentials?.token;
     } catch (err) {
-      output.appendLine(`[LanOnasis] Chat: Failed to get OAuth token: ${err}`);
+      output.appendLine(`[LanOnasis] Chat: Failed to get credentials: ${err}`);
+      return undefined;
     }
-    try {
-      return await context.secrets.get(STORAGE_KEYS.API_KEY);
-    } catch (err) {
-      output.appendLine(`[LanOnasis] Chat: Failed to get API key: ${err}`);
-    }
-    return undefined;
   };
 
   const chatParticipant = new MemoryChatParticipant(
@@ -834,16 +730,25 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('lzeroMemory.authenticate', async () => {
+    vscode.commands.registerCommand('lzeroMemory.authenticate', async (mode?: 'oauth' | 'apikey') => {
       try {
-        const tokens = await oauthFlow.authenticate();
-        if (tokens.access_token) {
-          await context.secrets.store(STORAGE_KEYS.OAUTH_TOKENS, JSON.stringify({ ...tokens, issued_at: Date.now() }));
-          await vscode.window.showInformationMessage('LanOnasis: Authenticated!');
+        let token: string | null = null;
+
+        if (mode === 'oauth') {
+          token = await secureApiKeyService.authenticateWithOAuthFlow();
+        } else if (mode === 'apikey') {
+          token = await secureApiKeyService.promptForApiKeyEntry();
+        } else {
+          token = await secureApiKeyService.promptForAuthentication();
+        }
+
+        if (token) {
+          await applyAuthenticationState(true);
+          await vscode.window.showInformationMessage('L0 Memory: Authenticated!');
         }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        await vscode.window.showErrorMessage('LanOnasis: Auth failed - ' + msg);
+        await vscode.window.showErrorMessage('L0 Memory: Auth failed - ' + msg);
       }
     }),
   );
@@ -900,7 +805,173 @@ export function activate(context: vscode.ExtensionContext) {
     }),
   );
 
+  context.subscriptions.push(
+    vscode.commands.registerCommand('lzeroMemory.openMemory', (memory: MemoryEntry | MemorySearchResult) => {
+      openMemoryInEditor(memory);
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('lzeroMemory.manageApiKeys', async () => {
+      await manageApiKeys(apiKeyService);
+    }),
+    vscode.commands.registerCommand('lzeroMemory.createProject', async () => {
+      await createProject(apiKeyService, apiKeyTreeProvider);
+    }),
+    vscode.commands.registerCommand('lzeroMemory.viewProjects', async () => {
+      await viewProjects(apiKeyService);
+    }),
+    vscode.commands.registerCommand('lzeroMemory.refreshApiKeys', async () => {
+      apiKeyTreeProvider.refresh(true);
+    }),
+    vscode.commands.registerCommand('lzeroMemory.viewProjectDetails', async (item: ProjectTreeItem) => {
+      if (item && item.project) {
+        await showProjectDetails(item.project, apiKeyService);
+      }
+    }),
+    vscode.commands.registerCommand('lzeroMemory.viewApiKeyDetails', async (item: ApiKeyTreeItem) => {
+      if (item && item.apiKey) {
+        await showApiKeyDetails(item.apiKey);
+      }
+    }),
+    vscode.commands.registerCommand('lzeroMemory.createApiKey', async (item: ProjectTreeItem) => {
+      if (item && item.project) {
+        await createApiKeyForProject(item.project, apiKeyService, apiKeyTreeProvider);
+      } else {
+        await createApiKey(apiKeyService, apiKeyTreeProvider);
+      }
+    }),
+    vscode.commands.registerCommand('lzeroMemory.rotateApiKey', async (item: ApiKeyTreeItem) => {
+      if (item && item.apiKey) {
+        await rotateApiKey(item.apiKey, apiKeyService, apiKeyTreeProvider);
+      }
+    }),
+    vscode.commands.registerCommand('lzeroMemory.deleteApiKey', async (item: ApiKeyTreeItem) => {
+      if (item && item.apiKey) {
+        await deleteApiKey(item.apiKey, apiKeyService, apiKeyTreeProvider);
+      }
+    }),
+    vscode.commands.registerCommand('lzeroMemory.deleteProject', async (item: ProjectTreeItem) => {
+      if (item && item.project) {
+        await deleteProject(item.project, apiKeyService, apiKeyTreeProvider);
+      }
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('lzeroMemory.checkApiKeyStatus', async () => {
+      try {
+        const hasApiKey = await secureApiKeyService.hasApiKey();
+        const status = hasApiKey ? '✅ Configured and stored securely' : '❌ Not configured';
+
+        if (hasApiKey) {
+          vscode.window.showInformationMessage(
+            `API Key Status: ${status}`,
+            'Test Connection',
+            'View Security Info'
+          ).then(async (selection) => {
+            if (selection === 'Test Connection') {
+              vscode.commands.executeCommand('lzeroMemory.testConnection');
+            } else if (selection === 'View Security Info') {
+              vscode.env.openExternal(vscode.Uri.parse('https://docs.lanonasis.com/security/api-keys'));
+            }
+          });
+        } else {
+          vscode.window.showInformationMessage(
+            `API Key Status: ${status}`,
+            'Connect in Browser',
+            'Enter API Key'
+          ).then((selection) => {
+            if (selection === 'Connect in Browser') {
+              vscode.commands.executeCommand('lzeroMemory.authenticate', 'oauth');
+            } else if (selection === 'Enter API Key') {
+              vscode.commands.executeCommand('lzeroMemory.authenticate', 'apikey');
+            }
+          });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Failed to check API key status: ${message}`);
+      }
+    }),
+    vscode.commands.registerCommand('lzeroMemory.clearApiKey', async () => {
+      try {
+        const hasApiKey = await secureApiKeyService.hasApiKey();
+        if (!hasApiKey) {
+          vscode.window.showInformationMessage('No API key is currently configured.');
+          return;
+        }
+
+        const confirmed = await vscode.window.showWarningMessage(
+          'Are you sure you want to clear your API key? This will require re-authentication.',
+          { modal: true },
+          'Clear API Key'
+        );
+
+        if (confirmed === 'Clear API Key') {
+          await secureApiKeyService.deleteApiKey();
+          await applyAuthenticationState(false);
+          vscode.window.showInformationMessage('API key cleared successfully.');
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Failed to clear API key: ${message}`);
+      }
+    }),
+    vscode.commands.registerCommand('lzeroMemory.testConnection', async () => {
+      try {
+        const hasApiKey = await secureApiKeyService.hasApiKey();
+        if (!hasApiKey) {
+          vscode.window.showWarningMessage('❌ No API key configured.');
+          return;
+        }
+
+        await memoryService.testConnection();
+        vscode.window.showInformationMessage('✅ Connection test successful!');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Connection test failed: ${message}`);
+      }
+    }),
+    vscode.commands.registerCommand('lzeroMemory.runDiagnostics', async () => {
+      try {
+        output.show();
+        output.appendLine('Running comprehensive diagnostics...\n');
+
+        const health = await runDiagnostics(
+          context,
+          secureApiKeyService,
+          memoryService,
+          output
+        );
+
+        const report = formatDiagnosticResults(health);
+
+        const doc = await vscode.workspace.openTextDocument({
+          content: report,
+          language: 'markdown'
+        });
+
+        await vscode.window.showTextDocument(doc);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Diagnostics failed: ${message}`);
+        output.appendLine(`[Diagnostics] Fatal error: ${message}`);
+      }
+    }),
+    vscode.commands.registerCommand('lzeroMemory.showLogs', () => {
+      output.show();
+    }),
+  );
+
   context.subscriptions.push({ dispose: () => cache.stopConnectivityCheck() });
+
+  try {
+    const hasStoredKey = await secureApiKeyService.hasApiKey();
+    await applyAuthenticationState(hasStoredKey);
+  } catch (error) {
+    output.appendLine(`[LanOnasis] Failed to check auth state: ${error instanceof Error ? error.message : String(error)}`);
+  }
 
   output.appendLine('[LanOnasis] Extension activated');
 }
@@ -908,4 +979,522 @@ export function activate(context: vscode.ExtensionContext) {
 export function deactivate() {
   memoryCacheInstance?.stopConnectivityCheck();
   memoryCacheInstance = null;
+}
+
+// ============================================================================
+// API KEY MANAGEMENT HELPERS
+// ============================================================================
+
+async function manageApiKeys(apiKeyService: ApiKeyService) {
+  const quickPickItems = [
+    {
+      label: '$(key) View API Keys',
+      description: 'View all API keys across projects',
+      command: 'view'
+    },
+    {
+      label: '$(add) Create API Key',
+      description: 'Create a new API key',
+      command: 'create'
+    },
+    {
+      label: '$(folder) Manage Projects',
+      description: 'Create and manage API key projects',
+      command: 'projects'
+    },
+    {
+      label: '$(refresh) Refresh',
+      description: 'Refresh API key data',
+      command: 'refresh'
+    }
+  ];
+
+  const selected = await vscode.window.showQuickPick(quickPickItems, {
+    placeHolder: 'Choose an API key management action'
+  });
+
+  if (!selected) return;
+
+  switch (selected.command) {
+    case 'view':
+      await viewApiKeys(apiKeyService);
+      break;
+    case 'create':
+      await createApiKey(apiKeyService);
+      break;
+    case 'projects':
+      await viewProjects(apiKeyService);
+      break;
+    case 'refresh':
+      vscode.commands.executeCommand('lzeroMemory.refreshApiKeys');
+      break;
+  }
+}
+
+async function viewApiKeys(apiKeyService: ApiKeyService) {
+  try {
+    vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: 'Loading API keys...',
+      cancellable: false
+    }, async () => {
+      const apiKeys = await apiKeyService.getApiKeys();
+
+      if (apiKeys.length === 0) {
+        vscode.window.showInformationMessage('No API keys found. Create your first API key to get started.');
+        return;
+      }
+
+      const items = apiKeys.map(key => ({
+        label: key.name,
+        description: `${key.environment} • ${key.keyType} • ${key.accessLevel}`,
+        detail: `Project: ${key.projectId} | Created: ${new Date(key.createdAt).toLocaleDateString()}`,
+        apiKey: key
+      }));
+
+      const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: `Select an API key (${apiKeys.length} found)`
+      });
+
+      if (selected) {
+        await showApiKeyDetails(selected.apiKey);
+      }
+    });
+  } catch (error) {
+    vscode.window.showErrorMessage(`Failed to load API keys: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+async function createApiKey(apiKeyService: ApiKeyService, _apiKeyTreeProvider?: ApiKeyTreeProvider) {
+  try {
+    const projects = await apiKeyService.getProjects();
+
+    if (projects.length === 0) {
+      const createProjectResponse = await vscode.window.showInformationMessage(
+        'No projects found. You need to create a project first.',
+        'Create Project', 'Cancel'
+      );
+
+      if (createProjectResponse === 'Create Project') {
+        await createProject(apiKeyService, undefined);
+      }
+      return;
+    }
+
+    const projectItems = projects.map(p => ({
+      label: p.name,
+      description: p.description || 'No description',
+      project: p
+    }));
+
+    const selectedProject = await vscode.window.showQuickPick(projectItems, {
+      placeHolder: 'Select a project for the API key'
+    });
+
+    if (!selectedProject) return;
+
+    const name = await vscode.window.showInputBox({
+      prompt: 'API Key Name',
+      placeHolder: 'Enter a name for your API key'
+    });
+
+    if (!name) return;
+
+    const value = await vscode.window.showInputBox({
+      prompt: 'API Key Value',
+      placeHolder: 'Enter the API key value',
+      password: true
+    });
+
+    if (!value) return;
+
+    type KeyTypeOption = vscode.QuickPickItem & { value: CreateApiKeyRequest['keyType'] };
+    const keyTypes: KeyTypeOption[] = [
+      { label: 'API Key', value: 'api_key' },
+      { label: 'Database URL', value: 'database_url' },
+      { label: 'OAuth Token', value: 'oauth_token' },
+      { label: 'Certificate', value: 'certificate' },
+      { label: 'SSH Key', value: 'ssh_key' },
+      { label: 'Webhook Secret', value: 'webhook_secret' },
+      { label: 'Encryption Key', value: 'encryption_key' }
+    ];
+
+    const selectedKeyType = await vscode.window.showQuickPick(keyTypes, {
+      placeHolder: 'Select key type'
+    });
+
+    if (!selectedKeyType) return;
+
+    const config = vscode.workspace.getConfiguration('lzero');
+    const defaultEnv = config.get<string>('defaultEnvironment', 'development');
+
+    type EnvironmentOption = vscode.QuickPickItem & { value: CreateApiKeyRequest['environment'] };
+    const environments: EnvironmentOption[] = [
+      { label: 'Development', value: 'development', picked: defaultEnv === 'development' },
+      { label: 'Staging', value: 'staging', picked: defaultEnv === 'staging' },
+      { label: 'Production', value: 'production', picked: defaultEnv === 'production' }
+    ];
+
+    const selectedEnvironment = await vscode.window.showQuickPick(environments, {
+      placeHolder: 'Select environment'
+    });
+
+    if (!selectedEnvironment) return;
+
+    await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: 'Creating API key...',
+      cancellable: false
+    }, async () => {
+      await apiKeyService.createApiKey({
+        name,
+        value,
+        keyType: selectedKeyType.value,
+        environment: selectedEnvironment.value,
+        accessLevel: 'team',
+        projectId: selectedProject.project.id
+      });
+    });
+
+    vscode.window.showInformationMessage(`API key "${name}" created successfully`);
+    vscode.commands.executeCommand('lzeroMemory.refreshApiKeys');
+
+  } catch (error) {
+    vscode.window.showErrorMessage(`Failed to create API key: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+async function createProject(apiKeyService: ApiKeyService, apiKeyTreeProvider: ApiKeyTreeProvider | undefined) {
+  try {
+    const name = await vscode.window.showInputBox({
+      prompt: 'Project Name',
+      placeHolder: 'Enter a name for your project'
+    });
+
+    if (!name) return;
+
+    const description = await vscode.window.showInputBox({
+      prompt: 'Project Description (optional)',
+      placeHolder: 'Enter a description for your project'
+    });
+
+    const config = vscode.workspace.getConfiguration('lzero');
+    let organizationId = config.get<string>('organizationId');
+
+    if (!organizationId) {
+      const orgId = await vscode.window.showInputBox({
+        prompt: 'Organization ID',
+        placeHolder: 'Enter your organization ID'
+      });
+
+      if (!orgId) return;
+
+      await config.update('organizationId', orgId, vscode.ConfigurationTarget.Global);
+      organizationId = orgId;
+    }
+
+    await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: 'Creating project...',
+      cancellable: false
+    }, async () => {
+      const project = await apiKeyService.createProject({
+        name,
+        description,
+        organizationId: organizationId
+      });
+
+      if (apiKeyTreeProvider) {
+        await apiKeyTreeProvider.addProject(project);
+      }
+    });
+
+    vscode.window.showInformationMessage(`Project "${name}" created successfully`);
+    vscode.commands.executeCommand('lzeroMemory.refreshApiKeys');
+
+  } catch (error) {
+    vscode.window.showErrorMessage(`Failed to create project: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+async function viewProjects(apiKeyService: ApiKeyService) {
+  try {
+    vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: 'Loading projects...',
+      cancellable: false
+    }, async () => {
+      const projects = await apiKeyService.getProjects();
+
+      if (projects.length === 0) {
+        const createProjectResponse = await vscode.window.showInformationMessage(
+          'No projects found. Create your first project to get started.',
+          'Create Project', 'Cancel'
+        );
+
+        if (createProjectResponse === 'Create Project') {
+          await createProject(apiKeyService, undefined);
+        }
+        return;
+      }
+
+      const items = projects.map(project => ({
+        label: project.name,
+        description: project.description || 'No description',
+        detail: `Organization: ${project.organizationId} | Created: ${new Date(project.createdAt).toLocaleDateString()}`,
+        project
+      }));
+
+      const selected = await vscode.window.showQuickPick(items, {
+        placeHolder: `Select a project (${projects.length} found)`
+      });
+
+      if (selected) {
+        await showProjectDetails(selected.project, apiKeyService);
+      }
+    });
+  } catch (error) {
+    vscode.window.showErrorMessage(`Failed to load projects: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+async function showApiKeyDetails(apiKey: ApiKey) {
+  const content = `# API Key: ${apiKey.name}
+
+**Type:** ${apiKey.keyType}
+**Environment:** ${apiKey.environment}
+**Access Level:** ${apiKey.accessLevel}
+**Project ID:** ${apiKey.projectId}
+**Created:** ${new Date(apiKey.createdAt).toLocaleString()}
+${apiKey.expiresAt ? `**Expires:** ${new Date(apiKey.expiresAt).toLocaleString()}` : '**Expires:** Never'}
+
+## Tags
+${apiKey.tags.length > 0 ? apiKey.tags.map((tag: string) => `- ${tag}`).join('\n') : 'No tags'}
+
+## Metadata
+
+\`\`\`json
+${JSON.stringify(apiKey.metadata, null, 2)}
+\`\`\`
+`;
+
+  vscode.workspace.openTextDocument({
+    content,
+    language: 'markdown'
+  }).then(doc => {
+    vscode.window.showTextDocument(doc);
+  });
+}
+
+async function showProjectDetails(project: Project, apiKeyService: ApiKeyService) {
+  try {
+    const apiKeys = await apiKeyService.getApiKeys(project.id);
+
+    const content = `# Project: ${project.name}
+
+**Description:** ${project.description || 'No description'}
+**Organization ID:** ${project.organizationId}
+**Created:** ${new Date(project.createdAt).toLocaleString()}
+**Team Members:** ${project.teamMembers.length}
+
+## API Keys (${apiKeys.length})
+${apiKeys.length > 0 ?
+        apiKeys.map((key: ApiKey) => `- **${key.name}** (${key.keyType}, ${key.environment})`).join('\n') :
+        'No API keys found in this project'
+      }
+
+## Settings
+
+\`\`\`json
+${JSON.stringify(project.settings, null, 2)}
+\`\`\`
+`;
+
+    vscode.workspace.openTextDocument({
+      content,
+      language: 'markdown'
+    }).then((doc: vscode.TextDocument) => {
+      vscode.window.showTextDocument(doc);
+    });
+  } catch (error) {
+    vscode.window.showErrorMessage(`Failed to load project details: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+async function createApiKeyForProject(project: Project, apiKeyService: ApiKeyService, apiKeyTreeProvider?: ApiKeyTreeProvider) {
+  try {
+    const name = await vscode.window.showInputBox({
+      prompt: 'API Key Name',
+      placeHolder: 'Enter a name for your API key'
+    });
+
+    if (!name) return;
+
+    const value = await vscode.window.showInputBox({
+      prompt: 'API Key Value',
+      placeHolder: 'Enter the API key value',
+      password: true
+    });
+
+    if (!value) return;
+
+    type KeyTypeOption = vscode.QuickPickItem & { value: CreateApiKeyRequest['keyType'] };
+    const keyTypes: KeyTypeOption[] = [
+      { label: 'API Key', value: 'api_key' },
+      { label: 'Database URL', value: 'database_url' },
+      { label: 'OAuth Token', value: 'oauth_token' },
+      { label: 'Certificate', value: 'certificate' },
+      { label: 'SSH Key', value: 'ssh_key' },
+      { label: 'Webhook Secret', value: 'webhook_secret' },
+      { label: 'Encryption Key', value: 'encryption_key' }
+    ];
+
+    const selectedKeyType = await vscode.window.showQuickPick(keyTypes, {
+      placeHolder: 'Select key type'
+    });
+
+    if (!selectedKeyType) return;
+
+    const environments: vscode.QuickPickItem[] = [
+      { label: 'Development', description: 'For development use' },
+      { label: 'Staging', description: 'For staging/testing' },
+      { label: 'Production', description: 'For production use' }
+    ];
+
+    const selectedEnv = await vscode.window.showQuickPick(environments, {
+      placeHolder: 'Select environment'
+    });
+
+    if (!selectedEnv) return;
+
+    const accessLevels: vscode.QuickPickItem[] = [
+      { label: 'Public', description: 'Publicly accessible' },
+      { label: 'Authenticated', description: 'Requires authentication' },
+      { label: 'Team', description: 'Team members only' },
+      { label: 'Admin', description: 'Administrators only' },
+      { label: 'Enterprise', description: 'Enterprise level access' }
+    ];
+
+    const selectedAccess = await vscode.window.showQuickPick(accessLevels, {
+      placeHolder: 'Select access level'
+    });
+
+    if (!selectedAccess) return;
+
+    const request: CreateApiKeyRequest = {
+      name,
+      value,
+      keyType: selectedKeyType.value,
+      environment: selectedEnv.label.toLowerCase() as 'development' | 'staging' | 'production',
+      accessLevel: selectedAccess.label.toLowerCase() as 'public' | 'authenticated' | 'team' | 'admin' | 'enterprise',
+      projectId: project.id
+    };
+
+    await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: 'Creating API key...',
+      cancellable: false
+    }, async () => {
+      const apiKey = await apiKeyService.createApiKey(request);
+      vscode.window.showInformationMessage(`API key "${apiKey.name}" created successfully!`);
+
+      if (apiKeyTreeProvider) {
+        await apiKeyTreeProvider.addApiKey(project.id, apiKey);
+      }
+    });
+  } catch (error) {
+    vscode.window.showErrorMessage(`Failed to create API key: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+async function rotateApiKey(apiKey: ApiKey, apiKeyService: ApiKeyService, apiKeyTreeProvider?: ApiKeyTreeProvider) {
+  try {
+    const confirmed = await vscode.window.showWarningMessage(
+      `Are you sure you want to rotate API key "${apiKey.name}"? The old key will be invalidated.`,
+      { modal: true },
+      'Rotate Key'
+    );
+
+    if (confirmed !== 'Rotate Key') return;
+
+    await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: 'Rotating API key...',
+      cancellable: false
+    }, async () => {
+      const rotated = await apiKeyService.rotateApiKey(apiKey.id);
+      vscode.window.showInformationMessage(`API key "${rotated.name}" rotated successfully!`);
+
+      if (apiKeyTreeProvider) {
+        await apiKeyTreeProvider.updateApiKey(apiKey.projectId, rotated);
+      }
+    });
+  } catch (error) {
+    vscode.window.showErrorMessage(`Failed to rotate API key: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+async function deleteApiKey(apiKey: ApiKey, apiKeyService: ApiKeyService, apiKeyTreeProvider?: ApiKeyTreeProvider) {
+  try {
+    const confirmed = await vscode.window.showWarningMessage(
+      `Are you sure you want to delete API key "${apiKey.name}"? This action cannot be undone.`,
+      { modal: true },
+      'Delete'
+    );
+
+    if (confirmed !== 'Delete') return;
+
+    await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: 'Deleting API key...',
+      cancellable: false
+    }, async () => {
+      await apiKeyService.deleteApiKey(apiKey.id);
+      vscode.window.showInformationMessage(`API key "${apiKey.name}" deleted successfully.`);
+
+      if (apiKeyTreeProvider) {
+        await apiKeyTreeProvider.removeApiKey(apiKey.projectId, apiKey.id);
+      }
+    });
+  } catch (error) {
+    vscode.window.showErrorMessage(`Failed to delete API key: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+async function deleteProject(project: Project, apiKeyService: ApiKeyService, apiKeyTreeProvider?: ApiKeyTreeProvider) {
+  try {
+    const confirmed = await vscode.window.showWarningMessage(
+      `Are you sure you want to delete project "${project.name}"? All API keys in this project will also be deleted. This action cannot be undone.`,
+      { modal: true },
+      'Delete'
+    );
+
+    if (confirmed !== 'Delete') return;
+
+    await vscode.window.withProgress({
+      location: vscode.ProgressLocation.Notification,
+      title: 'Deleting project...',
+      cancellable: false
+    }, async () => {
+      await apiKeyService.deleteProject(project.id);
+      vscode.window.showInformationMessage(`Project "${project.name}" deleted successfully.`);
+
+      if (apiKeyTreeProvider) {
+        await apiKeyTreeProvider.removeProject(project.id);
+      }
+    });
+  } catch (error) {
+    vscode.window.showErrorMessage(`Failed to delete project: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+function openMemoryInEditor(memory: MemoryEntry | MemorySearchResult) {
+  const content = `# ${memory.title}\n\n**Type:** ${memory.memory_type}\n**Created:** ${new Date(memory.created_at).toLocaleString()}\n\n---\n\n${memory.content}`;
+
+  vscode.workspace.openTextDocument({
+    content,
+    language: 'markdown'
+  }).then(doc => {
+    vscode.window.showTextDocument(doc);
+  });
 }

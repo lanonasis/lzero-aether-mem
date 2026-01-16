@@ -1,0 +1,180 @@
+import * as vscode from 'vscode';
+import type { MemoryService } from '../services/MemoryService';
+import { MemoryEntry, MemoryType } from '../types/memory-aligned';
+
+export class MemoryTreeItem extends vscode.TreeItem {
+    constructor(
+        public readonly memory: MemoryEntry,
+        collapsibleState: vscode.TreeItemCollapsibleState,
+    ) {
+        super(memory.title, collapsibleState);
+
+        this.tooltip = `${memory.title}\n\nType: ${memory.memory_type}\nCreated: ${new Date(memory.created_at).toLocaleDateString()}\n\n${memory.content.substring(0, 200)}${memory.content.length > 200 ? '...' : ''}`;
+        this.description = memory.memory_type;
+        this.contextValue = 'memory';
+
+        this.iconPath = this.getIconForMemoryType(memory.memory_type);
+
+        this.command = {
+            command: 'lzeroMemory.openMemory',
+            title: 'Open Memory',
+            arguments: [memory],
+        };
+    }
+
+    private getIconForMemoryType(type: MemoryType): vscode.ThemeIcon {
+        switch (type) {
+            case 'conversation':
+                return new vscode.ThemeIcon('comment-discussion');
+            case 'knowledge':
+                return new vscode.ThemeIcon('book');
+            case 'project':
+                return new vscode.ThemeIcon('project');
+            case 'context':
+                return new vscode.ThemeIcon('info');
+            case 'reference':
+                return new vscode.ThemeIcon('references');
+            case 'personal':
+                return new vscode.ThemeIcon('account');
+            case 'workflow':
+                return new vscode.ThemeIcon('settings');
+            default:
+                return new vscode.ThemeIcon('file');
+        }
+    }
+}
+
+export class MemoryTypeTreeItem extends vscode.TreeItem {
+    constructor(
+        public readonly memoryType: MemoryType,
+        public readonly memories: MemoryEntry[],
+        collapsibleState: vscode.TreeItemCollapsibleState,
+    ) {
+        super(memoryType, collapsibleState);
+
+        this.tooltip = `${memoryType} (${memories.length} memories)`;
+        this.description = `${memories.length} memories`;
+        this.contextValue = 'memoryType';
+        this.iconPath = new vscode.ThemeIcon('folder');
+    }
+}
+
+export class MemoryTreeProvider implements vscode.TreeDataProvider<MemoryTreeItem | MemoryTypeTreeItem> {
+    private _onDidChangeTreeData: vscode.EventEmitter<MemoryTreeItem | MemoryTypeTreeItem | undefined | null | void> = new vscode.EventEmitter<MemoryTreeItem | MemoryTypeTreeItem | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<MemoryTreeItem | MemoryTypeTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+
+    private memories: MemoryEntry[] = [];
+    private loading = false;
+    private authenticated = false;
+
+    constructor(private memoryService: MemoryService) {
+        void this.setAuthenticated(false);
+    }
+
+    private async loadMemories(): Promise<void> {
+        if (!this.authenticated) {
+            this.memories = [];
+            this.loading = false;
+            this._onDidChangeTreeData.fire();
+            return;
+        }
+
+        try {
+            this.loading = true;
+            this.memories = await this.memoryService.listMemories(100);
+        } catch (error) {
+            this.memories = [];
+            if (!(error instanceof Error && error.message.includes('Not authenticated'))) {
+                vscode.window.showErrorMessage(`Failed to load memories: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+        } finally {
+            this.loading = false;
+            this._onDidChangeTreeData.fire();
+        }
+    }
+
+    refresh(): void {
+        if (!this.authenticated) {
+            this.clear();
+            return;
+        }
+
+        void this.loadMemories();
+    }
+
+    async setAuthenticated(authenticated: boolean): Promise<void> {
+        this.authenticated = authenticated;
+
+        if (authenticated) {
+            void this.loadMemories();
+        } else {
+            this.clear();
+        }
+    }
+
+    clear(): void {
+        this.loading = false;
+        this.memories = [];
+        this._onDidChangeTreeData.fire();
+    }
+
+    getTreeItem(element: MemoryTreeItem | MemoryTypeTreeItem): vscode.TreeItem {
+        return element;
+    }
+
+    getChildren(element?: MemoryTreeItem | MemoryTypeTreeItem): Promise<(MemoryTreeItem | MemoryTypeTreeItem)[]> {
+        if (!this.authenticated) {
+            return Promise.resolve([]);
+        }
+
+        if (this.loading) {
+            return Promise.resolve([]);
+        }
+
+        if (!element) {
+            return Promise.resolve(this.getMemoryTypeGroups());
+        }
+
+        if (element instanceof MemoryTypeTreeItem) {
+            return Promise.resolve(
+                element.memories.map(memory =>
+                    new MemoryTreeItem(memory, vscode.TreeItemCollapsibleState.None)
+                )
+            );
+        }
+
+        return Promise.resolve([]);
+    }
+
+    private getMemoryTypeGroups(): MemoryTypeTreeItem[] {
+        const memoryTypes: MemoryType[] = ['conversation', 'knowledge', 'project', 'context', 'reference', 'personal', 'workflow'];
+        const groups: MemoryTypeTreeItem[] = [];
+
+        for (const type of memoryTypes) {
+            const memoriesForType = this.memories.filter(memory => memory.memory_type === type);
+            if (memoriesForType.length > 0) {
+                groups.push(new MemoryTypeTreeItem(
+                    type,
+                    memoriesForType,
+                    vscode.TreeItemCollapsibleState.Collapsed
+                ));
+            }
+        }
+
+        return groups;
+    }
+
+    getParent(element: MemoryTreeItem | MemoryTypeTreeItem): vscode.ProviderResult<MemoryTreeItem | MemoryTypeTreeItem> {
+        if (!this.authenticated) {
+            return null;
+        }
+
+        if (element instanceof MemoryTreeItem) {
+            const memoryType = element.memory.memory_type;
+            const memoriesForType = this.memories.filter(memory => memory.memory_type === memoryType);
+            return new MemoryTypeTreeItem(memoryType, memoriesForType, vscode.TreeItemCollapsibleState.Collapsed);
+        }
+
+        return null;
+    }
+}

@@ -31,9 +31,9 @@ export interface SyncStatus {
 }
 
 const CACHE_KEYS = {
-  MEMORIES: 'lanonasis.memories.cache',
-  PENDING_QUEUE: 'lanonasis.memories.pending',
-  LAST_SYNC: 'lanonasis.memories.lastSync',
+  MEMORIES: 'lzero.memories.cache',
+  PENDING_QUEUE: 'lzero.memories.pending',
+  LAST_SYNC: 'lzero.memories.lastSync',
 } as const;
 
 export class MemoryCache {

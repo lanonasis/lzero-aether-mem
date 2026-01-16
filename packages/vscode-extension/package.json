@@ -2,7 +2,7 @@
   "name": "lzero-memory",
   "displayName": "L0 Memory",
   "description": "L0 / LanOnasis Memory-as-a-Service companion for VS Code (Desktop & Web)",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "publisher": "lanonasis",
   "private": true,
   "repository": {
@@ -34,12 +34,7 @@
   "main": "./out/extension.js",
   "browser": "./out/extension.web.js",
   "activationEvents": [
-    "onUri",
-    "onView:lzero.memorySidebar",
-    "onCommand:lzeroMemory.authenticate",
-    "onCommand:lzeroMemory.createMemoryFromSelection",
-    "onCommand:lzeroMemory.syncMemories",
-    "onCommand:lzeroMemory.searchMemories"
+    "onStartupFinished"
   ],
   "contributes": {
     "viewsContainers": {
@@ -57,6 +52,20 @@
           "id": "lzero.memorySidebar",
           "name": "L0 Memory",
           "type": "webview"
+        },
+        {
+          "type": "tree",
+          "id": "lzeroMemories",
+          "name": "Memories",
+          "icon": "$(list-tree)",
+          "when": "config.lzero.showTreeView"
+        },
+        {
+          "type": "tree",
+          "id": "lzeroApiKeys",
+          "name": "API Keys",
+          "icon": "$(key)",
+          "when": "lzero.enableApiKeyManagement"
         }
       ]
     },
@@ -76,6 +85,163 @@
       {
         "command": "lzeroMemory.searchMemories",
         "title": "L0 Memory: Search Memories"
+      },
+      {
+        "command": "lzeroMemory.openMemory",
+        "title": "L0 Memory: Open Memory"
+      },
+      {
+        "command": "lzeroMemory.manageApiKeys",
+        "title": "L0 Memory: Manage API Keys"
+      },
+      {
+        "command": "lzeroMemory.createProject",
+        "title": "L0 Memory: Create API Key Project"
+      },
+      {
+        "command": "lzeroMemory.viewProjects",
+        "title": "L0 Memory: View API Key Projects"
+      },
+      {
+        "command": "lzeroMemory.refreshApiKeys",
+        "title": "L0 Memory: Refresh API Keys"
+      },
+      {
+        "command": "lzeroMemory.viewProjectDetails",
+        "title": "L0 Memory: View Project Details"
+      },
+      {
+        "command": "lzeroMemory.createApiKey",
+        "title": "L0 Memory: Create API Key"
+      },
+      {
+        "command": "lzeroMemory.deleteProject",
+        "title": "L0 Memory: Delete Project"
+      },
+      {
+        "command": "lzeroMemory.viewApiKeyDetails",
+        "title": "L0 Memory: View API Key Details"
+      },
+      {
+        "command": "lzeroMemory.rotateApiKey",
+        "title": "L0 Memory: Rotate API Key"
+      },
+      {
+        "command": "lzeroMemory.deleteApiKey",
+        "title": "L0 Memory: Delete API Key"
+      },
+      {
+        "command": "lzeroMemory.checkApiKeyStatus",
+        "title": "L0 Memory: Check API Key Status"
+      },
+      {
+        "command": "lzeroMemory.clearApiKey",
+        "title": "L0 Memory: Clear API Key"
+      },
+      {
+        "command": "lzeroMemory.testConnection",
+        "title": "L0 Memory: Test Connection"
+      },
+      {
+        "command": "lzeroMemory.runDiagnostics",
+        "title": "L0 Memory: Run Diagnostics"
+      },
+      {
+        "command": "lzeroMemory.showLogs",
+        "title": "L0 Memory: Show Logs"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "lzeroMemory.searchMemories",
+        "key": "ctrl+shift+m",
+        "mac": "cmd+shift+m",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "lzeroMemory.createMemoryFromSelection",
+        "key": "ctrl+shift+alt+m",
+        "mac": "cmd+shift+alt+m",
+        "when": "editorHasSelection"
+      },
+      {
+        "command": "lzeroMemory.manageApiKeys",
+        "key": "ctrl+shift+k",
+        "mac": "cmd+shift+k",
+        "when": "editorTextFocus"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "lzeroMemory.searchMemories",
+          "when": "view == lzeroMemories",
+          "group": "navigation"
+        },
+        {
+          "command": "lzeroMemory.authenticate",
+          "when": "view == lzeroMemories && !lzero.authenticated",
+          "group": "navigation"
+        },
+        {
+          "command": "lzeroMemory.refreshApiKeys",
+          "when": "view == lzeroApiKeys",
+          "group": "navigation"
+        },
+        {
+          "command": "lzeroMemory.createProject",
+          "when": "view == lzeroApiKeys && lzero.authenticated",
+          "group": "navigation"
+        },
+        {
+          "command": "lzeroMemory.authenticate",
+          "when": "view == lzeroApiKeys && !lzero.authenticated",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "lzeroMemory.viewProjectDetails",
+          "when": "view == lzeroApiKeys && viewItem == project",
+          "group": "inline"
+        },
+        {
+          "command": "lzeroMemory.createApiKey",
+          "when": "view == lzeroApiKeys && viewItem == project",
+          "group": "inline"
+        },
+        {
+          "command": "lzeroMemory.deleteProject",
+          "when": "view == lzeroApiKeys && viewItem == project",
+          "group": "inline@2"
+        },
+        {
+          "command": "lzeroMemory.viewApiKeyDetails",
+          "when": "view == lzeroApiKeys && viewItem == apiKey",
+          "group": "inline"
+        },
+        {
+          "command": "lzeroMemory.rotateApiKey",
+          "when": "view == lzeroApiKeys && viewItem == apiKey",
+          "group": "inline@1"
+        },
+        {
+          "command": "lzeroMemory.deleteApiKey",
+          "when": "view == lzeroApiKeys && viewItem == apiKey",
+          "group": "inline@2"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "lzeroMemories",
+        "contents": "Welcome to L0 Memory! 🧠\n\nTo get started, authenticate with your L0 account.\n\n[Connect in Browser](command:lzeroMemory.authenticate?%5B%22oauth%22%5D)\n\n[Enter API Key](command:lzeroMemory.authenticate?%5B%22apikey%22%5D)\n\n[Get API Key](https://api.lanonasis.com)\n\n---\n\n**What is L0 Memory?**\n\nL0 Memory helps you store and recall key developer context with semantic search, offline caching, and fast retrieval.\n\n**Need Help?**\n\n[View Documentation](https://docs.lanonasis.com)\n[Report Issue](https://github.com/lanonasis/lzero-aether-mem/issues)",
+        "when": "!lzero.authenticated"
+      },
+      {
+        "view": "lzeroApiKeys",
+        "contents": "Welcome to API Key Management! 🔑\n\nAuthenticate to manage API keys and projects.\n\n[Connect in Browser](command:lzeroMemory.authenticate?%5B%22oauth%22%5D)\n\n[Enter API Key](command:lzeroMemory.authenticate?%5B%22apikey%22%5D)",
+        "when": "!lzero.authenticated"
       }
     ],
     "chatParticipants": [
@@ -109,10 +275,70 @@
           "default": "https://api.lanonasis.com",
           "description": "Base URL for the L0 Memory API (without /api/v1 suffix)."
         },
+        "lzero.gatewayUrl": {
+          "type": "string",
+          "default": "https://api.lanonasis.com",
+          "description": "Gateway URL for centralized API management."
+        },
+        "lzero.useGateway": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use gateway routing instead of direct API calls."
+        },
+        "lzero.authUrl": {
+          "type": "string",
+          "default": "https://auth.lanonasis.com",
+          "description": "OAuth authentication server URL."
+        },
         "lzero.dashboardUrl": {
           "type": "string",
           "default": "https://lanonasis.com/dashboard",
           "description": "Dashboard URL for API key management and profile access."
+        },
+        "lzero.defaultMemoryType": {
+          "type": "string",
+          "enum": [
+            "context",
+            "project",
+            "knowledge",
+            "reference",
+            "personal",
+            "workflow",
+            "conversation"
+          ],
+          "default": "context",
+          "description": "Default memory type for new memories"
+        },
+        "lzero.searchLimit": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Maximum number of search results to show"
+        },
+        "lzero.enableApiKeyManagement": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable API key management features (requires backend support)"
+        },
+        "lzero.defaultEnvironment": {
+          "type": "string",
+          "enum": [
+            "development",
+            "staging",
+            "production"
+          ],
+          "default": "development",
+          "description": "Default environment for API key management"
+        },
+        "lzero.organizationId": {
+          "type": "string",
+          "description": "Your organization ID for API key management"
+        },
+        "lzero.showTreeView": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show tree views for memories and API keys"
         },
         "lzero.retainContextWhenHidden": {
           "type": "boolean",
