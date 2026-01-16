@@ -318,6 +318,19 @@ const parseTags = (value: string) =>
     .map((tag) => tag.trim())
     .filter(Boolean);
 
+const getInitials = (value?: string | null) => {
+  if (!value) return "U";
+  const trimmed = value.trim();
+  if (!trimmed) return "U";
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    const token = parts[0];
+    const handle = token.includes("@") ? token.split("@")[0] : token;
+    return handle.slice(0, 2).toUpperCase();
+  }
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
 const matchesQuery = (memory: CachedMemory, query: string) => {
   const q = query.toLowerCase();
   return (
@@ -792,6 +805,8 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
     ? "Local cache"
     : "Not connected";
   const userDisplayName = userName || userEmail || null;
+  const userSubLabel = userName && userEmail ? userEmail : null;
+  const avatarLabel = userDisplayName || userEmail || null;
   const selectedIsLocal =
     !!selectedMemory &&
     (selectedMemory.id.startsWith("local_") ||
@@ -1456,13 +1471,33 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--vscode-sideBar-background)]">
           <div className="flex items-center gap-2">
-            <L0Logo
-              className="h-4 w-4 text-[var(--vscode-icon-foreground)]"
-              size={16}
-            />
-            <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--vscode-sideBarTitle-foreground)]">
-              LanOnasis Memory
-            </span>
+            {avatarLabel ? (
+              <div className="flex items-center gap-2">
+                <div className="h-6 w-6 rounded-full bg-[var(--vscode-badge-background)]/30 text-[10px] font-semibold text-[var(--vscode-editor-foreground)] flex items-center justify-center">
+                  {getInitials(avatarLabel)}
+                </div>
+                <div className="flex flex-col leading-tight">
+                  <span className="text-[11px] font-semibold text-[var(--vscode-sideBarTitle-foreground)] max-w-[150px] truncate">
+                    {userDisplayName}
+                  </span>
+                  {userSubLabel && (
+                    <span className="text-[10px] text-[var(--vscode-descriptionForeground)] max-w-[150px] truncate">
+                      {userSubLabel}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <>
+                <L0Logo
+                  className="h-4 w-4 text-[var(--vscode-icon-foreground)]"
+                  size={16}
+                />
+                <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--vscode-sideBarTitle-foreground)]">
+                  LanOnasis Memory
+                </span>
+              </>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -1508,14 +1543,6 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                       new Date(syncStatus.lastSyncAt).toISOString()
                     )}`
                   : "Not synced"}
-              </span>
-            )}
-            {userDisplayName && (
-              <span
-                className="text-[10px] text-[var(--vscode-descriptionForeground)] max-w-[120px] truncate"
-                title={userDisplayName}
-              >
-                {userDisplayName}
               </span>
             )}
             <Button

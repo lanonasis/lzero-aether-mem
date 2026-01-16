@@ -244,8 +244,97 @@ export class ApiKeyService {
         }
     }
 
-    async getUserInfo(): Promise<{ id: string; email: string; name?: string }> {
-        return this.makeRequest<{ id: string; email: string; name?: string }>('/api/v1/auth/me');
+    async getUserInfo(): Promise<{ id: string; email: string; name?: string } | null> {
+        const endpoints = [
+            '/v1/auth/me',
+            '/v1/auth/session',
+            '/api/v1/auth/me',
+            '/api/v1/auth/session'
+        ];
+        const methods: Array<'GET' | 'POST'> = ['GET', 'POST'];
+        let lastError: unknown;
+
+        for (const endpoint of endpoints) {
+            for (const method of methods) {
+                try {
+                    const response = await this.makeRequest<unknown>(endpoint, { method });
+                    const normalized = this.normalizeUserInfo(response);
+                    if (normalized) {
+                        return normalized;
+                    }
+                } catch (error) {
+                    lastError = error;
+                    const message = String(error);
+                    const isRetryable = message.includes('404') || message.includes('405') || message.includes('Method Not Allowed');
+                    if (isRetryable) {
+                        continue;
+                    }
+                }
+            }
+        }
+
+        if (lastError) {
+            throw lastError instanceof Error ? lastError : new Error(String(lastError));
+        }
+
+        return null;
+    }
+
+    private normalizeUserInfo(payload: unknown): { id: string; email: string; name?: string } | null {
+        if (!payload || typeof payload !== 'object') {
+            return null;
+        }
+
+        const asRecord = payload as Record<string, unknown>;
+        const direct = this.readUserFields(asRecord);
+        if (direct) return direct;
+
+        const data = asRecord.data;
+        if (data && typeof data === 'object') {
+            const fromData = this.readUserFields(data as Record<string, unknown>);
+            if (fromData) return fromData;
+        }
+
+        const session = asRecord.session;
+        if (session && typeof session === 'object') {
+            const fromSession = this.readUserFields(session as Record<string, unknown>);
+            if (fromSession) return fromSession;
+            const sessionUser = (session as Record<string, unknown>).user;
+            if (sessionUser && typeof sessionUser === 'object') {
+                const fromSessionUser = this.readUserFields(sessionUser as Record<string, unknown>);
+                if (fromSessionUser) return fromSessionUser;
+            }
+        }
+
+        const user = asRecord.user;
+        if (user && typeof user === 'object') {
+            const fromUser = this.readUserFields(user as Record<string, unknown>);
+            if (fromUser) return fromUser;
+        }
+
+        return null;
+    }
+
+    private readUserFields(source: Record<string, unknown>): { id: string; email: string; name?: string } | null {
+        const id = typeof source.id === 'string' ? source.id : typeof source.user_id === 'string' ? source.user_id : undefined;
+        const email = typeof source.email === 'string' ? source.email : typeof source.user_email === 'string' ? source.user_email : undefined;
+        const name = typeof source.name === 'string'
+            ? source.name
+            : typeof source.full_name === 'string'
+                ? source.full_name
+                : typeof source.username === 'string'
+                    ? source.username
+                    : undefined;
+
+        if (!id && !email && !name) {
+            return null;
+        }
+
+        return {
+            id: id || 'unknown',
+            email: email || 'unknown',
+            name,
+        };
     }
 
     private log(message: string): void {

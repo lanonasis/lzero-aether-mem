@@ -126,6 +126,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     private readonly context: vscode.ExtensionContext,
     private readonly output: vscode.OutputChannel,
     private readonly secureApiKeyService: SecureApiKeyService,
+    private readonly apiKeyService: ApiKeyService,
     private readonly cache: MemoryCache,
   ) { }
 
@@ -530,6 +531,16 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       if (credentials?.token) {
         authCredential = credentials.token;
         userProfile = getUserProfileFromToken(credentials.token);
+        if (!userProfile) {
+          try {
+            const apiUser = await this.apiKeyService.getUserInfo();
+            if (apiUser) {
+              userProfile = { id: apiUser.id, name: apiUser.name, email: apiUser.email };
+            }
+          } catch (error) {
+            this.output.appendLine('[LanOnasis] Failed to load user profile: ' + String(error));
+          }
+        }
         this.output.appendLine('[LanOnasis] Found stored credentials');
       }
     } catch (err) {
@@ -547,10 +558,22 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       const token = await this.secureApiKeyService.authenticateWithOAuthFlow();
       if (!token) throw new Error('No tokens received');
 
+      let userProfile = getUserProfileFromToken(token);
+      if (!userProfile) {
+        try {
+          const apiUser = await this.apiKeyService.getUserInfo();
+          if (apiUser) {
+            userProfile = { id: apiUser.id, name: apiUser.name, email: apiUser.email };
+          }
+        } catch (error) {
+          this.output.appendLine('[LanOnasis] Failed to load user profile: ' + String(error));
+        }
+      }
+
       webview.postMessage({ type: 'lanonasis:auth:result', payload: { success: true } });
       webview.postMessage({
         type: 'lanonasis:config:update',
-        payload: { apiKey: token, user: getUserProfileFromToken(token) },
+        payload: { apiKey: token, user: userProfile },
       });
       await vscode.window.showInformationMessage('LanOnasis: Connected via OAuth!');
     } catch (error) {
@@ -568,8 +591,17 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       }
 
       await this.secureApiKeyService.storeApiKeyDirect(apiKey);
+      let userProfile: UserProfile | null = null;
+      try {
+        const apiUser = await this.apiKeyService.getUserInfo();
+        if (apiUser) {
+          userProfile = { id: apiUser.id, name: apiUser.name, email: apiUser.email };
+        }
+      } catch (error) {
+        this.output.appendLine('[LanOnasis] Failed to load user profile: ' + String(error));
+      }
       webview.postMessage({ type: 'lanonasis:auth:result', payload: { success: true } });
-      webview.postMessage({ type: 'lanonasis:config:update', payload: { apiKey, user: null } });
+      webview.postMessage({ type: 'lanonasis:config:update', payload: { apiKey, user: userProfile } });
       await vscode.window.showInformationMessage('LanOnasis: Connected!');
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -668,7 +700,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const cache = new MemoryCache(context, output);
   memoryCacheInstance = cache;
 
-  const provider = new MemorySidebarProvider(context, output, secureApiKeyService, cache);
+  const provider = new MemorySidebarProvider(context, output, secureApiKeyService, apiKeyService, cache);
 
   const memoryTreeProvider = new MemoryTreeProvider(memoryService);
   const apiKeyTreeProvider = new ApiKeyTreeProvider(apiKeyService, output);
