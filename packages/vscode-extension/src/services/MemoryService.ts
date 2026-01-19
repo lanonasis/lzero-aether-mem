@@ -2,12 +2,42 @@ import type { OutputChannel } from 'vscode';
 import { SecureApiKeyService } from './SecureApiKeyService';
 import type { CreateMemoryRequest, MemoryEntry, MemorySearchResult, UpdateMemoryRequest } from '../types/memory-aligned';
 
+// Default timeout for API requests (30 seconds)
+const DEFAULT_TIMEOUT_MS = 30000;
+
 export class MemoryService {
     constructor(
         private readonly secureApiKeyService: SecureApiKeyService,
         private readonly output: OutputChannel,
         private readonly edgeFunctionsUrl: string,
     ) { }
+
+    /**
+     * Creates a fetch request with timeout support
+     */
+    private async fetchWithTimeout(
+        url: string,
+        options: RequestInit,
+        timeoutMs: number = DEFAULT_TIMEOUT_MS
+    ): Promise<Response> {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal,
+            });
+            return response;
+        } catch (error) {
+            if (error instanceof Error && error.name === 'AbortError') {
+                throw new Error(`Request timed out after ${timeoutMs}ms`);
+            }
+            throw error;
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
 
     async isAuthenticated(): Promise<boolean> {
         return await this.secureApiKeyService.hasApiKey();
@@ -34,10 +64,11 @@ export class MemoryService {
 
     async testConnection(): Promise<void> {
         const headers = await this.getAuthHeaders();
-        const response = await fetch(`${this.edgeFunctionsUrl}/functions/v1/system-health`, {
-            method: 'GET',
-            headers,
-        });
+        const response = await this.fetchWithTimeout(
+            `${this.edgeFunctionsUrl}/functions/v1/system-health`,
+            { method: 'GET', headers },
+            10000 // 10 second timeout for health checks
+        );
 
         if (!response.ok) {
             const body = await response.text();
@@ -47,10 +78,10 @@ export class MemoryService {
 
     async listMemories(limit: number = 100): Promise<MemoryEntry[]> {
         const headers = await this.getAuthHeaders();
-        const response = await fetch(`${this.edgeFunctionsUrl}/functions/v1/memory-list?limit=${limit}`, {
-            method: 'GET',
-            headers,
-        });
+        const response = await this.fetchWithTimeout(
+            `${this.edgeFunctionsUrl}/functions/v1/memory-list?limit=${limit}`,
+            { method: 'GET', headers }
+        );
 
         if (!response.ok) {
             const body = await response.text();
@@ -64,15 +95,18 @@ export class MemoryService {
 
     async searchMemories(query: string, options: { limit?: number; threshold?: number } = {}): Promise<MemorySearchResult[]> {
         const headers = await this.getAuthHeaders();
-        const response = await fetch(`${this.edgeFunctionsUrl}/functions/v1/memory-search`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-                query,
-                limit: options.limit ?? 10,
-                threshold: options.threshold ?? 0.7,
-            }),
-        });
+        const response = await this.fetchWithTimeout(
+            `${this.edgeFunctionsUrl}/functions/v1/memory-search`,
+            {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    query,
+                    limit: options.limit ?? 10,
+                    threshold: options.threshold ?? 0.7,
+                }),
+            }
+        );
 
         if (!response.ok) {
             const body = await response.text();
@@ -86,11 +120,14 @@ export class MemoryService {
 
     async createMemory(request: CreateMemoryRequest): Promise<MemoryEntry> {
         const headers = await this.getAuthHeaders();
-        const response = await fetch(`${this.edgeFunctionsUrl}/functions/v1/memory-create`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(request),
-        });
+        const response = await this.fetchWithTimeout(
+            `${this.edgeFunctionsUrl}/functions/v1/memory-create`,
+            {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(request),
+            }
+        );
 
         if (!response.ok) {
             const body = await response.text();
@@ -103,14 +140,17 @@ export class MemoryService {
 
     async updateMemory(id: string, updates: UpdateMemoryRequest): Promise<MemoryEntry> {
         const headers = await this.getAuthHeaders();
-        const response = await fetch(`${this.edgeFunctionsUrl}/functions/v1/memory-update`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-                id,
-                ...updates,
-            }),
-        });
+        const response = await this.fetchWithTimeout(
+            `${this.edgeFunctionsUrl}/functions/v1/memory-update`,
+            {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    id,
+                    ...updates,
+                }),
+            }
+        );
 
         if (!response.ok) {
             const body = await response.text();
@@ -123,11 +163,14 @@ export class MemoryService {
 
     async deleteMemory(id: string): Promise<void> {
         const headers = await this.getAuthHeaders();
-        const response = await fetch(`${this.edgeFunctionsUrl}/functions/v1/memory-delete`, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({ id }),
-        });
+        const response = await this.fetchWithTimeout(
+            `${this.edgeFunctionsUrl}/functions/v1/memory-delete`,
+            {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ id }),
+            }
+        );
 
         if (!response.ok) {
             const body = await response.text();
@@ -137,10 +180,10 @@ export class MemoryService {
 
     async getMemory(id: string): Promise<MemoryEntry> {
         const headers = await this.getAuthHeaders();
-        const response = await fetch(`${this.edgeFunctionsUrl}/functions/v1/memory-get?id=${encodeURIComponent(id)}`, {
-            method: 'GET',
-            headers,
-        });
+        const response = await this.fetchWithTimeout(
+            `${this.edgeFunctionsUrl}/functions/v1/memory-get?id=${encodeURIComponent(id)}`,
+            { method: 'GET', headers }
+        );
 
         if (!response.ok) {
             const body = await response.text();

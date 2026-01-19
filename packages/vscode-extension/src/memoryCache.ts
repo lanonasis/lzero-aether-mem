@@ -6,7 +6,8 @@
 
 import * as vscode from 'vscode';
 
-const SUPABASE_ORIGIN = 'https://lanonasis.supabase.co';
+// Use environment variable if available, fall back to default
+const SUPABASE_ORIGIN = process.env.SUPABASE_URL || 'https://mxtsdgkwzjzlttpotole.supabase.co';
 const SYSTEM_HEALTH_URL = `${SUPABASE_ORIGIN}/functions/v1/system-health`;
 
 export interface CachedMemory {

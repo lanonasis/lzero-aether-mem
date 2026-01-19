@@ -10,7 +10,8 @@ import { runDiagnostics, formatDiagnosticResults } from './utils/diagnostics';
 import type { MemoryEntry, MemorySearchResult } from './types/memory-aligned';
 
 // API configuration - Supabase edge functions direct URL
-const SUPABASE_URL = 'https://lanonasis.supabase.co';
+// Use environment variable if available, fall back to config or default
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mxtsdgkwzjzlttpotole.supabase.co';
 
 const getApiUrl = (): string => {
   const config = vscode.workspace.getConfiguration('lzero');
@@ -686,7 +687,15 @@ export async function activate(context: vscode.ExtensionContext) {
   output.appendLine('[LanOnasis] Extension activating...');
 
   const secureApiKeyService = new SecureApiKeyService(context, output);
-  void secureApiKeyService.initialize();
+
+  // Properly await initialization to ensure credentials are migrated before use
+  try {
+    await secureApiKeyService.initialize();
+    output.appendLine('[LanOnasis] SecureApiKeyService initialized successfully');
+  } catch (initError) {
+    output.appendLine(`[LanOnasis] SecureApiKeyService initialization warning: ${initError}`);
+    // Continue anyway - the extension can still work without migration
+  }
 
   const memoryService = new MemoryService(secureApiKeyService, output, getEdgeFunctionsUrl());
   const apiKeyService = new ApiKeyService(secureApiKeyService, output);
