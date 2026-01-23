@@ -289,9 +289,21 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     this.cache.setSyncing(true);
     webview.postMessage({ type: 'lanonasis:sync:start' });
 
+    // Master timeout for entire sync operation (60 seconds)
+    const syncTimeout = setTimeout(() => {
+      this.cache.setSyncing(false);
+      this.output.appendLine('[LanOnasis] Sync timed out after 60 seconds');
+      webview.postMessage({
+        type: 'lanonasis:sync:error',
+        payload: { error: 'Sync timed out after 60 seconds', isNetworkError: true }
+      });
+    }, 60000);
+
     try {
       const headers = await this.getEdgeAuthHeaders();
       if (!headers) {
+        clearTimeout(syncTimeout);
+        this.cache.setSyncing(false);
         webview.postMessage({ type: 'lanonasis:sync:error', payload: { error: 'Not authenticated' } });
         return;
       }
@@ -305,12 +317,12 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       for (const pending of pendingQueue) {
         try {
           if (pending._pending === 'create') {
-            // POST /functions/v1/memory-create
+            // POST /memories (REST API)
             const createController = new AbortController();
             const createTimeout = setTimeout(() => createController.abort(), 30000);
 
             try {
-              const createResponse = await fetch(`${apiUrl}/functions/v1/memory-create`, {
+              const createResponse = await fetch(`${apiUrl}/memories`, {
                 method: 'POST',
                 headers,
                 signal: createController.signal,
@@ -336,12 +348,12 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
               clearTimeout(createTimeout);
             }
           } else if (pending._pending === 'update') {
-            // POST /functions/v1/memory-update with id in body
+            // POST /memory/update (REST API)
             const updateController = new AbortController();
             const updateTimeout = setTimeout(() => updateController.abort(), 30000);
 
             try {
-              const updateResponse = await fetch(`${apiUrl}/functions/v1/memory-update`, {
+              const updateResponse = await fetch(`${apiUrl}/memory/update`, {
                 method: 'POST',
                 headers,
                 signal: updateController.signal,
@@ -366,12 +378,12 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
               clearTimeout(updateTimeout);
             }
           } else if (pending._pending === 'delete') {
-            // POST /functions/v1/memory-delete with id in body
+            // POST /memory/delete (REST API)
             const deleteController = new AbortController();
             const deleteTimeout = setTimeout(() => deleteController.abort(), 30000);
 
             try {
-              const deleteResponse = await fetch(`${apiUrl}/functions/v1/memory-delete`, {
+              const deleteResponse = await fetch(`${apiUrl}/memory/delete`, {
                 method: 'POST',
                 headers,
                 signal: deleteController.signal,
@@ -398,30 +410,44 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         this.output.appendLine(`[LanOnasis] Sync results: ${syncResults.success} succeeded, ${syncResults.failed} failed`);
       }
 
-      // Step 2: Fetch fresh data from API - GET /functions/v1/memory-list
-      const response = await fetch(`${apiUrl}/functions/v1/memory-list?limit=100`, { headers });
+      // Step 2: Fetch fresh data from API - GET /memories/list (REST API)
+      const listController = new AbortController();
+      const listTimeout = setTimeout(() => listController.abort(), 30000);
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+      try {
+        const response = await fetch(`${apiUrl}/memories/list?limit=100`, {
+          headers,
+          signal: listController.signal
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        // API returns { data: { memories: [...] } } or { memories: [...] }
+        const memories = (data.data?.memories || data.memories || data.data || data || []) as CachedMemory[];
+        await this.cache.updateFromApi(memories);
+        this.cache.setOnline(true);
+
+        clearTimeout(syncTimeout);
+        webview.postMessage({
+          type: 'lanonasis:sync:complete',
+          payload: { memories, status: this.cache.getStatus(), syncResults }
+        });
+      } finally {
+        clearTimeout(listTimeout);
       }
-
-      const data = await response.json();
-      // API returns { data: { memories: [...] } } or { memories: [...] }
-      const memories = (data.data?.memories || data.memories || data.data || data || []) as CachedMemory[];
-      await this.cache.updateFromApi(memories);
-      this.cache.setOnline(true);
-
-      webview.postMessage({
-        type: 'lanonasis:sync:complete',
-        payload: { memories, status: this.cache.getStatus(), syncResults }
-      });
     } catch (err) {
+      clearTimeout(syncTimeout);
       // Only mark as offline for network errors, not API errors (404, 401, etc.)
       const errorStr = String(err);
       const isNetworkError = errorStr.includes('fetch') ||
         errorStr.includes('network') ||
         errorStr.includes('ECONNREFUSED') ||
-        errorStr.includes('ETIMEDOUT');
+        errorStr.includes('ETIMEDOUT') ||
+        errorStr.includes('AbortError') ||
+        errorStr.includes('aborted');
       if (isNetworkError) {
         this.cache.setOnline(false);
       }
@@ -431,6 +457,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         payload: { error: errorStr, isNetworkError }
       });
     } finally {
+      clearTimeout(syncTimeout);
       this.cache.setSyncing(false);
     }
   }
@@ -446,12 +473,12 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         payload: { results: localResults, query }
       });
 
-      // Then try API semantic search using Supabase edge function
+      // Then try API semantic search via REST API
       const apiKey = await this.getStoredApiKey();
       const headers = await this.getEdgeAuthHeaders();
       if (headers) {
         const apiUrl = getMemoryApiUrl();
-        const response = await fetch(`${apiUrl}/functions/v1/memory-search`, {
+        const response = await fetch(`${apiUrl}/memories/search`, {
           method: 'POST',
           headers,
           body: JSON.stringify({

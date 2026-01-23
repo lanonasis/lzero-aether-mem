@@ -142,8 +142,8 @@ export class MemoryChatParticipant {
       const apiKey = await this.getApiKey();
       if (!apiKey) return [];
 
-      // Use POST /functions/v1/memory-search (Supabase edge function)
-      const response = await fetch(`${this.apiUrl}/functions/v1/memory-search`, {
+      // Use POST /memories/search (REST API)
+      const response = await fetch(`${this.apiUrl}/memories/search`, {
         method: 'POST',
         headers: {
           'X-API-Key': apiKey,
@@ -240,7 +240,7 @@ export class MemoryChatParticipant {
       const apiKey = await this.getApiKey();
       if (!apiKey) return;
 
-      const response = await fetch(`${this.apiUrl}/functions/v1/memory-create`, {
+      const response = await fetch(`${this.apiUrl}/memories`, {
         method: 'POST',
         headers: {
           'X-API-Key': apiKey,

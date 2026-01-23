@@ -2,7 +2,7 @@
   "name": "lzero-memory",
   "displayName": "L0 Memory",
   "description": "L0 / LanOnasis Memory-as-a-Service companion for VS Code (Desktop & Web)",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "publisher": "lanonasis",
   "private": true,
   "repository": {
