@@ -17,7 +17,8 @@ export class SecureApiKeyService {
     private static readonly AUTH_TOKEN_KEY = 'lzero.authToken';
     private static readonly REFRESH_TOKEN_KEY = 'lzero.refreshToken';
     private static readonly CREDENTIAL_TYPE_KEY = 'lzero.credentialType';
-    private static readonly CALLBACK_PORT = 8080;
+    // Ports to try for OAuth callback (in order of preference)
+    private static readonly CALLBACK_PORTS = [8080, 8081, 8082, 8083, 3000, 3001];
     private static readonly OAUTH_TIMEOUT_MS = 5 * 60 * 1000;
 
     private migrationCompleted = false;
@@ -333,6 +334,27 @@ export class SecureApiKeyService {
             return false;
         }
 
+        // Try multiple ports in case some are in use
+        for (const port of SecureApiKeyService.CALLBACK_PORTS) {
+            try {
+                const result = await this.tryPKCEWithPort(port);
+                return result;
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                if (message.includes('EADDRINUSE') || message.includes('already in use')) {
+                    this.log(`Port ${port} is in use, trying next port...`);
+                    continue;
+                }
+                // Non-port-related error - rethrow
+                throw error;
+            }
+        }
+
+        this.log('All callback ports are in use');
+        throw new Error('Unable to start OAuth callback server - all ports are in use. Please close some applications and try again.');
+    }
+
+    private async tryPKCEWithPort(port: number): Promise<boolean> {
         return new Promise((resolve, reject) => {
             let timeoutId: NodeJS.Timeout | undefined;
 
@@ -340,7 +362,7 @@ export class SecureApiKeyService {
                 const config = vscode.workspace.getConfiguration('lzero');
                 const authUrl = config.get<string>('authUrl') || 'https://auth.lanonasis.com';
                 const clientId = 'vscode-extension';
-                const redirectUri = `http://localhost:${SecureApiKeyService.CALLBACK_PORT}/callback`;
+                const redirectUri = `http://localhost:${port}/callback`;
 
                 const codeVerifier = this.generateCodeVerifier();
                 const state = this.generateState();
@@ -369,7 +391,7 @@ export class SecureApiKeyService {
                                 res.end('Missing URL');
                                 return;
                             }
-                            const url = new URL(req.url, `http://localhost:${SecureApiKeyService.CALLBACK_PORT}`);
+                            const url = new URL(req.url, `http://localhost:${port}`);
 
                             if (url.pathname === '/callback') {
                                 const code = url.searchParams.get('code');
@@ -438,14 +460,14 @@ export class SecureApiKeyService {
                         if (timeoutId) clearTimeout(timeoutId);
 
                         if (err.code === 'EADDRINUSE') {
-                            reject(new Error(`Port ${SecureApiKeyService.CALLBACK_PORT} is already in use. Please close any applications using this port and try again.`));
+                            reject(new Error(`Port ${port} is already in use. Please close any applications using this port and try again.`));
                         } else {
                             reject(new Error(`Failed to start OAuth callback server: ${err.message}`));
                         }
                     });
 
-                    server.listen(SecureApiKeyService.CALLBACK_PORT, 'localhost', () => {
-                        this.outputChannel.appendLine(`OAuth callback server listening on port ${SecureApiKeyService.CALLBACK_PORT}`);
+                    server.listen(port, 'localhost', () => {
+                        this.outputChannel.appendLine(`OAuth callback server listening on port ${port}`);
                         vscode.env.openExternal(vscode.Uri.parse(authUrlObj.toString()));
                     });
 

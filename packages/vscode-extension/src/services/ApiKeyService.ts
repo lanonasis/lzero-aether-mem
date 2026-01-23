@@ -45,9 +45,14 @@ export interface CreateProjectRequest {
     settings?: Record<string, unknown>;
 }
 
+// Default timeout for API requests (30 seconds)
+const DEFAULT_TIMEOUT_MS = 30000;
+
 export class ApiKeyService {
     private config: vscode.WorkspaceConfiguration;
     private baseUrl: string = 'https://api.lanonasis.com';
+    private userInfoCache: { id: string; email: string; name?: string } | null = null;
+    private userInfoCacheExpiry: number = 0;
 
     constructor(
         private readonly secureApiKeyService: SecureApiKeyService,
@@ -55,6 +60,33 @@ export class ApiKeyService {
     ) {
         this.config = vscode.workspace.getConfiguration('lzero');
         this.updateConfig();
+    }
+
+    /**
+     * Creates a fetch request with timeout support
+     */
+    private async fetchWithTimeout(
+        url: string,
+        options: RequestInit,
+        timeoutMs: number = DEFAULT_TIMEOUT_MS
+    ): Promise<Response> {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const response = await fetch(url, {
+                ...options,
+                signal: controller.signal,
+            });
+            return response;
+        } catch (error) {
+            if (error instanceof Error && error.name === 'AbortError') {
+                throw new Error(`Request timed out after ${timeoutMs}ms`);
+            }
+            throw error;
+        } finally {
+            clearTimeout(timeoutId);
+        }
     }
 
     private updateConfig(): void {
@@ -70,7 +102,7 @@ export class ApiKeyService {
         this.updateConfig();
     }
 
-    private async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    private async makeRequest<T>(endpoint: string, options: RequestInit = {}, timeoutMs: number = DEFAULT_TIMEOUT_MS): Promise<T> {
         const credentials = await this.resolveCredentials();
         const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
         const url = `${this.baseUrl}${normalizedEndpoint}`;
@@ -78,14 +110,14 @@ export class ApiKeyService {
             ? { 'Authorization': `Bearer ${credentials.token}` }
             : { 'X-API-Key': credentials.token };
 
-        const response = await fetch(url, {
+        const response = await this.fetchWithTimeout(url, {
             ...options,
             headers: {
                 'Content-Type': 'application/json',
                 ...authHeaders,
                 ...options.headers
             }
-        });
+        }, timeoutMs);
 
         if (!response.ok) {
             const errorText = await response.text();
@@ -216,14 +248,18 @@ export class ApiKeyService {
             const credentials = await this.resolveCredentials();
 
             if (credentials.type === 'oauth') {
-                const response = await fetch(`${this.baseUrl}/oauth/introspect`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'Authorization': `Bearer ${credentials.token}`
+                const response = await this.fetchWithTimeout(
+                    `${this.baseUrl}/oauth/introspect`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'Authorization': `Bearer ${credentials.token}`
+                        },
+                        body: new URLSearchParams({ token: credentials.token })
                     },
-                    body: new URLSearchParams({ token: credentials.token })
-                });
+                    10000 // 10s timeout for connection test
+                );
 
                 if (!response.ok) {
                     const body = await response.text();
@@ -235,7 +271,7 @@ export class ApiKeyService {
                 return data.active === true;
             }
 
-            await this.makeRequest<{ status: string }>('/health');
+            await this.makeRequest<{ status: string }>('/health', {}, 10000);
             return true;
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -244,40 +280,67 @@ export class ApiKeyService {
         }
     }
 
-    async getUserInfo(): Promise<{ id: string; email: string; name?: string } | null> {
-        const endpoints = [
-            '/v1/auth/me',
-            '/v1/auth/session',
-            '/api/v1/auth/me',
-            '/api/v1/auth/session'
+    /**
+     * Get user info with caching and smart endpoint selection.
+     * Results are cached for 5 minutes to avoid redundant API calls.
+     */
+    async getUserInfo(forceRefresh: boolean = false): Promise<{ id: string; email: string; name?: string } | null> {
+        // Check cache first (5 minute TTL)
+        const now = Date.now();
+        if (!forceRefresh && this.userInfoCache && this.userInfoCacheExpiry > now) {
+            return this.userInfoCache;
+        }
+
+        // Try most likely endpoints first (prioritize GET /api/v1/auth/me)
+        const endpointConfigs: Array<{ endpoint: string; method: 'GET' | 'POST' }> = [
+            { endpoint: '/api/v1/auth/me', method: 'GET' },
+            { endpoint: '/api/v1/auth/session', method: 'GET' },
+            { endpoint: '/v1/auth/me', method: 'GET' },
+            { endpoint: '/v1/auth/session', method: 'GET' },
         ];
-        const methods: Array<'GET' | 'POST'> = ['GET', 'POST'];
+
         let lastError: unknown;
 
-        for (const endpoint of endpoints) {
-            for (const method of methods) {
-                try {
-                    const response = await this.makeRequest<unknown>(endpoint, { method });
-                    const normalized = this.normalizeUserInfo(response);
-                    if (normalized) {
-                        return normalized;
-                    }
-                } catch (error) {
-                    lastError = error;
-                    const message = String(error);
-                    const isRetryable = message.includes('404') || message.includes('405') || message.includes('Method Not Allowed');
-                    if (isRetryable) {
-                        continue;
-                    }
+        for (const { endpoint, method } of endpointConfigs) {
+            try {
+                const response = await this.makeRequest<unknown>(endpoint, { method }, 10000); // 10s timeout for user info
+                const normalized = this.normalizeUserInfo(response);
+                if (normalized) {
+                    // Cache successful result for 5 minutes
+                    this.userInfoCache = normalized;
+                    this.userInfoCacheExpiry = now + 5 * 60 * 1000;
+                    this.log(`User info retrieved from ${endpoint}`);
+                    return normalized;
+                }
+            } catch (error) {
+                lastError = error;
+                const message = String(error);
+                // Only continue on 404/405 errors, fail fast on auth errors
+                const isRetryable = message.includes('404') || message.includes('405') || message.includes('Method Not Allowed');
+                if (!isRetryable) {
+                    // Auth error or server error - don't try more endpoints
+                    break;
                 }
             }
         }
+
+        // Clear cache on failure
+        this.userInfoCache = null;
+        this.userInfoCacheExpiry = 0;
 
         if (lastError) {
             throw lastError instanceof Error ? lastError : new Error(String(lastError));
         }
 
         return null;
+    }
+
+    /**
+     * Clear the user info cache (e.g., on logout)
+     */
+    clearUserInfoCache(): void {
+        this.userInfoCache = null;
+        this.userInfoCacheExpiry = 0;
     }
 
     private normalizeUserInfo(payload: unknown): { id: string; email: string; name?: string } | null {
