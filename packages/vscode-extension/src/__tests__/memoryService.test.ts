@@ -26,7 +26,7 @@ describe('MemoryService', () => {
     it('lists memories using OAuth header', async () => {
         const fetchMock = vi.fn().mockResolvedValue({
             ok: true,
-            json: async () => ({ data: { memories: [createMemory()] } }),
+            json: async () => ({ data: [createMemory()] }),
         });
         vi.stubGlobal('fetch', fetchMock);
 
@@ -38,7 +38,7 @@ describe('MemoryService', () => {
         const service = new MemoryService(
             secureApiKeyService as any,
             createOutput(),
-            'https://lanonasis.supabase.co',
+            'https://api.lanonasis.com/api/v1',
         );
 
         const memories = await service.listMemories();
@@ -46,14 +46,14 @@ describe('MemoryService', () => {
         expect(memories).toHaveLength(1);
         expect(fetchMock).toHaveBeenCalledTimes(1);
         const [url, init] = fetchMock.mock.calls[0];
-        expect(url).toContain('/functions/v1/memory-list?limit=100');
+        expect(url).toContain('/memories/list?limit=100');
         expect(init?.headers).toMatchObject({ Authorization: 'Bearer oauth-token' });
     });
 
-    it('creates memories with API key header', async () => {
+    it('creates memories with API key using Bearer header', async () => {
         const fetchMock = vi.fn().mockResolvedValue({
             ok: true,
-            json: async () => ({ memory: createMemory({ id: 'mem-2' }) }),
+            json: async () => ({ data: createMemory({ id: 'mem-2' }) }),
         });
         vi.stubGlobal('fetch', fetchMock);
 
@@ -64,7 +64,7 @@ describe('MemoryService', () => {
         const service = new MemoryService(
             secureApiKeyService as any,
             createOutput(),
-            'https://lanonasis.supabase.co',
+            'https://api.lanonasis.com/api/v1',
         );
 
         const created = await service.createMemory({
@@ -75,8 +75,10 @@ describe('MemoryService', () => {
         });
 
         expect(created.id).toBe('mem-2');
-        const [, init] = fetchMock.mock.calls[0];
-        expect(init?.headers).toMatchObject({ 'X-API-Key': 'lano_test' });
+        const [url, init] = fetchMock.mock.calls[0];
+        expect(url).toContain('/memories');
+        // API keys also use Bearer authorization
+        expect(init?.headers).toMatchObject({ Authorization: 'Bearer lano_test' });
     });
 
     it('throws on failed API response', async () => {
@@ -94,7 +96,7 @@ describe('MemoryService', () => {
         const service = new MemoryService(
             secureApiKeyService as any,
             createOutput(),
-            'https://lanonasis.supabase.co',
+            'https://api.lanonasis.com/api/v1',
         );
 
         await expect(service.listMemories()).rejects.toThrow('List memories failed');

@@ -9,31 +9,23 @@ import { ApiKeyTreeProvider, ApiKeyTreeItem, ProjectTreeItem } from './providers
 import { runDiagnostics, formatDiagnosticResults } from './utils/diagnostics';
 import type { MemoryEntry, MemorySearchResult } from './types/memory-aligned';
 
-// API configuration - Supabase edge functions direct URL
-// Use environment variable if available, fall back to config or default
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mxtsdgkwzjzlttpotole.supabase.co';
+// API configuration
+// Default to the public API URL
+const DEFAULT_API_URL = 'https://api.lanonasis.com';
 
 const getApiUrl = (): string => {
   const config = vscode.workspace.getConfiguration('lzero');
-  // Allow override via settings, default to direct Supabase
-  return config.get<string>('apiUrl') || SUPABASE_URL;
+  return config.get<string>('apiUrl') || DEFAULT_API_URL;
 };
 
-const getEdgeFunctionsUrl = (): string => {
+const getMemoryApiUrl = (): string => {
   const config = vscode.workspace.getConfiguration('lzero');
-  const configured = config.get<string>('apiUrl') || SUPABASE_URL;
-
-  if (configured.includes('supabase.co')) {
-    return configured.replace(/\/functions\/v1\/?$/, '');
+  const apiUrl = config.get<string>('apiUrl') || DEFAULT_API_URL;
+  // Ensure we have the /api/v1 path
+  if (apiUrl.endsWith('/api/v1')) {
+    return apiUrl;
   }
-
-  if (configured.includes('/functions/v1')) {
-    return configured.replace(/\/functions\/v1\/?$/, '');
-  }
-
-  // If apiUrl points to the public API (e.g. https://api.lanonasis.com),
-  // fall back to the Supabase edge base for function calls.
-  return SUPABASE_URL;
+  return `${apiUrl.replace(/\/$/, '')}/api/v1`;
 };
 
 const getDashboardUrl = (): string => {
@@ -44,9 +36,9 @@ const getDashboardUrl = (): string => {
 // Get base URL without /api/v1 (for memory-client SDK which adds it internally)
 const getApiBaseUrl = (): string => {
   const config = vscode.workspace.getConfiguration('lzero');
-  const configUrl = config.get<string>('apiUrl') || SUPABASE_URL;
+  const configUrl = config.get<string>('apiUrl') || DEFAULT_API_URL;
   // Strip /api/v1 suffix if present (for SDK compatibility)
-  return configUrl.replace(/\/api\/v1\/?$/, '').replace(/\/functions\/v1\/?$/, '');
+  return configUrl.replace(/\/api\/v1\/?$/, '');
 };
 
 const VALID_API_KEY_PREFIXES = ['lano_', 'lns_'] as const;
@@ -304,7 +296,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         return;
       }
 
-      const apiUrl = getEdgeFunctionsUrl();
+      const apiUrl = getMemoryApiUrl();
 
       // Step 1: Push pending changes to API (using Supabase edge functions)
       const pendingQueue = this.cache.getPendingQueue();
@@ -458,7 +450,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       const apiKey = await this.getStoredApiKey();
       const headers = await this.getEdgeAuthHeaders();
       if (headers) {
-        const apiUrl = getEdgeFunctionsUrl();
+        const apiUrl = getMemoryApiUrl();
         const response = await fetch(`${apiUrl}/functions/v1/memory-search`, {
           method: 'POST',
           headers,
@@ -697,7 +689,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Continue anyway - the extension can still work without migration
   }
 
-  const memoryService = new MemoryService(secureApiKeyService, output, getEdgeFunctionsUrl());
+  const memoryService = new MemoryService(secureApiKeyService, output, getMemoryApiUrl());
   const apiKeyService = new ApiKeyService(secureApiKeyService, output);
 
   // Read retainContextWhenHidden setting (default false)
@@ -706,7 +698,7 @@ export async function activate(context: vscode.ExtensionContext) {
     .get<boolean>('retainContextWhenHidden', false);
 
   // Initialize memory cache
-  const cache = new MemoryCache(context, output);
+  const cache = new MemoryCache(context, output, getMemoryApiUrl());
   memoryCacheInstance = cache;
 
   const provider = new MemorySidebarProvider(context, output, secureApiKeyService, apiKeyService, cache);

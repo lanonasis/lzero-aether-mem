@@ -6,10 +6,6 @@
 
 import * as vscode from 'vscode';
 
-// Use environment variable if available, fall back to default
-const SUPABASE_ORIGIN = process.env.SUPABASE_URL || 'https://mxtsdgkwzjzlttpotole.supabase.co';
-const SYSTEM_HEALTH_URL = `${SUPABASE_ORIGIN}/functions/v1/system-health`;
-
 export interface CachedMemory {
   id: string;
   title: string;
@@ -47,6 +43,7 @@ export class MemoryCache {
   constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly output: vscode.OutputChannel,
+    private readonly apiUrl: string = 'https://api.lanonasis.com/api/v1',
   ) {
     this.loadFromStorage();
     this.setupNetworkListener();
@@ -99,7 +96,9 @@ export class MemoryCache {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-        const response = await fetch(SYSTEM_HEALTH_URL, {
+        const healthUrl = `${this.apiUrl}/health`;
+
+        const response = await fetch(healthUrl, {
           method: 'GET',
           signal: controller.signal,
         });
