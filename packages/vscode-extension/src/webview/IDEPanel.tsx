@@ -1586,28 +1586,28 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
           {isAssistantOpen && (
             <div
               ref={chatContainerRef}
-              className="min-h-[120px] max-h-[200px] overflow-y-auto p-3 space-y-3"
+              className="min-h-[120px] max-h-[200px] overflow-y-auto p-3 space-y-3 bg-[var(--vscode-sideBar-background)]"
             >
               {chatMessages.length === 0 ? (
-                <div className="text-[13px] text-[var(--vscode-descriptionForeground)] flex flex-col items-center justify-center text-center py-4">
+                <div className="text-[13px] text-[var(--vscode-foreground)] flex flex-col items-center justify-center text-center py-4">
                   {isAuthenticated ? (
                     <>
                       <div className="text-[var(--vscode-button-background)] mb-2">
                         {icons.lightbulb}
                       </div>
-                      <p className="italic opacity-80">
+                      <p className="italic opacity-90">
                         Ask me to find or save memories
                       </p>
-                      <p className="text-[11px] mt-1 opacity-60">
+                      <p className="text-[11px] mt-1 opacity-70">
                         Try: "find my OAuth notes"
                       </p>
                     </>
                   ) : (
                     <>
-                      <p className="italic opacity-80">
+                      <p className="italic opacity-90">
                         Local mode: search cached memories or save new ones.
                       </p>
-                      <p className="text-[11px] mt-1 opacity-60">
+                      <p className="text-[11px] mt-1 opacity-70">
                         Connect for full AI search and sync.
                       </p>
                     </>
