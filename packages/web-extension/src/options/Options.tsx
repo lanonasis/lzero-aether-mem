@@ -6,9 +6,41 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Key, LogOut, Check, AlertCircle, Loader2 } from 'lucide-react';
 
+function normalizeApiUrl(raw: string): { ok: true; value: string; changed: boolean } | { ok: false; error: string } {
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: false, error: 'API URL is required' };
+  try {
+    const u = new URL(trimmed);
+    // The SDK appends `/api/v1`, so store the origin as the configured base.
+    const normalized = u.origin;
+    return { ok: true, value: normalized, changed: normalized !== trimmed };
+  } catch {
+    return { ok: false, error: 'Invalid API URL' };
+  }
+}
+
+async function ensureHostPermissionForOrigin(origin: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const pattern = `${origin}/*`;
+
+  // If the permissions API isn't available (or not declared), don't hard-fail.
+  if (!chrome.permissions?.contains || !chrome.permissions?.request) {
+    return { ok: true };
+  }
+
+  try {
+    const already = await chrome.permissions.contains({ origins: [pattern] });
+    if (already) return { ok: true };
+
+    const granted = await chrome.permissions.request({ origins: [pattern] });
+    return granted ? { ok: true } : { ok: false, error: `Permission denied for ${origin}` };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Permission check/request failed' };
+  }
+}
+
 export const Options: React.FC = () => {
   const [apiKey, setApiKey] = useState('');
-  const [apiUrl, setApiUrl] = useState('https://api.lanonasis.com/api/v1');
+  const [apiUrl, setApiUrl] = useState('https://api.lanonasis.com');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -38,8 +70,29 @@ export const Options: React.FC = () => {
         return;
       }
 
+      const normalized = normalizeApiUrl(apiUrl);
+      if (!normalized.ok) {
+        setMessage({ type: 'error', text: normalized.error });
+        setIsSaving(false);
+        return;
+      }
+
+      // If the user points to a non-default API origin, ensure we have host permission.
+      // Default LanOnasis API is already included in required host_permissions.
+      if (normalized.value !== 'https://api.lanonasis.com') {
+        const perm = await ensureHostPermissionForOrigin(normalized.value);
+        if (!perm.ok) {
+          setMessage({
+            type: 'error',
+            text: `Cannot access API URL without host permission. ${perm.error}`,
+          });
+          setIsSaving(false);
+          return;
+        }
+      }
+
       // Save settings
-      const updates: Record<string, string> = { apiUrl };
+      const updates: Record<string, string> = { apiUrl: normalized.value };
       
       if (apiKey && !apiKey.startsWith('••')) {
         updates.authToken = apiKey;
@@ -52,7 +105,13 @@ export const Options: React.FC = () => {
         setApiKey('••••••••••••••••');
       }
 
-      setMessage({ type: 'success', text: 'Settings saved successfully!' });
+      setApiUrl(normalized.value);
+      setMessage({
+        type: 'success',
+        text: normalized.changed
+          ? `Settings saved. API URL normalized to ${normalized.value}`
+          : 'Settings saved successfully!',
+      });
 
       // Trigger sync
       chrome.runtime.sendMessage({ type: 'SYNC_MEMORIES' });
@@ -154,7 +213,7 @@ export const Options: React.FC = () => {
               className="w-full bg-[#1E1E1E] border border-[#3C3C3C] rounded-lg px-4 py-3 text-white placeholder:text-gray-500 focus:outline-none focus:border-[#007ACC]"
             />
             <p className="text-xs text-gray-500 mt-2">
-              Default: https://api.lanonasis.com/api/v1
+              Default: https://api.lanonasis.com
             </p>
           </div>
         </div>

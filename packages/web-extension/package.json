@@ -9,9 +9,9 @@
     "build": "tsc && vite build",
     "build:chrome": "BROWSER=chrome vite build",
     "build:firefox": "BROWSER=firefox vite build",
-    "package": "npm run build && node scripts/package.js",
-    "package:chrome": "npm run build:chrome && cd dist && zip -r ../lzero-memory-chrome.zip .",
-    "package:firefox": "npm run build:firefox && cd dist && zip -r ../lzero-memory-firefox.zip .",
+    "package": "bun run build && node scripts/package.js",
+    "package:chrome": "bun run build:chrome && cd dist && zip -r ../lzero-memory-chrome.zip .",
+    "package:firefox": "bun run build:firefox && cd dist && zip -r ../lzero-memory-firefox.zip .",
     "lint": "eslint . --ext ts,tsx",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -19,7 +19,7 @@
     "clean": "rm -rf dist *.zip"
   },
   "dependencies": {
-    "@lanonasis/memory-client": "^2.0.0",
+    "@lanonasis/memory-client": "^2.2.0",
     "@lanonasis/shared": "workspace:*",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-scroll-area": "^1.2.10",

@@ -61,6 +61,10 @@
     "https://auth.lanonasis.com/*"
   ],
 
+  "optional_host_permissions": [
+    "<all_urls>"
+  ],
+
   "omnibox": {
     "keyword": "mem"
   },
@@ -97,7 +101,8 @@
   ],
 
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'"
+    "extension_pages": "script-src 'self'; object-src 'self'",
+    "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; object-src 'self'"
   },
 
   "minimum_chrome_version": "114"

@@ -6,8 +6,6 @@
 
 import { openDB, type IDBPDatabase, type DBSchema } from 'idb';
 import {
-  createMemoryClient,
-  type CoreMemoryClient,
   type MemoryEntry,
 } from '@lanonasis/memory-client';
 
@@ -61,14 +59,58 @@ interface MemoryDB extends DBSchema {
 
 const DB_NAME = 'l0-memory-cache';
 const DB_VERSION = 2;
-const API_URL = 'https://lanonasis.supabase.co';
+const DEFAULT_API_URL = 'https://api.lanonasis.com';
+const DEFAULT_TIMEOUT_MS = 15000;
+
+function normalizeApiUrl(raw: string): string {
+  // The SDK always appends `/api/v1`, so treat the configured URL as a base origin.
+  // Users often paste `.../api` or `.../api/v1`; normalize those to the origin.
+  try {
+    const u = new URL(raw.trim());
+    return u.origin;
+  } catch {
+    return raw.trim();
+  }
+}
+
+type ApiResult<T> = { data?: T; error?: string };
 
 export class MemoryCache {
   private db: IDBPDatabase<MemoryDB> | null = null;
-  private client: CoreMemoryClient | null = null;
   private isOnline = true;
   private isSyncing = false;
   private lastSyncAt: number | null = null;
+  private networkListenersInstalled = false;
+
+  constructor() {
+    // Register listeners synchronously during the worker's initial evaluation.
+    // Chrome warns if these are added after an `await` in an async initializer.
+    this.refreshOnlineStatus();
+    this.installNetworkListeners();
+  }
+
+  private refreshOnlineStatus(): void {
+    // `navigator.onLine` is not guaranteed in every worker runtime; guard it.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const online = (navigator as any)?.onLine;
+      if (typeof online === 'boolean') this.isOnline = online;
+    } catch {
+      // Keep previous value
+    }
+  }
+
+  private installNetworkListeners(): void {
+    if (this.networkListenersInstalled) return;
+    this.networkListenersInstalled = true;
+
+    self.addEventListener('online', () => {
+      this.isOnline = true;
+    });
+    self.addEventListener('offline', () => {
+      this.isOnline = false;
+    });
+  }
 
   async init(): Promise<void> {
     this.db = await openDB<MemoryDB>(DB_NAME, DB_VERSION, {
@@ -94,43 +136,83 @@ export class MemoryCache {
     const meta = await this.db.get('meta', 'lastSyncAt');
     this.lastSyncAt = (meta as number) || null;
 
-    // Check online status
-    this.isOnline = navigator.onLine;
-    self.addEventListener('online', () => { this.isOnline = true; });
-    self.addEventListener('offline', () => { this.isOnline = false; });
+    // Refresh online status (listeners are installed in the constructor).
+    this.refreshOnlineStatus();
 
     console.log('[MemoryCache] Initialized');
   }
 
   /**
-   * Get or create the memory client with current auth token
+   * Get auth + API url from extension storage.
    */
-  private async getClient(): Promise<CoreMemoryClient | null> {
-    const { authToken } = await chrome.storage.local.get('authToken');
+  private async getAuthConfig(): Promise<{ token: string; apiUrl: string } | null> {
+    const { authToken, apiUrl } = await chrome.storage.local.get(['authToken', 'apiUrl']);
     if (!authToken) {
-      console.log('[MemoryCache] No auth token available');
+      console.log('[MemoryCache] No API key available');
       return null;
     }
 
-    if (!this.client) {
-      this.client = createMemoryClient({
-        apiUrl: API_URL,
-        authToken,
-        timeout: 15000,
-        onError: (error) => {
-          console.error('[MemoryCache] API Error:', error.message, error);
-          // Mark offline only for network errors
-          if (error.message?.includes('fetch') || error.message?.includes('network')) {
-            this.isOnline = false;
-          }
+    const effectiveApiUrl = normalizeApiUrl(apiUrl || DEFAULT_API_URL);
+    return { token: authToken, apiUrl: effectiveApiUrl };
+  }
+
+  /**
+   * Browser-extension safe API request helper.
+   * We intentionally do not set forbidden headers (like User-Agent).
+   */
+  private async apiRequest<T>(
+    endpoint: string,
+    init: RequestInit & { timeoutMs?: number } = {}
+  ): Promise<ApiResult<T>> {
+    const cfg = await this.getAuthConfig();
+    if (!cfg) return { error: 'No auth token' };
+
+    const url = `${cfg.apiUrl}/api/v1${endpoint}`;
+    console.log('[MemoryCache] API Request:', url);
+
+    const controller = new AbortController();
+    const timeoutMs = init.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const res = await fetch(url, {
+        ...init,
+        // Prevent any accidental cookie credential involvement from impacting CORS.
+        credentials: 'omit',
+        cache: 'no-store',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': cfg.token,
+          ...(init.headers || {}),
         },
       });
-    } else {
-      // Update token in case it changed
-      this.client.setAuthToken(authToken);
-    }
 
-    return this.client;
+      clearTimeout(timeoutId);
+
+      const contentType = res.headers.get('content-type') || '';
+      const body = contentType.includes('application/json') ? await res.json() : await res.text();
+
+      if (!res.ok) {
+        const message =
+          typeof body === 'object' && body && 'error' in body
+            ? String((body as any).error)
+            : `HTTP ${res.status}: ${res.statusText}`;
+        return { error: message };
+      }
+
+      this.isOnline = true;
+      return { data: body as T };
+    } catch (err) {
+      clearTimeout(timeoutId);
+
+      const message = err instanceof Error ? err.message : 'Network error';
+      console.error('[MemoryCache] API Error:', message, err);
+      if (message.toLowerCase().includes('fetch') || message.toLowerCase().includes('network')) {
+        this.isOnline = false;
+      }
+      return { error: message };
+    }
   }
 
   getStatus(): SyncStatus {
@@ -291,8 +373,8 @@ export class MemoryCache {
     console.log('[MemoryCache] Starting sync...');
 
     try {
-      const client = await this.getClient();
-      if (!client) {
+      const cfg = await this.getAuthConfig();
+      if (!cfg) {
         console.log('[MemoryCache] No auth token, skipping sync');
         return;
       }
@@ -303,8 +385,11 @@ export class MemoryCache {
         await this.syncOne(mem);
       }
 
-      // Fetch latest from API using SDK
-      const response = await client.listMemories({ limit: 100 });
+      // Fetch latest from API
+      const response = await this.apiRequest<{ data: MemoryEntry[]; pagination?: unknown }>(
+        '/memory?limit=100',
+        { method: 'GET' }
+      );
 
       if (response.data) {
         const memories = response.data.data.map((m: MemoryEntry) => ({
@@ -317,6 +402,8 @@ export class MemoryCache {
           updated_at: m.updated_at,
         })) as CachedMemory[];
         await this.updateFromApi(memories);
+      } else if (response.error) {
+        console.warn('[MemoryCache] Sync list failed:', response.error);
       }
     } catch (err) {
       console.error('[MemoryCache] Sync error:', err);
@@ -327,15 +414,18 @@ export class MemoryCache {
 
   private async syncOne(memory: CachedMemory): Promise<void> {
     try {
-      const client = await this.getClient();
-      if (!client) return;
+      const cfg = await this.getAuthConfig();
+      if (!cfg) return;
 
-      // Use SDK to create memory
-      const response = await client.createMemory({
-        title: memory.title,
-        content: memory.content,
-        memory_type: memory.memory_type as 'context' | 'project' | 'knowledge' | 'reference' | 'personal' | 'workflow',
-        tags: memory.tags,
+      // Create memory
+      const response = await this.apiRequest<MemoryEntry>('/memory', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: memory.title,
+          content: memory.content,
+          memory_type: memory.memory_type as 'context' | 'project' | 'knowledge' | 'reference' | 'personal' | 'workflow',
+          tags: memory.tags,
+        }),
       });
 
       if (response.data) {
@@ -350,6 +440,8 @@ export class MemoryCache {
         };
         await this.markSynced(memory.id, serverMemory);
         console.log('[MemoryCache] Synced memory:', memory.title);
+      } else if (response.error) {
+        console.warn('[MemoryCache] Create failed:', response.error);
       }
     } catch (err) {
       console.error('[MemoryCache] Failed to sync memory:', err);
@@ -361,18 +453,24 @@ export class MemoryCache {
    */
   async searchWithApi(query: string): Promise<CachedMemory[]> {
     try {
-      const client = await this.getClient();
-      if (!client || !this.isOnline) {
+      const cfg = await this.getAuthConfig();
+      if (!cfg || !this.isOnline) {
         // Fallback to local search
         return this.searchLocalAsync(query);
       }
 
-      const response = await client.searchMemories({
-        query,
-        limit: 10,
-        status: 'active',
-        threshold: 0.5,
-      });
+      const response = await this.apiRequest<{ results: MemoryEntry[] }>(
+        '/memory/search',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            query,
+            limit: 10,
+            status: 'active',
+            threshold: 0.5,
+          }),
+        }
+      );
 
       if (response.data?.results) {
         return response.data.results.map((r) => ({
@@ -465,12 +563,6 @@ export class MemoryCache {
     await this.db!.clear('embeddings');
     await this.db!.clear('meta');
     this.lastSyncAt = null;
-
-    // Clear client auth
-    if (this.client) {
-      this.client.clearAuth();
-      this.client = null;
-    }
   }
 }
 

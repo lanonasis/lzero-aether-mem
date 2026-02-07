@@ -10,7 +10,7 @@ function fixHtmlPaths() {
     name: 'fix-html-paths',
     closeBundle() {
       const distDir = path.resolve(__dirname, 'dist');
-      const htmlDirs = ['src/popup', 'src/sidepanel', 'src/options'];
+      const htmlDirs = ['src/popup', 'src/sidepanel', 'src/options', 'src/offscreen'];
 
       htmlDirs.forEach(dir => {
         const htmlPath = path.resolve(distDir, dir, 'index.html');
@@ -92,6 +92,7 @@ export default defineConfig({
         popup: path.resolve(__dirname, 'src/popup/index.html'),
         sidepanel: path.resolve(__dirname, 'src/sidepanel/index.html'),
         options: path.resolve(__dirname, 'src/options/index.html'),
+        offscreen: path.resolve(__dirname, 'src/offscreen/index.html'),
         background: path.resolve(__dirname, 'src/background/index.ts'),
         content: path.resolve(__dirname, 'src/content/index.ts'),
       },

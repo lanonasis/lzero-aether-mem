@@ -1,16 +1,15 @@
 /**
  * Semantic Search Hook for Web Extension
- * Uses LocalEmbeddingEngine from @lanonasis/shared for on-device AI search
+ * Uses offscreen document for on-device AI to bypass CSP restrictions.
  *
  * Progressive enhancement:
- * 1. Local AI embeddings (when ready)
- * 2. API semantic search (when online)
+ * 1. API semantic search (primary - when online)
+ * 2. Local AI embeddings via offscreen (when offline and AI ready)
  * 3. Keyword matching (fallback)
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { openDB, type IDBPDatabase } from 'idb';
-import { getLocalAIEngine, type LocalEmbeddingEngine } from '@lanonasis/shared';
 
 interface CachedEmbedding {
   id: string;
@@ -63,6 +62,23 @@ function hashContent(content: string): string {
   return hash.toString(36);
 }
 
+// Cosine similarity calculation
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length) return 0;
+
+  let dotProduct = 0;
+  let normA = 0;
+  let normB = 0;
+
+  for (let i = 0; i < a.length; i++) {
+    dotProduct += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+
+  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
 export function useSemanticSearch() {
   const [state, setState] = useState<SemanticSearchState>({
     isAIReady: false,
@@ -72,9 +88,8 @@ export function useSemanticSearch() {
     deviceInfo: '',
   });
 
-  const engineRef = useRef<LocalEmbeddingEngine | null>(null);
   const dbRef = useRef<IDBPDatabase<EmbeddingDB> | null>(null);
-  const initPromiseRef = useRef<Promise<void> | null>(null);
+  const initAttempted = useRef(false);
 
   // Initialize IndexedDB for embedding storage
   const initDB = useCallback(async () => {
@@ -91,73 +106,109 @@ export function useSemanticSearch() {
     return dbRef.current;
   }, []);
 
-  // Initialize the AI engine
+  // Initialize AI via background script (which uses offscreen document)
   const initializeAI = useCallback(async () => {
-    if (initPromiseRef.current) return initPromiseRef.current;
-    if (state.isAIReady || state.isAILoading) return;
+    if (state.isAIReady || state.isAILoading || initAttempted.current) return;
 
-    initPromiseRef.current = (async () => {
-      setState(prev => ({ ...prev, isAILoading: true, error: null }));
+    initAttempted.current = true;
+    setState(prev => ({ ...prev, isAILoading: true, error: null }));
 
-      try {
-        console.log('[SemanticSearch] 🧠 Initializing on-device AI...');
-        const engine = getLocalAIEngine();
+    try {
+      console.log('[SemanticSearch] Initializing AI via offscreen...');
 
-        // Poll for progress
-        const progressInterval = setInterval(() => {
-          if (engine.loadProgress !== undefined) {
-            setState(prev => ({ ...prev, loadProgress: engine.loadProgress }));
+      // Request AI initialization from background script
+      const response = await new Promise<{
+        isReady: boolean;
+        loadProgress: number;
+        deviceInfo: string;
+        error?: string;
+      }>((resolve) => {
+        chrome.runtime.sendMessage({ type: 'OFFSCREEN_INIT_AI' }, (res) => {
+          if (chrome.runtime.lastError) {
+            resolve({
+              isReady: false,
+              loadProgress: 0,
+              deviceInfo: '',
+              error: chrome.runtime.lastError.message,
+            });
+          } else {
+            resolve(res || { isReady: false, loadProgress: 0, deviceInfo: '' });
           }
-        }, 100);
-
-        await engine.initialize();
-
-        clearInterval(progressInterval);
-        engineRef.current = engine;
-
-        setState({
-          isAIReady: true,
-          isAILoading: false,
-          loadProgress: 100,
-          error: null,
-          deviceInfo: engine.getDeviceInfo(),
         });
+      });
 
-        console.log('[SemanticSearch] ✅ AI ready on:', engine.getDeviceInfo());
-
-        // Initialize DB
-        await initDB();
-      } catch (err) {
-        console.error('[SemanticSearch] ❌ AI init failed:', err);
-        setState(prev => ({
-          ...prev,
-          isAILoading: false,
-          error: err instanceof Error ? err.message : 'AI initialization failed',
-        }));
-        initPromiseRef.current = null;
+      if (response.error) {
+        throw new Error(response.error);
       }
-    })();
 
-    return initPromiseRef.current;
+      setState({
+        isAIReady: response.isReady,
+        isAILoading: false,
+        loadProgress: response.loadProgress,
+        error: null,
+        deviceInfo: response.deviceInfo,
+      });
+
+      console.log('[SemanticSearch] AI ready:', response.deviceInfo);
+      await initDB();
+    } catch (err) {
+      console.warn('[SemanticSearch] AI init failed (using API fallback):', err);
+      setState(prev => ({
+        ...prev,
+        isAILoading: false,
+        isAIReady: false,
+        error: err instanceof Error ? err.message : 'AI initialization failed',
+      }));
+    }
   }, [state.isAIReady, state.isAILoading, initDB]);
 
-  // Get or generate embedding for a memory
-  const getEmbedding = useCallback(async (memory: Memory): Promise<number[] | null> => {
-    if (!engineRef.current || !dbRef.current) return null;
+  // Get embedding via offscreen document
+  const getEmbedding = useCallback(async (text: string): Promise<number[] | null> => {
+    try {
+      const response = await new Promise<{ embedding?: number[]; error?: string }>((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: 'OFFSCREEN_EMBED', payload: { text } },
+          (res) => {
+            if (chrome.runtime.lastError) {
+              resolve({ error: chrome.runtime.lastError.message });
+            } else {
+              resolve(res || { error: 'No response' });
+            }
+          }
+        );
+      });
+
+      if (response.error) {
+        console.error('[SemanticSearch] Embedding failed:', response.error);
+        return null;
+      }
+
+      return response.embedding || null;
+    } catch (err) {
+      console.error('[SemanticSearch] Embedding error:', err);
+      return null;
+    }
+  }, []);
+
+  // Get or generate embedding for a memory (with caching)
+  const getMemoryEmbedding = useCallback(async (memory: Memory): Promise<number[] | null> => {
+    if (!dbRef.current) {
+      await initDB();
+    }
 
     const contentHash = hashContent(memory.title + ' ' + memory.content);
 
     // Check cache first
-    const cached = await dbRef.current.get('embeddings', memory.id);
+    const cached = await dbRef.current?.get('embeddings', memory.id);
     if (cached && cached.contentHash === contentHash) {
       return cached.embedding;
     }
 
     // Generate new embedding
-    try {
-      const text = `${memory.title}. ${memory.content}`;
-      const embedding = await engineRef.current.embed(text);
+    const text = `${memory.title}. ${memory.content}`;
+    const embedding = await getEmbedding(text);
 
+    if (embedding && dbRef.current) {
       // Cache it
       await dbRef.current.put('embeddings', {
         id: memory.id,
@@ -165,26 +216,23 @@ export function useSemanticSearch() {
         contentHash,
         createdAt: Date.now(),
       });
-
-      return embedding;
-    } catch (err) {
-      console.error('[SemanticSearch] Embedding failed for:', memory.id, err);
-      return null;
     }
-  }, []);
+
+    return embedding;
+  }, [initDB, getEmbedding]);
 
   // Generate embeddings for all memories (background task)
   const generateEmbeddings = useCallback(async (memories: Memory[]): Promise<void> => {
-    if (!engineRef.current) return;
+    if (!state.isAIReady) return;
 
     console.log('[SemanticSearch] Generating embeddings for', memories.length, 'memories...');
 
     for (const memory of memories) {
-      await getEmbedding(memory);
+      await getMemoryEmbedding(memory);
     }
 
-    console.log('[SemanticSearch] ✅ Embeddings generated');
-  }, [getEmbedding]);
+    console.log('[SemanticSearch] Embeddings generated');
+  }, [state.isAIReady, getMemoryEmbedding]);
 
   // Semantic search using AI
   const searchWithAI = useCallback(async (
@@ -192,40 +240,39 @@ export function useSemanticSearch() {
     memories: Memory[],
     limit = 10
   ): Promise<SemanticSearchResult[]> => {
-    if (!engineRef.current) {
-      console.log('[SemanticSearch] AI not ready, falling back to keyword search');
+    if (!state.isAIReady) {
       return searchWithKeywords(query, memories, limit);
     }
 
     try {
-      console.log('[SemanticSearch] 🔍 AI search for:', query);
+      console.log('[SemanticSearch] AI search for:', query);
       const startTime = performance.now();
 
       // Get query embedding
-      const queryEmbedding = await engineRef.current.embed(query);
+      const queryEmbedding = await getEmbedding(query);
+      if (!queryEmbedding) {
+        return searchWithKeywords(query, memories, limit);
+      }
 
-      // Get embeddings for all memories and score them
+      // Score all memories
       const scored: SemanticSearchResult[] = [];
 
       for (const memory of memories) {
-        const embedding = await getEmbedding(memory);
+        const embedding = await getMemoryEmbedding(memory);
         if (embedding) {
-          const score = engineRef.current.cosineSimilarity(queryEmbedding, embedding);
+          const score = cosineSimilarity(queryEmbedding, embedding);
           scored.push({ ...memory, score, searchMethod: 'ai' });
         } else {
-          // Fall back to keyword score for memories without embeddings
-          const keywordScore = keywordScore_internal(query, memory);
+          const keywordScore = keywordScoreInternal(query, memory);
           scored.push({ ...memory, score: keywordScore, searchMethod: 'keyword' });
         }
       }
 
-      // Sort by score descending
       scored.sort((a, b) => b.score - a.score);
 
       const elapsed = performance.now() - startTime;
-      console.log(`[SemanticSearch] ⚡ AI search completed in ${elapsed.toFixed(0)}ms`);
+      console.log(`[SemanticSearch] AI search completed in ${elapsed.toFixed(0)}ms`);
 
-      // Filter by threshold and limit
       return scored
         .filter(r => r.score > 0.3)
         .slice(0, limit);
@@ -233,7 +280,7 @@ export function useSemanticSearch() {
       console.error('[SemanticSearch] AI search failed:', err);
       return searchWithKeywords(query, memories, limit);
     }
-  }, [getEmbedding]);
+  }, [state.isAIReady, getEmbedding, getMemoryEmbedding]);
 
   // Keyword search fallback
   const searchWithKeywords = useCallback((
@@ -241,11 +288,11 @@ export function useSemanticSearch() {
     memories: Memory[],
     limit = 10
   ): SemanticSearchResult[] => {
-    console.log('[SemanticSearch] 📝 Keyword search for:', query);
+    console.log('[SemanticSearch] Keyword search for:', query);
 
     const scored = memories.map(memory => ({
       ...memory,
-      score: keywordScore_internal(query, memory),
+      score: keywordScoreInternal(query, memory),
       searchMethod: 'keyword' as const,
     }));
 
@@ -255,7 +302,7 @@ export function useSemanticSearch() {
       .slice(0, limit);
   }, []);
 
-  // Main search function - uses AI when available
+  // Main search function - prioritizes API, then AI, then keywords
   const search = useCallback(async (
     query: string,
     memories: Memory[],
@@ -269,10 +316,12 @@ export function useSemanticSearch() {
       }));
     }
 
-    if (state.isAIReady && engineRef.current) {
+    // If AI is ready and we have local memories, use AI search
+    if (state.isAIReady) {
       return searchWithAI(query, memories, limit);
     }
 
+    // Otherwise use keyword search
     return searchWithKeywords(query, memories, limit);
   }, [state.isAIReady, searchWithAI, searchWithKeywords]);
 
@@ -284,9 +333,14 @@ export function useSemanticSearch() {
     }
   }, []);
 
-  // Auto-initialize on mount
+  // Try to initialize AI on mount (but don't block rendering)
   useEffect(() => {
-    initializeAI();
+    // Delay AI init to not block initial render
+    const timeout = setTimeout(() => {
+      initializeAI();
+    }, 1000);
+
+    return () => clearTimeout(timeout);
   }, [initializeAI]);
 
   return {
@@ -308,7 +362,7 @@ export function useSemanticSearch() {
 }
 
 // Internal keyword scoring function
-function keywordScore_internal(query: string, memory: Memory): number {
+function keywordScoreInternal(query: string, memory: Memory): number {
   const q = query.toLowerCase();
   const keywords = q.split(/\s+/).filter(w => w.length > 2);
 
@@ -325,7 +379,6 @@ function keywordScore_internal(query: string, memory: Memory): number {
     if (tagsLower.some(t => t.includes(kw))) score += 0.2;
   }
 
-  // Normalize to 0-1 range
   return Math.min(score / keywords.length, 1);
 }
 

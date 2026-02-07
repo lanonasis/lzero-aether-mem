@@ -358,8 +358,8 @@
     "test": "vitest run",
     "typecheck": "tsc -p . --noEmit",
     "clean": "rm -rf out media/sidebar-react.* media/style.css",
-    "package": "npm run build && npm run build:webview && vsce package",
-    "vscode:prepublish": "npm run build && npm run build:webview"
+    "package": "bun run build && bun run build:webview && vsce package",
+    "vscode:prepublish": "bun run build && bun run build:webview"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.17",
@@ -373,7 +373,7 @@
     "vite": "^7.2.6"
   },
   "dependencies": {
-    "@lanonasis/memory-client": "^2.0.0",
+    "@lanonasis/memory-client": "^2.2.0",
     "@lanonasis/oauth-client": "^1.2.1",
     "@lanonasis/security-sdk": "^1.0.3",
     "vitest": "^4.0.17"

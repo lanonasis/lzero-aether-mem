@@ -13,6 +13,12 @@ import { setupContextMenus } from './contextMenu';
 import { setupOmnibox } from './omnibox';
 import { MemoryCache } from './cache';
 import { setupSync } from './sync';
+import {
+  ensureOffscreenDocument,
+  initializeOffscreenAI,
+  generateEmbedding,
+  getOffscreenAIStatus,
+} from './offscreenManager';
 
 // Initialize cache
 const cache = new MemoryCache();
@@ -102,7 +108,36 @@ async function handleMessage(
       await chrome.storage.local.remove(['authToken', 'userEmail']);
       await cache.clear();
       return { success: true };
-    
+
+    // Offscreen AI handlers
+    case 'OFFSCREEN_INIT_AI':
+      try {
+        await ensureOffscreenDocument();
+        const status = await initializeOffscreenAI();
+        return status;
+      } catch (error) {
+        console.error('[L0 Memory] Offscreen AI init failed:', error);
+        return { isReady: false, loadProgress: 0, deviceInfo: '', error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+
+    case 'OFFSCREEN_EMBED':
+      try {
+        await ensureOffscreenDocument();
+        const embedding = await generateEmbedding(message.payload?.text || '');
+        return { embedding };
+      } catch (error) {
+        console.error('[L0 Memory] Offscreen embed failed:', error);
+        return { error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+
+    case 'OFFSCREEN_STATUS':
+      try {
+        await ensureOffscreenDocument();
+        return await getOffscreenAIStatus();
+      } catch (error) {
+        return { isReady: false, loadProgress: 0, deviceInfo: '' };
+      }
+
     default:
       console.warn('[L0 Memory] Unknown message type:', message.type);
       return { error: 'Unknown message type' };
