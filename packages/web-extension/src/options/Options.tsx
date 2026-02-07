@@ -41,19 +41,23 @@ async function ensureHostPermissionForOrigin(origin: string): Promise<{ ok: true
 export const Options: React.FC = () => {
   const [apiKey, setApiKey] = useState('');
   const [apiUrl, setApiUrl] = useState('https://api.lanonasis.com');
+  const [aiMode, setAiMode] = useState<'off' | 'auto' | 'on'>('auto');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     // Load saved settings
-    chrome.storage.local.get(['authToken', 'apiUrl'], (result) => {
+    chrome.storage.local.get(['authToken', 'apiUrl', 'aiMode'], (result) => {
       if (result.authToken) {
         setApiKey('••••••••••••••••');
         setIsAuthenticated(true);
       }
       if (result.apiUrl) {
         setApiUrl(result.apiUrl);
+      }
+      if (result.aiMode === 'off' || result.aiMode === 'auto' || result.aiMode === 'on') {
+        setAiMode(result.aiMode);
       }
     });
   }, []);
@@ -92,7 +96,7 @@ export const Options: React.FC = () => {
       }
 
       // Save settings
-      const updates: Record<string, string> = { apiUrl: normalized.value };
+      const updates: Record<string, string> = { apiUrl: normalized.value, aiMode };
       
       if (apiKey && !apiKey.startsWith('••')) {
         updates.authToken = apiKey;
@@ -214,6 +218,29 @@ export const Options: React.FC = () => {
             />
             <p className="text-xs text-gray-500 mt-2">
               Default: https://api.lanonasis.com
+            </p>
+          </div>
+        </div>
+
+        {/* AI Settings */}
+        <div className="bg-[#252526] border border-[#3C3C3C] rounded-xl p-6 mb-6">
+          <h2 className="text-lg font-semibold mb-4">On-Device AI</h2>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              AI Mode
+            </label>
+            <select
+              value={aiMode}
+              onChange={(e) => setAiMode(e.target.value as 'off' | 'auto' | 'on')}
+              className="w-full bg-[#1E1E1E] border border-[#3C3C3C] rounded-lg px-4 py-3 text-white focus:outline-none focus:border-[#007ACC]"
+            >
+              <option value="off">Off (API only)</option>
+              <option value="auto">Auto (offline only)</option>
+              <option value="on">On (always enable)</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-2">
+              Auto avoids downloading/loading the Xenova model while you are online, which helps Chrome memory usage.
             </p>
           </div>
         </div>

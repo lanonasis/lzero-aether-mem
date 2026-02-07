@@ -75,6 +75,29 @@ function normalizeApiUrl(raw: string): string {
 
 type ApiResult<T> = { data?: T; error?: string };
 
+function unwrapListResponse(payload: unknown): unknown[] {
+  // The API responses in this repo vary a bit by client:
+  // - { data: { memories: [...] } }
+  // - { memories: [...] }
+  // - { data: [...] }
+  // - [...]
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return [];
+  const p: any = payload;
+
+  const candidates = [
+    p?.data?.memories,
+    p?.memories,
+    p?.data?.data,
+    p?.data,
+  ];
+
+  for (const c of candidates) {
+    if (Array.isArray(c)) return c;
+  }
+  return [];
+}
+
 export class MemoryCache {
   private db: IDBPDatabase<MemoryDB> | null = null;
   private isOnline = true;
@@ -385,14 +408,12 @@ export class MemoryCache {
         await this.syncOne(mem);
       }
 
-      // Fetch latest from API
-      const response = await this.apiRequest<{ data: MemoryEntry[]; pagination?: unknown }>(
-        '/memory?limit=100',
-        { method: 'GET' }
-      );
+      // Fetch latest from API (REST endpoints used across this repo)
+      const response = await this.apiRequest<unknown>('/memories/list?limit=100', { method: 'GET' });
 
       if (response.data) {
-        const memories = response.data.data.map((m: MemoryEntry) => ({
+        const list = unwrapListResponse(response.data) as MemoryEntry[];
+        const memories = list.map((m: MemoryEntry) => ({
           id: m.id,
           title: m.title,
           content: m.content,
@@ -418,7 +439,7 @@ export class MemoryCache {
       if (!cfg) return;
 
       // Create memory
-      const response = await this.apiRequest<MemoryEntry>('/memory', {
+      const response = await this.apiRequest<unknown>('/memories', {
         method: 'POST',
         body: JSON.stringify({
           title: memory.title,
@@ -429,14 +450,15 @@ export class MemoryCache {
       });
 
       if (response.data) {
+        const created = (response.data as any)?.data ?? (response.data as any)?.memory ?? response.data;
         const serverMemory: CachedMemory = {
-          id: response.data.id,
-          title: response.data.title,
-          content: response.data.content,
-          memory_type: response.data.memory_type,
-          tags: response.data.tags,
-          created_at: response.data.created_at,
-          updated_at: response.data.updated_at,
+          id: created.id,
+          title: created.title,
+          content: created.content,
+          memory_type: created.memory_type,
+          tags: created.tags,
+          created_at: created.created_at,
+          updated_at: created.updated_at,
         };
         await this.markSynced(memory.id, serverMemory);
         console.log('[MemoryCache] Synced memory:', memory.title);
@@ -459,21 +481,27 @@ export class MemoryCache {
         return this.searchLocalAsync(query);
       }
 
-      const response = await this.apiRequest<{ results: MemoryEntry[] }>(
-        '/memory/search',
+      const response = await this.apiRequest<unknown>(
+        '/memories/search',
         {
           method: 'POST',
           body: JSON.stringify({
             query,
             limit: 10,
-            status: 'active',
             threshold: 0.5,
           }),
         }
       );
 
-      if (response.data?.results) {
-        return response.data.results.map((r) => ({
+      if (response.data) {
+        const results =
+          (response.data as any)?.data?.results ??
+          (response.data as any)?.results ??
+          (response.data as any)?.data ??
+          [];
+        if (!Array.isArray(results)) return this.searchLocalAsync(query);
+
+        return (results as MemoryEntry[]).map((r) => ({
           id: r.id,
           title: r.title,
           content: r.content,

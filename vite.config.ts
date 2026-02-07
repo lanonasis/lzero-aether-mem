@@ -21,6 +21,9 @@ export default defineConfig({
         "lib",
         "oauth-client-browser.ts",
       ),
+      // The `@lanonasis/memory-client` root entry pulls in Node-only modules in v2.2.0.
+      // Force the browser-safe core client for the Vite (web) bundle.
+      "@lanonasis/memory-client": "@lanonasis/memory-client/core",
     },
   },
   css: {

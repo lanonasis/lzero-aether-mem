@@ -8,7 +8,7 @@
  * 3. Keyword matching (fallback)
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { openDB, type IDBPDatabase } from 'idb';
 
 interface CachedEmbedding {
@@ -332,16 +332,6 @@ export function useSemanticSearch() {
       console.log('[SemanticSearch] Cache cleared');
     }
   }, []);
-
-  // Try to initialize AI on mount (but don't block rendering)
-  useEffect(() => {
-    // Delay AI init to not block initial render
-    const timeout = setTimeout(() => {
-      initializeAI();
-    }, 1000);
-
-    return () => clearTimeout(timeout);
-  }, [initializeAI]);
 
   return {
     // State

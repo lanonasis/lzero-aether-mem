@@ -5,6 +5,17 @@
  * allowing @xenova/transformers to use eval() and WASM.
  */
 
+// transformers.js may warn if upstream doesn't send Content-Length.
+// This is harmless, but Chrome surfaces it prominently in the extension UI.
+const _warn = console.warn.bind(console);
+console.warn = (...args: any[]) => {
+  const first = args[0];
+  if (typeof first === 'string' && first.includes('Unable to determine content-length from response headers')) {
+    return;
+  }
+  _warn(...args);
+};
+
 // Types for messages
 interface AIRequest {
   type: 'INIT_AI' | 'EMBED' | 'EMBED_BATCH' | 'GET_STATUS';

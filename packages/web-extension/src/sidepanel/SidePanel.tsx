@@ -69,7 +69,7 @@ const getMemoryIcon = (type: string) => {
   return Icon;
 };
 
-const MemoryCard: React.FC<{ memory: Memory }> = ({ memory }) => {
+const MemoryCard: React.FC<{ memory: Memory; onSelect?: (m: Memory) => void }> = ({ memory, onSelect }) => {
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
@@ -83,7 +83,10 @@ const MemoryCard: React.FC<{ memory: Memory }> = ({ memory }) => {
   const Icon = getMemoryIcon(memory.memory_type);
 
   return (
-    <div className="group relative flex flex-col gap-2 rounded-lg border border-[#2D2D2D] bg-gradient-to-br from-[#252526] to-[#1E1E1E] p-3 hover:from-[#2A2D2E] hover:to-[#252526] hover:border-[#007ACC]/50 transition-all duration-200">
+    <div
+      onClick={() => onSelect?.(memory)}
+      className={`group relative flex flex-col gap-2 rounded-lg border border-[#2D2D2D] bg-gradient-to-br from-[#252526] to-[#1E1E1E] p-3 hover:from-[#2A2D2E] hover:to-[#252526] hover:border-[#007ACC]/50 transition-all duration-200 ${onSelect ? 'cursor-pointer' : ''}`}
+    >
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-sm font-semibold text-[#CCCCCC] leading-tight line-clamp-2">
           {memory.title}
@@ -105,6 +108,110 @@ const MemoryCard: React.FC<{ memory: Memory }> = ({ memory }) => {
         {memory._pending && (
           <span className="text-yellow-400">⏳</span>
         )}
+      </div>
+
+      {/* Preview snippet so entries are actually scannable in the side panel */}
+      {memory.content && (
+        <p className="text-[11px] text-[#AAAAAA] leading-relaxed line-clamp-3">
+          {memory.content}
+        </p>
+      )}
+    </div>
+  );
+};
+
+const MemoryDetailModal: React.FC<{
+  memory: Memory;
+  onClose: () => void;
+}> = ({ memory, onClose }) => {
+  const formatDateTime = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Recent';
+      return format(date, 'PPpp');
+    } catch {
+      return 'Recent';
+    }
+  };
+
+  const handleCopy = async () => {
+    const text = `${memory.title}\n\n${memory.content}`;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Fall back silently; clipboard permissions can be finicky in some extension contexts.
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="w-full max-w-[520px] max-h-[85vh] overflow-hidden rounded-xl border border-[#3C3C3C] bg-gradient-to-b from-[#1E1E1E] to-[#0D0D0D] shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-[#3C3C3C] p-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] bg-[#007ACC]/10 border border-[#007ACC]/30 text-[#007ACC] px-2 py-0.5 rounded">
+                {memory.memory_type}
+              </span>
+              {memory._pending && (
+                <span className="text-[10px] text-yellow-400">Pending sync</span>
+              )}
+            </div>
+            <h2 className="mt-2 text-sm font-semibold text-white leading-tight break-words">
+              {memory.title}
+            </h2>
+            <div className="mt-1 text-[10px] text-[#888888]">
+              {formatDateTime(memory.created_at)}
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={handleCopy}
+              className="text-[11px] px-2.5 py-1 rounded-md border border-[#3C3C3C] bg-[#252526] hover:bg-[#2A2D2E] text-[#CCCCCC]"
+              title="Copy title + content"
+            >
+              Copy
+            </button>
+            <button
+              onClick={onClose}
+              className="text-[11px] px-2.5 py-1 rounded-md border border-[#3C3C3C] bg-[#1E1E1E] hover:bg-[#252526] text-[#CCCCCC]"
+              title="Close"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 overflow-y-auto max-h-[calc(85vh-72px)]">
+          {memory.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {memory.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="text-[10px] bg-[#007ACC]/10 border border-[#007ACC]/20 text-[#007ACC] px-2 py-0.5 rounded"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="rounded-lg border border-[#2D2D2D] bg-[#0D0D0D]/40 p-3">
+            <div className="text-[10px] uppercase tracking-wide text-[#888888] mb-2">
+              Content
+            </div>
+            <div className="text-sm text-[#CCCCCC] whitespace-pre-wrap break-words leading-relaxed">
+              {memory.content}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -159,10 +266,12 @@ export const SidePanel: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [memories, setMemories] = useState<Memory[]>([]);
+  const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
+  const [aiMode, setAiMode] = useState<'off' | 'auto' | 'on'>('auto');
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     isOnline: true,
     pendingCount: 0,
@@ -177,16 +286,12 @@ export const SidePanel: React.FC = () => {
     loadProgress,
     error: aiError,
     deviceInfo,
+    initializeAI,
     search: semanticSearch,
-    generateEmbeddings,
   } = useSemanticSearch();
 
-  // Generate embeddings when memories load and AI is ready
-  useEffect(() => {
-    if (isAIReady && memories.length > 0) {
-      generateEmbeddings(memories);
-    }
-  }, [isAIReady, memories, generateEmbeddings]);
+  const shouldUseLocalAI =
+    aiMode === 'on' || (aiMode === 'auto' && !syncStatus.isOnline);
 
   useEffect(() => {
     // Check auth status
@@ -208,14 +313,43 @@ export const SidePanel: React.FC = () => {
       }
     });
 
+    // Load AI mode setting
+    chrome.storage.local.get(['aiMode'], (result) => {
+      if (result.aiMode === 'off' || result.aiMode === 'auto' || result.aiMode === 'on') {
+        setAiMode(result.aiMode);
+      }
+    });
+
+    const handleStorageChange: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
+      if (area !== 'local') return;
+      const next = changes.aiMode?.newValue;
+      if (next === 'off' || next === 'auto' || next === 'on') {
+        setAiMode(next);
+      }
+    };
+    chrome.storage.onChanged.addListener(handleStorageChange);
+
     // Listen for search queries from omnibox/context menu
-    chrome.runtime.onMessage.addListener((message) => {
+    const handleRuntimeMessage = (message: any) => {
       if (message.type === 'SEARCH_QUERY') {
         setSearchQuery(message.payload?.query || '');
         handleSearch(message.payload?.query || '');
       }
-    });
+    };
+    chrome.runtime.onMessage.addListener(handleRuntimeMessage);
+
+    return () => {
+      chrome.runtime.onMessage.removeListener(handleRuntimeMessage);
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
   }, []);
+
+  // Initialize local AI only when needed to avoid heavy preload/memory use.
+  useEffect(() => {
+    if (shouldUseLocalAI && !isAIReady && !isAILoading) {
+      void initializeAI();
+    }
+  }, [shouldUseLocalAI, isAIReady, isAILoading, initializeAI]);
 
   const handleSearch = useCallback(async (query: string) => {
     if (!query.trim()) {
@@ -227,9 +361,18 @@ export const SidePanel: React.FC = () => {
       return;
     }
 
-    // Use on-device AI semantic search when available
-    if (isAIReady) {
+    // Use on-device AI semantic search only when enabled and ready
+    if (shouldUseLocalAI) {
       try {
+        if (!isAIReady && !isAILoading) {
+          void initializeAI();
+        }
+
+        if (!isAIReady) {
+          // If local AI isn't ready yet, fall back without blocking UI.
+          throw new Error('Local AI not ready');
+        }
+
         // Get all memories first (we need them for local AI search)
         chrome.runtime.sendMessage({ type: 'GET_MEMORIES' }, async (response) => {
           if (Array.isArray(response)) {
@@ -262,7 +405,7 @@ export const SidePanel: React.FC = () => {
         }
       }
     );
-  }, [isAIReady, semanticSearch]);
+  }, [shouldUseLocalAI, isAIReady, isAILoading, initializeAI, semanticSearch]);
 
   const handleLogin = () => {
     setIsConnecting(true);
@@ -366,7 +509,7 @@ export const SidePanel: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-full bg-gradient-to-b from-[#1E1E1E] to-[#0D0D0D] text-[#CCCCCC] font-sans overflow-hidden flex-col">
+    <div className="flex h-screen w-full bg-gradient-to-b from-[#1E1E1E] to-[#0D0D0D] text-[#CCCCCC] font-mono overflow-hidden flex-col">
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3 bg-[#1E1E1E]/80 backdrop-blur-sm border-b border-[#3C3C3C] shrink-0">
         <div className="flex items-center gap-2">
@@ -425,7 +568,19 @@ export const SidePanel: React.FC = () => {
 
               {/* AI Status */}
               <div className="flex items-center gap-2 p-2 rounded-lg bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20">
-                {isAILoading ? (
+                {aiMode === 'off' ? (
+                  <>
+                    <Cpu className="h-3 w-3 text-gray-500" />
+                    <span className="text-xs text-gray-500">On-Device AI Off</span>
+                    <button
+                      onClick={() => chrome.runtime.openOptionsPage()}
+                      className="ml-auto text-[10px] text-purple-300 hover:text-purple-200"
+                      title="Change AI mode"
+                    >
+                      Settings
+                    </button>
+                  </>
+                ) : isAILoading ? (
                   <>
                     <Loader2 className="h-3 w-3 text-purple-400 animate-spin" />
                     <div className="flex-1">
@@ -452,7 +607,11 @@ export const SidePanel: React.FC = () => {
                 ) : (
                   <>
                     <Cpu className="h-3 w-3 text-gray-500" />
-                    <span className="text-xs text-gray-500">AI Initializing...</span>
+                    <span className="text-xs text-gray-500">
+                      {aiMode === 'auto' && syncStatus.isOnline
+                        ? 'On-Device AI Auto (online)'
+                        : 'On-Device AI Not Ready'}
+                    </span>
                     {aiError && (
                       <span className="ml-auto text-[9px] text-red-400" title={aiError}>⚠</span>
                     )}
@@ -490,7 +649,7 @@ export const SidePanel: React.FC = () => {
                       {msg.memories && msg.memories.length > 0 && (
                         <div className="w-full space-y-2 mt-2">
                           {msg.memories.slice(0, 3).map((memory) => (
-                            <MemoryCard key={memory.id} memory={memory} />
+                            <MemoryCard key={memory.id} memory={memory} onSelect={setSelectedMemory} />
                           ))}
                         </div>
                       )}
@@ -515,7 +674,7 @@ export const SidePanel: React.FC = () => {
                   </div>
                 ) : (
                   memories.map((memory) => (
-                    <MemoryCard key={memory.id} memory={memory} />
+                    <MemoryCard key={memory.id} memory={memory} onSelect={setSelectedMemory} />
                   ))
                 )}
               </div>
@@ -525,6 +684,10 @@ export const SidePanel: React.FC = () => {
           )}
         </div>
       </div>
+
+      {selectedMemory && (
+        <MemoryDetailModal memory={selectedMemory} onClose={() => setSelectedMemory(null)} />
+      )}
       
       {/* Chat Input - Fixed at bottom */}
       <footer className="p-3 bg-[#1E1E1E] border-t border-[#3C3C3C] shrink-0">
