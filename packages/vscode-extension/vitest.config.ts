@@ -5,6 +5,7 @@ export default defineConfig({
     root: __dirname,
     test: {
         include: ['src/**/*.{test,spec}.ts?(x)'],
+        globals: true,
         coverage: {
             provider: 'v8',
             reportsDirectory: path.resolve(__dirname, 'coverage'),

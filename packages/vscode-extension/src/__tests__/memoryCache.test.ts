@@ -1,4 +1,3 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExtensionContext, OutputChannel } from 'vscode';
 import { MemoryCache } from '../memoryCache';
 
@@ -17,25 +16,15 @@ const createMockContext = (): ExtensionContext => {
     } as unknown as ExtensionContext;
 };
 
-const createMockOutput = (): OutputChannel => {
-    return {
-        appendLine: vi.fn(),
-    } as unknown as OutputChannel;
+const outputMock = {
+    appendLine: () => {},
 };
 
 describe('MemoryCache', () => {
-    beforeEach(() => {
-        vi.useFakeTimers();
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
-    });
-
-    afterEach(() => {
-        vi.useRealTimers();
-        vi.unstubAllGlobals();
-    });
-
     it('adds local memories and queues for sync', async () => {
-        const cache = new MemoryCache(createMockContext(), createMockOutput());
+        globalThis.fetch = async () => ({ ok: true } as Response);
+        
+        const cache = new MemoryCache(createMockContext(), outputMock as unknown as OutputChannel);
 
         const created = await cache.addLocal({
             title: 'Test memory',
@@ -52,7 +41,9 @@ describe('MemoryCache', () => {
     });
 
     it('keeps create pending status when updating a local memory', async () => {
-        const cache = new MemoryCache(createMockContext(), createMockOutput());
+        globalThis.fetch = async () => ({ ok: true } as Response);
+        
+        const cache = new MemoryCache(createMockContext(), outputMock as unknown as OutputChannel);
 
         const created = await cache.addLocal({
             title: 'Draft memory',
@@ -71,7 +62,9 @@ describe('MemoryCache', () => {
     });
 
     it('removes unsynced local memory when queued for delete', async () => {
-        const cache = new MemoryCache(createMockContext(), createMockOutput());
+        globalThis.fetch = async () => ({ ok: true } as Response);
+        
+        const cache = new MemoryCache(createMockContext(), outputMock as unknown as OutputChannel);
 
         const created = await cache.addLocal({
             title: 'Temp memory',
@@ -89,7 +82,9 @@ describe('MemoryCache', () => {
     });
 
     it('marks local memory as synced with server id', async () => {
-        const cache = new MemoryCache(createMockContext(), createMockOutput());
+        globalThis.fetch = async () => ({ ok: true } as Response);
+        
+        const cache = new MemoryCache(createMockContext(), outputMock as unknown as OutputChannel);
 
         const created = await cache.addLocal({
             title: 'Local memory',
@@ -119,7 +114,9 @@ describe('MemoryCache', () => {
     });
 
     it('updates cache from API and records sync status', async () => {
-        const cache = new MemoryCache(createMockContext(), createMockOutput());
+        globalThis.fetch = async () => ({ ok: true } as Response);
+        
+        const cache = new MemoryCache(createMockContext(), outputMock as unknown as OutputChannel);
 
         await cache.updateFromApi([
             {
