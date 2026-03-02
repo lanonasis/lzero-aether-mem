@@ -167,7 +167,7 @@ After completing Phase 1, verify improvements:
   - Expected: 50% smaller images
 
 - [ ] **Add Service Worker Caching**
-  - File: New `sw.js`
+  - File: `background/index.js`
   - Cache static assets
   - Implement Workbox
   - Test: Offline mode
