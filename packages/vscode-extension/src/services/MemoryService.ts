@@ -49,7 +49,14 @@ export class MemoryService {
             throw new Error('Not authenticated');
         }
 
-        // Both OAuth tokens and API keys use Bearer authorization
+        // API keys use X-API-Key header; OAuth tokens use Bearer
+        if (credentials.type === 'apikey') {
+            return {
+                'Content-Type': 'application/json',
+                'X-API-Key': credentials.token,
+            };
+        }
+
         return {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${credentials.token}`,
@@ -72,8 +79,9 @@ export class MemoryService {
 
     async listMemories(limit: number = 100): Promise<MemoryEntry[]> {
         const headers = await this.getAuthHeaders();
+        // Correct endpoint: GET /memories (not /memories/list)
         const response = await this.fetchWithTimeout(
-            `${this.apiUrl}/memories/list?limit=${limit}`,
+            `${this.apiUrl}/memories?limit=${limit}&sortBy=updated_at&sortOrder=desc`,
             { method: 'GET', headers }
         );
 
@@ -83,13 +91,14 @@ export class MemoryService {
         }
 
         const data = await response.json();
-        // Handle various response formats
+        // API returns { data: [...] } or { memories: [...] } or bare array
         const memories = (data.data || data.memories || data || []) as MemoryEntry[];
         return Array.isArray(memories) ? memories : [];
     }
 
     async searchMemories(query: string, options: { limit?: number; threshold?: number } = {}): Promise<MemorySearchResult[]> {
         const headers = await this.getAuthHeaders();
+        // Correct endpoint: POST /memories/search
         const response = await this.fetchWithTimeout(
             `${this.apiUrl}/memories/search`,
             {
@@ -115,6 +124,7 @@ export class MemoryService {
 
     async createMemory(request: CreateMemoryRequest): Promise<MemoryEntry> {
         const headers = await this.getAuthHeaders();
+        // Correct endpoint: POST /memories
         const response = await this.fetchWithTimeout(
             `${this.apiUrl}/memories`,
             {
@@ -135,12 +145,13 @@ export class MemoryService {
 
     async updateMemory(id: string, updates: UpdateMemoryRequest): Promise<MemoryEntry> {
         const headers = await this.getAuthHeaders();
+        // Correct endpoint: PUT /memories/{id} (not POST /memory/update)
         const response = await this.fetchWithTimeout(
-            `${this.apiUrl}/memory/update`,
+            `${this.apiUrl}/memories/${encodeURIComponent(id)}`,
             {
-                method: 'POST',
+                method: 'PUT',
                 headers,
-                body: JSON.stringify({ id, ...updates }),
+                body: JSON.stringify(updates),
             }
         );
 
@@ -155,12 +166,12 @@ export class MemoryService {
 
     async deleteMemory(id: string): Promise<void> {
         const headers = await this.getAuthHeaders();
+        // Correct endpoint: DELETE /memories/{id} (not POST /memory/delete)
         const response = await this.fetchWithTimeout(
-            `${this.apiUrl}/memory/delete`,
+            `${this.apiUrl}/memories/${encodeURIComponent(id)}`,
             {
-                method: 'POST',
+                method: 'DELETE',
                 headers,
-                body: JSON.stringify({ id }),
             }
         );
 
@@ -172,8 +183,9 @@ export class MemoryService {
 
     async getMemory(id: string): Promise<MemoryEntry> {
         const headers = await this.getAuthHeaders();
+        // Correct endpoint: GET /memories/{id} (plural, not /memory/{id})
         const response = await this.fetchWithTimeout(
-            `${this.apiUrl}/memory/${encodeURIComponent(id)}`,
+            `${this.apiUrl}/memories/${encodeURIComponent(id)}`,
             { method: 'GET', headers }
         );
 

@@ -779,6 +779,24 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
   const [showSettingsApiKeyInput, setShowSettingsApiKeyInput] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const activeAiRequestIdRef = useRef<string | null>(null);
+
+  const updateAssistantMessage = (
+    messageId: string | undefined,
+    updater: (message: ChatMessage) => ChatMessage
+  ) => {
+    if (!messageId) {
+      return;
+    }
+
+    setChatMessages((prev) =>
+      prev.map((message) =>
+        message.id === messageId && message.role === "assistant"
+          ? updater(message)
+          : message
+      )
+    );
+  };
 
   // Auto-dismiss error notification after 5 seconds
   useEffect(() => {
@@ -869,56 +887,48 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
       if (message.type === "lanonasis:ai:search:local") {
         const results = message.payload?.results || [];
         const query = message.payload?.query || "";
-        // Update the last assistant message with local results
-        setChatMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last?.role === "assistant") {
-            return [
-              ...prev.slice(0, -1),
-              {
-                ...last,
-                content:
-                  results.length > 0
-                    ? `Found ${results.length} local memories:`
-                    : `No local matches for "${query}". Try saving more context or connect for full search.`,
-                memories: results,
-              },
-            ];
-          }
-          return prev;
-        });
-        setIsAISearching(false);
+        const requestId = message.payload?.requestId as string | undefined;
+        updateAssistantMessage(requestId, (assistantMessage) => ({
+          ...assistantMessage,
+          content:
+            results.length > 0
+              ? `Found ${results.length} local memories:`
+              : `No local matches for "${query}". Try saving more context or connect for full search.`,
+          memories: results,
+        }));
+        if (requestId && requestId === activeAiRequestIdRef.current) {
+          setIsAISearching(false);
+        }
       }
       if (message.type === "lanonasis:ai:search:api") {
         const results = message.payload?.results || [];
         const query = message.payload?.query || "";
-        setIsAISearching(false);
-        // Merge with existing results, preferring API results, and update content
-        setChatMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last?.role === "assistant") {
-            const existingIds = new Set((last.memories || []).map((m) => m.id));
-            const newMemories = results.filter(
-              (m: CachedMemory) => !existingIds.has(m.id)
-            );
-            const allMemories = [
-              ...(last.memories || []),
-              ...newMemories,
-            ].slice(0, 5);
-            return [
-              ...prev.slice(0, -1),
-              {
-                ...last,
-                content:
-                  allMemories.length > 0
-                    ? `Found ${allMemories.length} relevant memories:`
-                    : `No memories found for "${query}"`,
-                memories: allMemories,
-              },
-            ];
-          }
-          return prev;
+        const requestId = message.payload?.requestId as string | undefined;
+        updateAssistantMessage(requestId, (assistantMessage) => {
+          const existingIds = new Set(
+            (assistantMessage.memories || []).map((memory) => memory.id)
+          );
+          const newMemories = results.filter(
+            (memory: CachedMemory) => !existingIds.has(memory.id)
+          );
+          const allMemories = [
+            ...(assistantMessage.memories || []),
+            ...newMemories,
+          ].slice(0, 5);
+
+          return {
+            ...assistantMessage,
+            content:
+              allMemories.length > 0
+                ? `Found ${allMemories.length} relevant memories:`
+                : `No memories found for "${query}"`,
+            memories: allMemories,
+          };
         });
+        if (requestId && requestId === activeAiRequestIdRef.current) {
+          activeAiRequestIdRef.current = null;
+          setIsAISearching(false);
+        }
       }
 
       // Handle memory added
@@ -1408,6 +1418,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
       memories: [],
       timestamp: Date.now(),
     };
+    activeAiRequestIdRef.current = assistantMessage.id;
     setChatMessages((prev) => [...prev, assistantMessage]);
 
     // Request AI search from extension host
@@ -1416,7 +1427,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
     if (window.vscode) {
       window.vscode.postMessage({
         type: "lanonasis:ai:search",
-        payload: { query: intent.query },
+        payload: { query: intent.query, requestId: assistantMessage.id },
       });
     } else {
       // Fallback for non-vscode context (e.g., browser testing)
@@ -1425,26 +1436,18 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
         const results = cachedMemories.filter((memory) =>
           matchesQuery(memory, intent.query)
         );
-        setChatMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (last?.role === "assistant") {
-            return [
-              ...prev.slice(0, -1),
-              {
-                ...last,
-                content:
-                  results && results.length > 0
-                    ? `Found ${results.length} relevant memories:`
-                    : `No memories found for "${intent.query}"`,
-                memories: (results || []) as CachedMemory[],
-              },
-            ];
-          }
-          return prev;
-        });
+        updateAssistantMessage(assistantMessage.id, (currentMessage) => ({
+          ...currentMessage,
+          content:
+            results && results.length > 0
+              ? `Found ${results.length} relevant memories:`
+              : `No memories found for "${intent.query}"`,
+          memories: (results || []) as CachedMemory[],
+        }));
       } catch (err) {
         console.log("Search failed:", err);
       } finally {
+        activeAiRequestIdRef.current = null;
         setIsAISearching(false);
       }
     }
@@ -2003,9 +2006,9 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                           className="flex gap-1"
                           style={{ flexWrap: "wrap" }}
                         >
-                          {selectedMemory.tags.map((tag) => (
+                          {selectedMemory.tags.map((tag, index) => (
                             <span
-                              key={tag}
+                              key={`${tag}-${index}`}
                               className="px-1.5 py-0.5 rounded bg-[var(--vscode-badge-background)]/10 text-[11px] text-[var(--vscode-editor-foreground)]"
                             >
                               #{tag}

@@ -53,6 +53,18 @@ interface UserProfile {
   email?: string;
 }
 
+type AuthMethod = 'apiKey' | 'oauth' | 'none';
+
+interface WebviewApiRequestPayload {
+  requestId?: string;
+  url?: string;
+  init?: {
+    method?: string;
+    headers?: Record<string, string> | Array<[string, string]>;
+    body?: string;
+  };
+}
+
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
   const parts = token.split('.');
   if (parts.length < 2) return null;
@@ -196,6 +208,11 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         return;
       }
 
+      if (message.type === 'lanonasis:api:request') {
+        void this.handleApiRequest(webview, message.payload as WebviewApiRequestPayload | undefined);
+        return;
+      }
+
       // Memory cache operations
       if (message.type === 'lanonasis:cache:get') {
         const memories = this.cache.getMemories();
@@ -277,8 +294,9 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
 
       if (message.type === 'lanonasis:ai:search') {
         const query = message.payload?.query as string;
+        const requestId = message.payload?.requestId as string | undefined;
         if (query) {
-          void this.handleAISearch(webview, query);
+          void this.handleAISearch(webview, query, requestId);
         }
         return;
       }
@@ -317,7 +335,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       for (const pending of pendingQueue) {
         try {
           if (pending._pending === 'create') {
-            // POST /memories (REST API)
+            // POST /memories
             const createController = new AbortController();
             const createTimeout = setTimeout(() => createController.abort(), 30000);
 
@@ -348,17 +366,16 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
               clearTimeout(createTimeout);
             }
           } else if (pending._pending === 'update') {
-            // POST /memory/update (REST API)
+            // PUT /memories/{id}  (was incorrectly POST /memory/update)
             const updateController = new AbortController();
             const updateTimeout = setTimeout(() => updateController.abort(), 30000);
 
             try {
-              const updateResponse = await fetch(`${apiUrl}/memory/update`, {
-                method: 'POST',
+              const updateResponse = await fetch(`${apiUrl}/memories/${encodeURIComponent(pending.id)}`, {
+                method: 'PUT',
                 headers,
                 signal: updateController.signal,
                 body: JSON.stringify({
-                  id: pending.id,
                   title: pending.title,
                   content: pending.content,
                   memory_type: pending.memory_type,
@@ -373,21 +390,21 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
                 syncResults.success++;
               } else {
                 syncResults.failed++;
+                this.output.appendLine(`[LanOnasis] Failed to update memory: ${pending.id} (${updateResponse.status})`);
               }
             } finally {
               clearTimeout(updateTimeout);
             }
           } else if (pending._pending === 'delete') {
-            // POST /memory/delete (REST API)
+            // DELETE /memories/{id}  (was incorrectly POST /memory/delete)
             const deleteController = new AbortController();
             const deleteTimeout = setTimeout(() => deleteController.abort(), 30000);
 
             try {
-              const deleteResponse = await fetch(`${apiUrl}/memory/delete`, {
-                method: 'POST',
+              const deleteResponse = await fetch(`${apiUrl}/memories/${encodeURIComponent(pending.id)}`, {
+                method: 'DELETE',
                 headers,
                 signal: deleteController.signal,
-                body: JSON.stringify({ id: pending.id }),
               });
 
               if (deleteResponse.ok) {
@@ -395,6 +412,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
                 syncResults.success++;
               } else {
                 syncResults.failed++;
+                this.output.appendLine(`[LanOnasis] Failed to delete memory: ${pending.id} (${deleteResponse.status})`);
               }
             } finally {
               clearTimeout(deleteTimeout);
@@ -410,12 +428,12 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         this.output.appendLine(`[LanOnasis] Sync results: ${syncResults.success} succeeded, ${syncResults.failed} failed`);
       }
 
-      // Step 2: Fetch fresh data from API - GET /memories/list (REST API)
+      // Step 2: Fetch fresh data from API - GET /memories
       const listController = new AbortController();
       const listTimeout = setTimeout(() => listController.abort(), 30000);
 
       try {
-        const response = await fetch(`${apiUrl}/memories/list?limit=100`, {
+        const response = await fetch(`${apiUrl}/memories?limit=100&sortBy=updated_at&sortOrder=desc`, {
           headers,
           signal: listController.signal
         });
@@ -431,6 +449,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         this.cache.setOnline(true);
 
         clearTimeout(syncTimeout);
+        this.cache.setSyncing(false);
         webview.postMessage({
           type: 'lanonasis:sync:complete',
           payload: { memories, status: this.cache.getStatus(), syncResults }
@@ -462,19 +481,20 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async handleAISearch(webview: vscode.Webview, query: string): Promise<void> {
+  private async handleAISearch(
+    webview: vscode.Webview,
+    query: string,
+    requestId?: string,
+  ): Promise<void> {
     try {
-      // First, search local cache
+      // First, search local cache and send results immediately
       const localResults = this.cache.semanticSearchLocal(query);
-
-      // Send local results immediately
       webview.postMessage({
         type: 'lanonasis:ai:search:local',
-        payload: { results: localResults, query }
+        payload: { results: localResults, query, requestId }
       });
 
-      // Then try API semantic search via REST API
-      const apiKey = await this.getStoredApiKey();
+      // Then try API semantic search: POST /memories/search
       const headers = await this.getEdgeAuthHeaders();
       if (headers) {
         const apiUrl = getMemoryApiUrl();
@@ -494,8 +514,10 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
           const apiResults = (data.data?.results || data.results || data.data || []) as CachedMemory[];
           webview.postMessage({
             type: 'lanonasis:ai:search:api',
-            payload: { results: apiResults, query }
+            payload: { results: apiResults, query, requestId }
           });
+        } else {
+          this.output.appendLine(`[LanOnasis] AI search API error: ${response.status}`);
         }
       }
     } catch (err) {
@@ -510,6 +532,73 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     } catch (err) {
       this.output.appendLine(`[LanOnasis] Failed to get credentials: ${err}`);
       return undefined;
+    }
+  }
+
+  private isAllowedApiRequestUrl(url: string): boolean {
+    try {
+      const requestedUrl = new URL(url);
+      const allowedBaseUrl = new URL(getApiBaseUrl());
+      return requestedUrl.origin === allowedBaseUrl.origin && requestedUrl.pathname.startsWith('/api/');
+    } catch {
+      return false;
+    }
+  }
+
+  private async handleApiRequest(
+    webview: vscode.Webview,
+    payload: WebviewApiRequestPayload | undefined,
+  ): Promise<void> {
+    const requestId = payload?.requestId;
+
+    if (!requestId) {
+      return;
+    }
+
+    try {
+      const url = payload?.url;
+      if (!url || !this.isAllowedApiRequestUrl(url)) {
+        throw new Error('Blocked API request');
+      }
+
+      const headers = new Headers(payload?.init?.headers ?? {});
+      headers.delete('authorization');
+      headers.delete('x-api-key');
+
+      const authHeaders = await this.getEdgeAuthHeaders();
+      if (authHeaders) {
+        for (const [key, value] of Object.entries(authHeaders)) {
+          headers.set(key, value);
+        }
+      }
+
+      const response = await fetch(url, {
+        method: payload?.init?.method || 'GET',
+        headers,
+        body: payload?.init?.body,
+      });
+
+      const body = await response.text();
+      webview.postMessage({
+        type: 'lanonasis:api:response',
+        payload: {
+          requestId,
+          status: response.status,
+          statusText: response.statusText,
+          headers: Array.from(response.headers.entries()),
+          body,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.output.appendLine(`[LanOnasis] API proxy error: ${message}`);
+      webview.postMessage({
+        type: 'lanonasis:api:response',
+        payload: {
+          requestId,
+          error: message,
+        },
+      });
     }
   }
 
@@ -543,13 +632,15 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     const oldConfig = vscode.workspace.getConfiguration('lanonasis');
     // Send base URL to webview (memory-client SDK adds /api/v1 internally)
     const apiUrl = getApiBaseUrl();
-    let authCredential: string | undefined;
+    let authMethod: AuthMethod = 'none';
+    let isAuthenticated = false;
     let userProfile: UserProfile | null = null;
 
     try {
       const credentials = await this.secureApiKeyService.getStoredCredentials();
       if (credentials?.token) {
-        authCredential = credentials.token;
+        authMethod = credentials.type;
+        isAuthenticated = true;
         userProfile = getUserProfileFromToken(credentials.token);
         if (!userProfile) {
           try {
@@ -569,7 +660,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
 
     webview.postMessage({
       type: 'lanonasis:config:init',
-      payload: { apiUrl, apiKey: authCredential, user: userProfile },
+      payload: { apiUrl, isAuthenticated, authMethod, user: userProfile },
     });
   }
 
@@ -593,7 +684,12 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       webview.postMessage({ type: 'lanonasis:auth:result', payload: { success: true } });
       webview.postMessage({
         type: 'lanonasis:config:update',
-        payload: { apiKey: token, user: userProfile },
+        payload: {
+          apiUrl: getApiBaseUrl(),
+          isAuthenticated: true,
+          authMethod: 'oauth' as AuthMethod,
+          user: userProfile,
+        },
       });
       await vscode.window.showInformationMessage('LanOnasis: Connected via OAuth!');
     } catch (error) {
@@ -621,7 +717,15 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         this.output.appendLine('[LanOnasis] Failed to load user profile: ' + String(error));
       }
       webview.postMessage({ type: 'lanonasis:auth:result', payload: { success: true } });
-      webview.postMessage({ type: 'lanonasis:config:update', payload: { apiKey, user: userProfile } });
+      webview.postMessage({
+        type: 'lanonasis:config:update',
+        payload: {
+          apiUrl: getApiBaseUrl(),
+          isAuthenticated: true,
+          authMethod: 'apiKey' as AuthMethod,
+          user: userProfile,
+        },
+      });
       await vscode.window.showInformationMessage('LanOnasis: Connected!');
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -632,7 +736,15 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
   private async handleLogout(webview: vscode.Webview): Promise<void> {
     try {
       await this.secureApiKeyService.deleteApiKey();
-      webview.postMessage({ type: 'lanonasis:config:update', payload: { apiKey: null, user: null } });
+      webview.postMessage({
+        type: 'lanonasis:config:update',
+        payload: {
+          apiUrl: getApiBaseUrl(),
+          isAuthenticated: false,
+          authMethod: 'none' as AuthMethod,
+          user: null,
+        },
+      });
       await vscode.window.showInformationMessage('LanOnasis: Logged out');
     } catch (error) {
       this.output.appendLine('[LanOnasis] Logout error: ' + String(error));
@@ -778,8 +890,9 @@ export async function activate(context: vscode.ExtensionContext) {
     context,
     output,
     cache,
-    getApiUrl(),
+    getMemoryApiUrl(),
     getApiKey,
+    secureApiKeyService,
   );
   chatParticipant.register();
 

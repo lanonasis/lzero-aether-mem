@@ -1,10 +1,32 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { existsSync } from 'fs';
 import path from 'path';
 
-// Path to the memory-client dist folder
-const memoryClientDist = path.resolve(__dirname, 'node_modules/@lanonasis/memory-client/dist');
+function resolvePackageRoot(packageName: string): string {
+  const packageSegments = packageName.split('/');
+  let currentDir = __dirname;
+
+  while (true) {
+    const candidate = path.join(currentDir, 'node_modules', ...packageSegments);
+
+    if (existsSync(path.join(candidate, 'package.json'))) {
+      return candidate;
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      break;
+    }
+
+    currentDir = parentDir;
+  }
+
+  throw new Error(`Unable to resolve ${packageName} from ${__dirname}`);
+}
+
+const memoryClientDist = path.join(resolvePackageRoot('@lanonasis/memory-client'), 'dist');
 
 // Vite build dedicated to the VS Code webview bundle.
 // It reuses the main client's IDEPanel and Tailwind/theme setup.

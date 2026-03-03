@@ -32,6 +32,15 @@ export class SecureApiKeyService {
         await this.migrateLegacySecrets();
     }
 
+    private escapeHtml(value: string): string {
+        return value
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     async getApiKeyOrPrompt(): Promise<string | null> {
         const apiKey = await this.getApiKey();
         if (apiKey) return apiKey;
@@ -410,7 +419,7 @@ export class SecureApiKeyService {
 
                                 if (error) {
                                     res.writeHead(400, { 'Content-Type': 'text/html' });
-                                    res.end(`<h1>OAuth Error: ${error}</h1>`);
+                                    res.end(`<h1>OAuth Error: ${this.escapeHtml(error)}</h1>`);
                                     server.close();
                                     if (timeoutId) clearTimeout(timeoutId);
                                     reject(new Error(`OAuth error: ${error}`));
@@ -449,7 +458,8 @@ export class SecureApiKeyService {
                             }
                         } catch (err) {
                             res.writeHead(500, { 'Content-Type': 'text/html' });
-                            res.end(`<h1>Error: ${err instanceof Error ? err.message : 'Unknown error'}</h1>`);
+                            const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+                            res.end(`<h1>Error: ${this.escapeHtml(errorMessage)}</h1>`);
                             server.close();
                             if (timeoutId) clearTimeout(timeoutId);
                             reject(err);

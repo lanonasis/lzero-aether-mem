@@ -10,6 +10,7 @@
 
 import * as vscode from 'vscode';
 import { MemoryCache, CachedMemory } from './memoryCache';
+import { SecureApiKeyService } from './services/SecureApiKeyService';
 
 const PARTICIPANT_ID = 'lanonasis.memory';
 
@@ -28,7 +29,33 @@ export class MemoryChatParticipant {
     private readonly cache: MemoryCache,
     private readonly apiUrl: string,
     private readonly getApiKey: () => Promise<string | undefined>,
+    private readonly secureApiKeyService?: SecureApiKeyService,
   ) { }
+
+  /** Returns correct auth headers based on credential type */
+  private async getAuthHeaders(): Promise<Record<string, string> | null> {
+    try {
+      // Use secureApiKeyService if available for type-aware headers
+      if (this.secureApiKeyService) {
+        const credentials = await this.secureApiKeyService.getStoredCredentials();
+        if (!credentials) return null;
+        if (credentials.type === 'apikey') {
+          return { 'X-API-Key': credentials.token, 'Content-Type': 'application/json' };
+        }
+        return { 'Authorization': `Bearer ${credentials.token}`, 'Content-Type': 'application/json' };
+      }
+      // Fallback: use getApiKey() — assume API key format
+      const apiKey = await this.getApiKey();
+      if (!apiKey) return null;
+      const isJwt = apiKey.includes('.');
+      if (isJwt) {
+        return { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' };
+      }
+      return { 'X-API-Key': apiKey, 'Content-Type': 'application/json' };
+    } catch {
+      return null;
+    }
+  }
 
   public register(): void {
     // Check if Chat API is available (VS Code 1.85+)
@@ -139,16 +166,13 @@ export class MemoryChatParticipant {
 
   private async searchApi(query: string): Promise<CachedMemory[]> {
     try {
-      const apiKey = await this.getApiKey();
-      if (!apiKey) return [];
+      const headers = await this.getAuthHeaders();
+      if (!headers) return [];
 
-      // Use POST /memories/search (REST API)
+      // POST /memories/search
       const response = await fetch(`${this.apiUrl}/memories/search`, {
         method: 'POST',
-        headers: {
-          'X-API-Key': apiKey,
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           query,
           limit: 5,
@@ -156,7 +180,10 @@ export class MemoryChatParticipant {
         }),
       });
 
-      if (!response.ok) return [];
+      if (!response.ok) {
+        this.output.appendLine(`[ChatParticipant] API search failed: ${response.status}`);
+        return [];
+      }
 
       const data = await response.json();
       // API returns { data: { results: [...] } } or { results: [...] }
@@ -237,15 +264,13 @@ export class MemoryChatParticipant {
 
   private async syncToApi(memory: CachedMemory): Promise<void> {
     try {
-      const apiKey = await this.getApiKey();
-      if (!apiKey) return;
+      const headers = await this.getAuthHeaders();
+      if (!headers) return;
 
+      // POST /memories
       const response = await fetch(`${this.apiUrl}/memories`, {
         method: 'POST',
-        headers: {
-          'X-API-Key': apiKey,
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           title: memory.title,
           content: memory.content,
@@ -259,6 +284,8 @@ export class MemoryChatParticipant {
         const serverMemory = data.data || data.memory || data;
         await this.cache.markSynced(memory.id, serverMemory);
         this.output.appendLine(`[ChatParticipant] Memory synced: ${memory.title}`);
+      } else {
+        this.output.appendLine(`[ChatParticipant] Sync failed: ${response.status}`);
       }
     } catch (err) {
       this.output.appendLine(`[ChatParticipant] Sync error: ${err}`);

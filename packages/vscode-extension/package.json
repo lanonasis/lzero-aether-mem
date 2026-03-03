@@ -2,7 +2,7 @@
   "name": "lzero-memory",
   "displayName": "L0 Memory",
   "description": "L0 / LanOnasis Memory-as-a-Service companion for VS Code (Desktop & Web)",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "publisher": "lanonasis",
   "private": true,
   "repository": {
@@ -358,7 +358,7 @@
     "test": "vitest run",
     "typecheck": "tsc -p . --noEmit",
     "clean": "rm -rf out media/sidebar-react.* media/style.css",
-    "package": "bun run build && bun run build:webview && vsce package",
+    "package": "bun run build && bun run build:webview && vsce package --no-dependencies",
     "vscode:prepublish": "bun run build && bun run build:webview"
   },
   "devDependencies": {

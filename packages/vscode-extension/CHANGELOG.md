@@ -5,6 +5,20 @@ All notable changes to the L0 Memory VS Code Extension will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6] - 2026-03-03
+
+### Fixed
+
+- **Sync State** - Fixed the sidebar sync action getting stuck in a perpetual syncing state after a successful refresh
+- **OAuth Callback Safety** - Escaped OAuth callback error output before rendering it in the local callback response
+- **Webview Secret Handling** - Removed stored credential echoing from extension host config messages into the webview runtime
+- **AI Search Correlation** - Matched async search responses back to the correct request bubble instead of mutating the latest message blindly
+
+### Changed
+
+- Webview API calls now proxy through the extension host for authenticated `/api/*` requests
+- Refined sidebar auth state updates so the UI reflects successful sign-in and sync completion more reliably
+
 ## [0.3.1] - 2025-06-20
 
 ### Fixed

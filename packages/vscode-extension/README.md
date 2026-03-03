@@ -70,9 +70,10 @@ Use natural language in VS Code Chat:
 
 ## Configuration
 
-Under `LanOnasis` settings:
+Under `L0 Memory` settings:
 
-- **`lanonasis.apiUrl`** – Base URL for the LanOnasis Memory API (default: `https://api.lanonasis.com/api/v1`).
+- **`lzero.apiUrl`** - Base URL for the L0 Memory API (default: `https://api.lanonasis.com`).
+- **`lzero.authUrl`** - OAuth authentication server URL (default: `https://auth.lanonasis.com`).
 
 ## Requirements
 

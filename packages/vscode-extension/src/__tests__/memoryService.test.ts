@@ -23,7 +23,7 @@ describe('MemoryService', () => {
         vi.unstubAllGlobals();
     });
 
-    it('lists memories using OAuth header', async () => {
+    it('lists memories using OAuth Bearer header and correct endpoint', async () => {
         const fetchMock = vi.fn().mockResolvedValue({
             ok: true,
             json: async () => ({ data: [createMemory()] }),
@@ -46,11 +46,13 @@ describe('MemoryService', () => {
         expect(memories).toHaveLength(1);
         expect(fetchMock).toHaveBeenCalledTimes(1);
         const [url, init] = fetchMock.mock.calls[0];
-        expect(url).toContain('/memories/list?limit=100');
+        // Correct endpoint: GET /memories (not /memories/list)
+        expect(url).toContain('/memories?limit=100');
+        expect(url).not.toContain('/memories/list');
         expect(init?.headers).toMatchObject({ Authorization: 'Bearer oauth-token' });
     });
 
-    it('creates memories with API key using Bearer header', async () => {
+    it('creates memories with API key using X-API-Key header', async () => {
         const fetchMock = vi.fn().mockResolvedValue({
             ok: true,
             json: async () => ({ data: createMemory({ id: 'mem-2' }) }),
@@ -58,7 +60,8 @@ describe('MemoryService', () => {
         vi.stubGlobal('fetch', fetchMock);
 
         const secureApiKeyService = {
-            getStoredCredentials: vi.fn().mockResolvedValue({ type: 'apiKey', token: 'lano_test' }),
+            // type 'apikey' (lowercase) triggers X-API-Key header
+            getStoredCredentials: vi.fn().mockResolvedValue({ type: 'apikey', token: 'lano_test' }),
         };
 
         const service = new MemoryService(
@@ -77,8 +80,9 @@ describe('MemoryService', () => {
         expect(created.id).toBe('mem-2');
         const [url, init] = fetchMock.mock.calls[0];
         expect(url).toContain('/memories');
-        // API keys also use Bearer authorization
-        expect(init?.headers).toMatchObject({ Authorization: 'Bearer lano_test' });
+        // API keys must use X-API-Key header, not Bearer
+        expect(init?.headers).toMatchObject({ 'X-API-Key': 'lano_test' });
+        expect(init?.headers).not.toHaveProperty('Authorization');
     });
 
     it('throws on failed API response', async () => {
