@@ -9,7 +9,7 @@
  */
 
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Plus,
   Home,
@@ -20,13 +20,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import {
-  useLanonasis,
-  useMemories as useSharedMemories,
-  useLocalAI,
-  type Memory,
-  type MemoryType,
-} from '@lanonasis/shared';
+import { useLocalAI, type Memory, type MemoryType } from '@lanonasis/shared';
 import {
   useAuth,
   useMemories,
@@ -236,7 +230,7 @@ export const MobileApp: React.FC = () => {
       <ChatInterface
         isOpen={showChat}
         onClose={() => setShowChat(false)}
-        memories={filteredMemories}
+        memories={memories}
         onSearch={searchMemories}
         aiReady={aiReady}
         embed={embed}

@@ -16,7 +16,8 @@
     "sourceMap": true,
     "types": [
       "node",
-      "vscode"
+      "vscode",
+      "vitest/globals"
     ],
     "paths": {
       "@/*": [

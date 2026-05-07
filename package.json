@@ -83,7 +83,7 @@
     "qs": "6.14.1"
   },
   "dependencies": {
-    "@lanonasis/mem-intel-sdk": "^2.0.2",
+    "@lanonasis/mem-intel-sdk": "^2.1.0",
     "@lanonasis/memory-client": "^2.2.0",
     "@lanonasis/oauth-client": "^2.0.0",
     "@neondatabase/serverless": "^1.0.2",

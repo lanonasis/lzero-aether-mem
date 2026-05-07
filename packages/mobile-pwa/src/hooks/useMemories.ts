@@ -3,7 +3,7 @@
  * Wraps @lanonasis/shared hooks to match desktop useMemories API
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useMemories as useSharedMemories, useLanonasis, type Memory, type MemoryType } from '@lanonasis/shared';
 
 export interface CreateMemoryRequest {
@@ -18,6 +18,8 @@ export const useMemories = (_isAuthenticated?: boolean) => {
     memories: rawMemories,
     isLoading,
     error,
+    searchQuery,
+    setSearchQuery,
     search,
     create,
     update,
@@ -26,18 +28,6 @@ export const useMemories = (_isAuthenticated?: boolean) => {
   } = useSharedMemories();
 
   const { isAuthenticated } = useLanonasis();
-  const [searchQuery, setSearchQuery] = useState('');
-
-  // Filter memories based on search query
-  const filteredMemories = useMemo(() => {
-    if (!searchQuery.trim()) return rawMemories;
-    const lowerQuery = searchQuery.toLowerCase();
-    return rawMemories.filter(
-      (m) =>
-        m.title.toLowerCase().includes(lowerQuery) ||
-        m.content.toLowerCase().includes(lowerQuery)
-    );
-  }, [rawMemories, searchQuery]);
 
   // Search memories (semantic search)
   const searchMemories = useCallback(
@@ -110,7 +100,7 @@ export const useMemories = (_isAuthenticated?: boolean) => {
     memories: rawMemories,
     searchQuery,
     setSearchQuery,
-    filteredMemories,
+    filteredMemories: rawMemories,
     isLoading,
     error,
     searchMemories,

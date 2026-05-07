@@ -9,7 +9,7 @@ export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   user: { id: string; email: string; name?: string } | null;
-  error: string | null;
+  error: Error | null;
 }
 
 export const useAuth = () => {
@@ -17,9 +17,9 @@ export const useAuth = () => {
 
   return {
     isAuthenticated: lanonasis.isAuthenticated,
-    isLoading: false, // SDK doesn't expose loading state
+    isLoading: lanonasis.isConnecting,
     user: lanonasis.user,
-    error: null, // SDK doesn't expose error state directly
+    error: lanonasis.error,
     // Auth methods
     loginWithOAuth: lanonasis.login,
     loginWithApiKey: lanonasis.login, // SDK only has login

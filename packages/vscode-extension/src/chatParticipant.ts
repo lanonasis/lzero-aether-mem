@@ -13,6 +13,15 @@ import { MemoryCache, CachedMemory } from './memoryCache';
 import { SecureApiKeyService } from './services/SecureApiKeyService';
 
 const PARTICIPANT_ID = 'lanonasis.memory';
+const buildSearchUrl = (apiUrl: string): string => `${apiUrl}/memory/search`;
+const buildCreateUrl = (apiUrl: string): string => `${apiUrl}/memory`;
+
+function withCompatibleMemoryType<T extends { memory_type?: string }>(payload: T): T & { type?: string } {
+  return {
+    ...payload,
+    ...(payload.memory_type ? { type: payload.memory_type } : {}),
+  };
+}
 
 interface MemoryParticipantResult {
   memories: CachedMemory[];
@@ -39,7 +48,7 @@ export class MemoryChatParticipant {
       if (this.secureApiKeyService) {
         const credentials = await this.secureApiKeyService.getStoredCredentials();
         if (!credentials) return null;
-        if (credentials.type === 'apikey') {
+        if (credentials.type === 'apiKey') {
           return { 'X-API-Key': credentials.token, 'Content-Type': 'application/json' };
         }
         return { 'Authorization': `Bearer ${credentials.token}`, 'Content-Type': 'application/json' };
@@ -169,8 +178,8 @@ export class MemoryChatParticipant {
       const headers = await this.getAuthHeaders();
       if (!headers) return [];
 
-      // POST /memories/search
-      const response = await fetch(`${this.apiUrl}/memories/search`, {
+      // POST /memory/search
+      const response = await fetch(buildSearchUrl(this.apiUrl), {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -267,16 +276,16 @@ export class MemoryChatParticipant {
       const headers = await this.getAuthHeaders();
       if (!headers) return;
 
-      // POST /memories
-      const response = await fetch(`${this.apiUrl}/memories`, {
+      // POST /memory
+      const response = await fetch(buildCreateUrl(this.apiUrl), {
         method: 'POST',
         headers,
-        body: JSON.stringify({
+        body: JSON.stringify(withCompatibleMemoryType({
           title: memory.title,
           content: memory.content,
           memory_type: memory.memory_type,
           tags: memory.tags,
-        }),
+        })),
       });
 
       if (response.ok) {
