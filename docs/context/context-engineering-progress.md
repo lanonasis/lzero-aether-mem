@@ -165,7 +165,7 @@ Cross-referenced with actual repository state. Corrections applied to context do
 | Maintenance Procedures | `docs/context/workflows/maintenance.md` | ✅ As-is |
 | **Audit Report** | `/tmp/lana_vscode_extension_audit_final.md` | ✅ New — 2026-05-08 |
 | **Archived Artifacts** | `_archive/vscode-extension-assets/` | ✅ New — 2026-05-08 |
-| **SDK Intelligence Plan** | `docs/context/execution-plan-sdk-intelligence-surfacing.md` | ✅ New — 2026-05-08 |
+| **SDK Intelligence Plan** | `docs/context/execution-plan-sdk-intelligence-surfacing.md` | ✅ Updated v2.1 — 2026-05-08 |
 
 ---
 
@@ -182,7 +182,7 @@ Cross-referenced with actual repository state. Corrections applied to context do
 ### Next Session Priorities
 
 #### 🔴 High Priority — SDK Intelligence Surfacing
-See `docs/context/execution-plan-sdk-intelligence-surfacing.md` for full plan (v2.0 — post Phase 0 verification).
+See `docs/context/execution-plan-sdk-intelligence-surfacing.md` for full plan (v2.1 — backend sync amendment).
 
 **Phase 0 — Verified (2026-05-08) ✅**
 
@@ -193,12 +193,29 @@ Key findings from runtime verification:
 - `packages/shared` needs `@lanonasis/memory-client` added to its deps for Topics/Analytics/Enhanced Search (Track B)
 - `mem-intel-sdk/react` subpath exists with `MemoryIntelligenceProvider` — use this browser-safe entrypoint
 
+**v2.1 Additions (2026-05-08) — Backend Sync Amendment:**
+- `InferredConclusion` + `ReasoningJob` types added to Phase 1 foundation (stub now, verify against SDK when backend Phase 1 ships)
+- `inferredConclusions` + `contextBundle` feature flags added to `LanonasisConfig.features` (both default `false`)
+- New **Phase 2.5**: `useInferredConclusions()`, `useFlushReasoning()`, `useContextBundle()` hooks — code now, gated by flags
+- New **Phase 6**: "Ask Me Anything" chat interface upgrade — VS Code `chatParticipant.ts`, Mobile PWA `ChatInterface.tsx`, Web Extension `SidePanel.tsx` — all use `useContextBundle()` as the intelligence layer
+- **Two backend handoff points** identified and documented in the execution sequence
+
+**Backend Dependency Gates:**
+| Gate | Unlocks | Backend Phase |
+|------|---------|---------------|
+| `@lanonasis/memory-client` version with `listInferredConclusions` published | Phase 5 (Track B dep addition) + `inferredConclusions` flag flip | Backend Phase 1 (weeks 1–2) |
+| `POST /api/v1/context` endpoint live, API contract frozen | Phase 6 (chat upgrade) + `contextBundle` flag flip | Backend Phase 3 (week 4) |
+
 **Remaining Sequence:**
-1. **Phase 1** — Foundation: expand `Memory` type (add `status`, `topicId`), add `features` flags to `LanonasisConfig`, create `adapter.ts`, create lazy `intelligence-client.ts`
-2. **Phase 2** — Track A hooks: `useMemoryCollectionHealth()`, `useIntelligence()` (suggestTags, findRelated, detectDuplicates, extractInsights, analyzePatterns)
-3. **Phase 3** — Validate on VS Code only (health score card + tag suggestions)
-4. **Phase 4** — Track A rollout to web extension, mobile PWA, mobile native
-5. **Phase 5** — Track B: add `memory-client` dep to shared, add `useTopics()` / `useEnhancedSearch()` / `useAnalytics()`
+1. **Phase 1** — Foundation: expand `Memory` type, add `features` flags (incl. new `inferredConclusions`/`contextBundle`), create `adapter.ts`, create lazy `intelligence-client.ts`
+2. **Phase 2** — Track A hooks: `useMemoryCollectionHealth()`, `useIntelligence()`
+3. **Phase 2.5** — Reasoning + context bundle hook stubs (gated, flags off by default)
+4. **Phase 3** — Validate on VS Code only (health score card + tag suggestions)
+5. **Phase 4** — Track A rollout to web extension, mobile PWA, mobile native
+6. _(await backend Phase 1 handoff)_
+7. **Phase 5** — Track B: add `memory-client` dep, add `useTopics()` / `useEnhancedSearch()` / `useAnalytics()` / `useInferredConclusions()`
+8. _(await backend Phase 3 handoff)_
+9. **Phase 6** — Chat interface upgrade: VS Code chatParticipant + Mobile PWA Tier 0 + Web Extension conversational AI
 
 #### 🟡 Medium Priority
 - **Manual test checklist** (requires live VS Code): OAuth flow, API key auth, memory CRUD, sync spinner, keybindings, chat participant
@@ -218,4 +235,4 @@ Key findings from runtime verification:
 
 ---
 
-_Last updated: 2026-05-08 by LANA (Chief of Staff / Strategy Orchestrator)_
+_Last updated: 2026-05-08 by LANA (Chief of Staff / Strategy Orchestrator) — v2.1 backend sync amendment_
