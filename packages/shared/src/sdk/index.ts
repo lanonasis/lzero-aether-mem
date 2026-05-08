@@ -9,6 +9,47 @@ import { Memory, CreateMemoryInput, User, ApiKey } from '../types';
 // Configuration
 // ============================================
 
+export interface LanonasisFeatureFlags {
+  // Track A — mem-intel-sdk already in packages/shared deps — default true
+  healthScore?: boolean;
+  tagSuggestions?: boolean;
+  relatedMemories?: boolean;
+  patternAnalysis?: boolean;
+  duplicateDetection?: boolean;
+  // Track B — requires @lanonasis/memory-client in packages/shared — default false
+  topics?: boolean;
+  analytics?: boolean;
+  enhancedSearch?: boolean;
+  // Track B+ — requires backend Phase 1 + Track B dep — default false
+  inferredConclusions?: boolean;
+  // Track C — requires backend Phase 3 /api/v1/context — default false
+  contextBundle?: boolean;
+  // Memory Concierge — requires backend concierge endpoint — default false
+  concierge?: boolean;
+  // Agent Relay — requires MCP endpoint exposure — default false
+  agentRelay?: boolean;
+  // Integration Hub — requires connectors to be live — default false
+  integrationHub?: boolean;
+  contextSpaces?: boolean;
+}
+
+export const DEFAULT_FEATURES: Required<LanonasisFeatureFlags> = {
+  healthScore: true,
+  tagSuggestions: true,
+  relatedMemories: true,
+  patternAnalysis: true,
+  duplicateDetection: true,
+  topics: false,
+  analytics: false,
+  enhancedSearch: false,
+  inferredConclusions: false,
+  contextBundle: false,
+  concierge: false,
+  agentRelay: false,
+  integrationHub: false,
+  contextSpaces: true,
+};
+
 export interface LanonasisConfig {
   baseUrl?: string;
   apiKey?: string;
@@ -16,6 +57,7 @@ export interface LanonasisConfig {
   enableOffline?: boolean;
   enableLocalAI?: boolean;
   debugLogging?: boolean;
+  features?: LanonasisFeatureFlags;
   onAuthChange?: (authenticated: boolean) => void;
   onSync?: (status: SyncStatus) => void;
   onError?: (error: Error) => void;
@@ -753,6 +795,21 @@ export class LanonasisClient {
       },
       sync: this.memory.getSyncStatus(),
     };
+  }
+
+  /**
+   * Returns the resolved config (with defaults applied).
+   * Used by intelligence hooks to access apiKey, baseUrl, organizationId, features.
+   */
+  getConfig(): LanonasisConfig {
+    return { ...this.config };
+  }
+
+  /**
+   * Returns the resolved feature flags merged with defaults.
+   */
+  getFeatures(): Required<LanonasisFeatureFlags> {
+    return { ...DEFAULT_FEATURES, ...this.config.features };
   }
 }
 

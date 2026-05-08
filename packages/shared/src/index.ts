@@ -10,7 +10,12 @@
  */
 
 // SDK exports
-export { LanonasisClient, type LanonasisConfig } from './sdk/index';
+export {
+  LanonasisClient,
+  type LanonasisConfig,
+  type LanonasisFeatureFlags,
+  DEFAULT_FEATURES,
+} from './sdk/index';
 export {
   LanonasisProvider,
   useLanonasis,
@@ -18,7 +23,29 @@ export {
   useLocalAI,
   useSyncStatus,
   useApiKeys,
+  // Phase 2 — Track A intelligence hooks
+  useMemoryCollectionHealth,
+  useIntelligence,
+  // Phase 2.5 — Gated hooks (flags off until backend handoffs)
+  useInferredConclusions,
+  useFlushReasoning,
+  useContextBundle,
+  // Memory Concierge (gated)
+  useMemoryConcierge,
 } from './sdk/react-hooks';
+
+// Adapter exports
+export {
+  type AppMemory,
+  adaptMemoryEntry,
+  adaptSharedMemory,
+} from './sdk/adapter';
+
+// Intelligence client utilities
+export {
+  getIntelligenceClient,
+  resetIntelligenceClient,
+} from './sdk/intelligence-client';
 
 // AI exports
 export {
@@ -56,4 +83,19 @@ export type {
   ApiKey,
   SyncStatus,
   ApiResponse,
+  // Intelligence layer types
+  AppMemoryTopic,
+  InferredConclusion,
+  ReasoningJob,
+  ContextBundle,
+  ConciergeMessage,
+  ConciergeCitation,
+  DriftSignal,
+  // Re-exported from mem-intel-sdk for convenience
+  PatternAnalysis,
+  TagSuggestion,
+  RelatedMemory,
+  DuplicatePair,
+  Insight,
+  MemoryHealth,
 } from './types/index';

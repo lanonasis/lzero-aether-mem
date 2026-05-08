@@ -12,8 +12,26 @@ import {
   useMemo,
   ReactNode,
 } from "react";
-import { LanonasisClient, LanonasisConfig, SyncStatus } from "./index";
-import { Memory, CreateMemoryInput, User } from "../types";
+import {
+  LanonasisClient,
+  LanonasisConfig,
+  LanonasisFeatureFlags,
+  DEFAULT_FEATURES,
+  SyncStatus,
+} from "./index";
+import {
+  Memory,
+  CreateMemoryInput,
+  User,
+  MemoryHealth,
+  InferredConclusion,
+  ReasoningJob,
+  ContextBundle,
+  ConciergeMessage,
+  ConciergeCitation,
+  DriftSignal,
+} from "../types";
+import { getIntelligenceClient, resetIntelligenceClient } from "./intelligence-client";
 
 // Lazy load the AI engine to avoid blocking initial render
 let LocalEmbeddingEngine: any = null;
@@ -31,6 +49,8 @@ const getEmbeddingEngine = async () => {
 
 interface LanonasisContextValue {
   client: LanonasisClient;
+  config: LanonasisConfig;
+  features: Required<LanonasisFeatureFlags>;
   isAuthenticated: boolean;
   isConnecting: boolean;
   user: User | null;
@@ -94,6 +114,7 @@ export function LanonasisProvider({
 
   const logout = useCallback(() => {
     client.logout();
+    resetIntelligenceClient();
     setIsAuthenticated(false);
     setUser(null);
   }, [client]);
@@ -101,6 +122,8 @@ export function LanonasisProvider({
   const value = useMemo(
     () => ({
       client,
+      config: client.getConfig(),
+      features: client.getFeatures(),
       isAuthenticated,
       isConnecting,
       user,
@@ -501,6 +524,421 @@ export function useSecuritySDK(): {
     isInitialized,
     initialize,
   };
+}
+
+// ============================================
+// Phase 2 — Track A Intelligence Hooks
+// ============================================
+
+/**
+ * Collection health score from mem-intel-sdk.
+ * Distinct from useApiHealth (service ping) — this is a collection quality feature.
+ */
+export function useMemoryCollectionHealth() {
+  const { isAuthenticated, config, features } = useLanonasis();
+  const [health, setHealth] = useState<MemoryHealth | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const check = useCallback(async () => {
+    if (!isAuthenticated || !features.healthScore) return null;
+    if (!config.apiKey || !config.baseUrl) return null;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const client = await getIntelligenceClient({
+        apiKey: config.apiKey,
+        apiUrl: config.baseUrl,
+      });
+      const result = await client.healthCheck({ userId: config.organizationId ?? '' });
+      setHealth(result.data ?? null);
+      return result.data ?? null;
+    } catch (e) {
+      setError(e instanceof Error ? e : new Error('Health check failed'));
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isAuthenticated, config, features.healthScore]);
+
+  useEffect(() => {
+    if (isAuthenticated) check();
+  }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return { health, check, isLoading, error };
+}
+
+/**
+ * Facade for on-demand intelligence operations (tags, related, duplicates, insights, patterns).
+ * All methods are no-ops when the corresponding feature flag is false.
+ */
+export function useIntelligence() {
+  const { isAuthenticated, config, features } = useLanonasis();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const withClient = useCallback(
+    async <T,>(
+      fn: (c: Awaited<ReturnType<typeof getIntelligenceClient>>) => Promise<T>,
+      fallback: T
+    ): Promise<T> => {
+      if (!isAuthenticated || !config.apiKey || !config.baseUrl) return fallback;
+      setIsLoading(true);
+      setError(null);
+      try {
+        const client = await getIntelligenceClient({
+          apiKey: config.apiKey,
+          apiUrl: config.baseUrl,
+        });
+        return await fn(client);
+      } catch (e) {
+        setError(e instanceof Error ? e : new Error('Intelligence request failed'));
+        return fallback;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [isAuthenticated, config]
+  );
+
+  const suggestTags = useCallback(
+    (memoryId: string): Promise<string[]> => {
+      if (!features.tagSuggestions) return Promise.resolve([]);
+      return withClient(
+        (c) =>
+          c
+            .suggestTags({ memoryId, userId: config.organizationId ?? '' })
+            .then((r: any) => (r.data?.suggestions ?? []) as string[]),
+        [] as string[]
+      );
+    },
+    [withClient, config, features.tagSuggestions]
+  );
+
+  const findRelated = useCallback(
+    (memoryId: string): Promise<unknown[]> => {
+      if (!features.relatedMemories) return Promise.resolve([]);
+      return withClient(
+        (c) =>
+          c
+            .findRelated({ memoryId, userId: config.organizationId ?? '' })
+            .then((r: any) => (r.data?.related_memories ?? []) as unknown[]),
+        [] as unknown[]
+      );
+    },
+    [withClient, config, features.relatedMemories]
+  );
+
+  const detectDuplicates = useCallback((): Promise<unknown[]> => {
+    if (!features.duplicateDetection) return Promise.resolve([]);
+    return withClient(
+      (c) =>
+        c
+          .detectDuplicates({ userId: config.organizationId ?? '' })
+          .then((r: any) => (r.data?.duplicate_pairs ?? []) as unknown[]),
+      [] as unknown[]
+    );
+  }, [withClient, config, features.duplicateDetection]);
+
+  const extractInsights = useCallback(
+    (topic?: string): Promise<unknown> => {
+      return withClient(
+        (c) =>
+          c
+            .extractInsights({ userId: config.organizationId ?? '', topic })
+            .then((r: any) => r.data ?? null),
+        null
+      );
+    },
+    [withClient, config]
+  );
+
+  const analyzePatterns = useCallback((): Promise<unknown> => {
+    if (!features.patternAnalysis) return Promise.resolve(null);
+    return withClient(
+      (c) =>
+        c
+          .analyzePatterns({ userId: config.organizationId ?? '' })
+          .then((r: any) => r.data ?? null),
+      null
+    );
+  }, [withClient, config, features.patternAnalysis]);
+
+  return {
+    suggestTags,
+    findRelated,
+    detectDuplicates,
+    extractInsights,
+    analyzePatterns,
+    isLoading,
+    error,
+  };
+}
+
+// ============================================
+// Phase 2.5 — Reasoning Cache & Context Bundle Hooks (Gated)
+// These are no-ops until feature flags are enabled after backend handoffs.
+// ============================================
+
+/**
+ * Lists pre-reasoned AI conclusions for a subject.
+ * No-op when features.inferredConclusions === false.
+ * Gate: backend Phase 1 + @lanonasis/memory-client dep addition.
+ */
+export function useInferredConclusions(subjectId: string) {
+  const { isAuthenticated, config, features } = useLanonasis();
+  const [conclusions, setConclusions] = useState<InferredConclusion[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const fetch = useCallback(
+    async (opts?: { include_superseded?: boolean; limit?: number }) => {
+      if (!isAuthenticated || !features.inferredConclusions) return [];
+      setIsLoading(true);
+      setError(null);
+      try {
+        // Requires @lanonasis/memory-client with listInferredConclusions (post backend Phase 1)
+        const { CoreMemoryClient } = await import('@lanonasis/memory-client' as any);
+        const client = new CoreMemoryClient({
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+        });
+        const result = await client.listInferredConclusions({
+          subject_id: subjectId,
+          limit: opts?.limit ?? 20,
+          include_superseded: opts?.include_superseded ?? false,
+        });
+        const data = result.data?.conclusions ?? [];
+        setConclusions(data);
+        return data;
+      } catch (e) {
+        setError(e instanceof Error ? e : new Error('Failed to fetch inferred conclusions'));
+        return [];
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [isAuthenticated, config, features.inferredConclusions, subjectId]
+  );
+
+  useEffect(() => {
+    if (isAuthenticated && subjectId && features.inferredConclusions) fetch();
+  }, [isAuthenticated, subjectId, features.inferredConclusions]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return { conclusions, fetch, isLoading, error };
+}
+
+/**
+ * Forces immediate reasoning inference for a subject.
+ * No-op when features.inferredConclusions === false.
+ * Gate: backend Phase 1 + @lanonasis/memory-client dep addition.
+ */
+export function useFlushReasoning() {
+  const { isAuthenticated, config, features } = useLanonasis();
+  const [isFlushing, setIsFlushing] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const flush = useCallback(
+    async (subjectId: string) => {
+      if (!isAuthenticated || !features.inferredConclusions) return null;
+      setIsFlushing(true);
+      setError(null);
+      try {
+        const { CoreMemoryClient } = await import('@lanonasis/memory-client' as any);
+        const client = new CoreMemoryClient({
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+        });
+        const result = await client.flushReasoningQueue(subjectId);
+        return result.data ?? null;
+      } catch (e) {
+        setError(e instanceof Error ? e : new Error('Reasoning flush failed'));
+        return null;
+      } finally {
+        setIsFlushing(false);
+      }
+    },
+    [isAuthenticated, config, features.inferredConclusions]
+  );
+
+  return { flush, isFlushing, error };
+}
+
+/**
+ * Compiles a context bundle via POST /api/v1/context.
+ * No-op when features.contextBundle === false.
+ * Gate: backend Phase 3.
+ */
+export function useContextBundle() {
+  const { isAuthenticated, config, features } = useLanonasis();
+  const [bundle, setBundle] = useState<ContextBundle | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const compile = useCallback(
+    async (opts: {
+      query?: string;
+      include?: Array<'profile_summary' | 'recent_memories' | 'conclusions' | 'semantic_recall'>;
+      tokenBudget?: number;
+      format?: 'anthropic' | 'openai' | 'mcp' | 'json';
+    }) => {
+      if (!isAuthenticated || !features.contextBundle) return null;
+      if (!config.apiKey || !config.baseUrl) return null;
+      setIsLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`${config.baseUrl}/api/v1/context`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${config.apiKey}`,
+          },
+          body: JSON.stringify({
+            subject_id: config.organizationId,
+            query: opts.query,
+            include: opts.include ?? ['profile_summary', 'recent_memories', 'conclusions'],
+            token_budget: opts.tokenBudget ?? 4096,
+            format: opts.format ?? 'anthropic',
+          }),
+        });
+        if (!res.ok) throw new Error(`Context bundle failed: ${res.status}`);
+        const data: ContextBundle = await res.json();
+        setBundle(data);
+        return data;
+      } catch (e) {
+        setError(e instanceof Error ? e : new Error('Context bundle failed'));
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [isAuthenticated, config, features.contextBundle]
+  );
+
+  return { bundle, compile, isLoading, error };
+}
+
+// ============================================
+// Memory Concierge Hook (Gated — requires backend concierge endpoint)
+// ============================================
+
+/**
+ * Conversational AI assistant with full memory context.
+ * No-op when features.concierge === false.
+ * Gate: backend Phase 2 (profiles) + backend Phase 3 (/api/v1/context).
+ */
+export function useMemoryConcierge() {
+  const { isAuthenticated, config, features } = useLanonasis();
+  const [messages, setMessages] = useState<ConciergeMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const send = useCallback(
+    async (
+      message: string,
+      opts?: {
+        mode?: 'default' | 'drift';
+        referenceEntry?: { memory_id?: string; content?: string };
+      }
+    ) => {
+      if (!isAuthenticated || !features.concierge) return;
+      if (!config.apiKey || !config.baseUrl) return;
+
+      const userMsg: ConciergeMessage = { role: 'user', content: message };
+      const placeholder: ConciergeMessage = {
+        role: 'assistant',
+        content: '',
+        isStreaming: true,
+      };
+
+      setMessages((prev) => [...prev, userMsg, placeholder]);
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const res = await fetch(`${config.baseUrl}/api/v1/concierge/chat`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${config.apiKey}`,
+          },
+          body: JSON.stringify({
+            message,
+            conversation_history: messages.map((m) => ({
+              role: m.role,
+              content: m.content,
+            })),
+            mode: opts?.mode ?? 'default',
+            reference_entry: opts?.referenceEntry,
+            stream: true,
+          }),
+        });
+
+        if (!res.ok || !res.body) {
+          throw new Error(`Concierge request failed: ${res.status}`);
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let fullContent = '';
+        let citations: ConciergeCitation[] = [];
+        let driftSignals: DriftSignal[] = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const lines = decoder.decode(value).split('\n');
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const chunk = JSON.parse(line.slice(6));
+              if (chunk.type === 'token') {
+                fullContent += chunk.content;
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = {
+                    role: 'assistant',
+                    content: fullContent,
+                    isStreaming: true,
+                  };
+                  return updated;
+                });
+              } else if (chunk.type === 'citations') {
+                citations = chunk.citations;
+              } else if (chunk.type === 'drift_signals') {
+                driftSignals = chunk.signals;
+              } else if (chunk.type === 'done') {
+                setMessages((prev) => {
+                  const updated = [...prev];
+                  updated[updated.length - 1] = {
+                    role: 'assistant',
+                    content: fullContent,
+                    citations,
+                    driftSignals,
+                    isStreaming: false,
+                  };
+                  return updated;
+                });
+              }
+            } catch {
+              // skip malformed SSE chunks
+            }
+          }
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e : new Error('Concierge request failed'));
+        setMessages((prev) => prev.slice(0, -1)); // remove streaming placeholder
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [isAuthenticated, config, features.concierge, messages]
+  );
+
+  const clear = useCallback(() => setMessages([]), []);
+
+  return { messages, send, clear, isLoading, error };
 }
 
 export default useLanonasis;
