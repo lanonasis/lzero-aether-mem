@@ -166,6 +166,9 @@ Cross-referenced with actual repository state. Corrections applied to context do
 | **Audit Report** | `/tmp/lana_vscode_extension_audit_final.md` | ✅ New — 2026-05-08 |
 | **Archived Artifacts** | `_archive/vscode-extension-assets/` | ✅ New — 2026-05-08 |
 | **SDK Intelligence Plan** | `docs/context/execution-plan-sdk-intelligence-surfacing.md` | ✅ Updated v2.1 — 2026-05-08 |
+| **Memory Concierge Plan** | `docs/context/execution-plan-memory-concierge.md` | ✅ New v1.0 — 2026-05-08 |
+| **Agent Relay Plan** | `docs/context/execution-plan-agent-relay.md` | ✅ New v1.0 — 2026-05-08 |
+| **Integration Hub Plan** | `docs/context/execution-plan-integration-hub.md` | ✅ New v1.0 — 2026-05-08 |
 
 ---
 
@@ -217,6 +220,35 @@ Key findings from runtime verification:
 8. _(await backend Phase 3 handoff)_
 9. **Phase 6** — Chat interface upgrade: VS Code chatParticipant + Mobile PWA Tier 0 + Web Extension conversational AI
 
+#### 🔴 High Priority — Second Brain Intelligence Layer (NEW — 2026-05-08)
+
+Three new execution plans drafted. These are separate concerns from the SDK surfacing plan but share infrastructure (context bundle, relay keys, feature flags).
+
+**Memory Concierge** — `docs/context/execution-plan-memory-concierge.md`
+Natural language AI assistant with full memory context. Answers questions, spots drift between entries, streams responses with citations. The core "second brain" user experience.
+- New backend endpoint: `POST /api/v1/concierge/chat` (streaming LLM call with compiled context)
+- New frontend hook: `useMemoryConcierge()` with `send()`, conversation state, drift mode
+- Surfaces: VS Code `chatParticipant.ts` upgrade, Mobile PWA Tier 0, Web Extension chat upgrade
+- Feature flag: `features.concierge` (default `false`)
+- **Depends on**: Backend Phase 2 (profiles) + Backend Phase 3 (`/api/v1/context`)
+
+**Agent Memory Relay** — `docs/context/execution-plan-agent-relay.md`
+Protocol for external AI agents (Claude Code, custom agents, Slack bots, etc.) to access the user's memory bank programmatically during their own live sessions.
+- MCP HTTP endpoint: `POST /mcp/v1` with per-user relay API keys
+- Scoped relay keys: `lms_relay_` prefix, `relay-read` / `relay-write` scope, revocable independently
+- Discovery doc: `GET /.well-known/agent-relay.json`
+- One-click "Connect to Claude Code" flow in VS Code settings
+- Feature flag: `features.agentRelay` (default `false`)
+- **Depends on**: Backend Phase 3 (memory_compile_context MCP tool) + Memory Concierge (memory_concierge_chat MCP tool)
+
+**Integration Hub** — `docs/context/execution-plan-integration-hub.md`
+Platform connectors (Notion, Slack, generic webhook) + personal/team context space separation.
+- Schema: `space: 'personal' | 'team'` column on memories (additive migration, defaults to `'personal'`)
+- Connectors: Slack slash command + 🧠 emoji reaction; Notion OAuth + manual sync; generic `POST /api/v1/integrations/ingest`
+- Context space selector in all UI surfaces; Concierge and search respect space boundaries
+- Feature flag: `features.integrationHub` (default `false`), `features.contextSpaces` (default `true`)
+- **Depends on**: Agent Relay plan (relay-write key for ingest auth) + Backend Phase 4 (visibility policy for team admin controls)
+
 #### 🟡 Medium Priority
 - **Manual test checklist** (requires live VS Code): OAuth flow, API key auth, memory CRUD, sync spinner, keybindings, chat participant
 - **ADR-006**: Authentication Architecture (if self-hosted server is prioritized)
@@ -235,4 +267,4 @@ Key findings from runtime verification:
 
 ---
 
-_Last updated: 2026-05-08 by LANA (Chief of Staff / Strategy Orchestrator) — v2.1 backend sync amendment_
+_Last updated: 2026-05-08 by LANA (Chief of Staff / Strategy Orchestrator) — Memory Concierge, Agent Relay, Integration Hub plans added_
