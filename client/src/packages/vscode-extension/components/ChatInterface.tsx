@@ -57,7 +57,7 @@ export const ChatInterface = ({
             size="icon"
             variant="ghost"
             className="h-6 w-6 rounded-[2px] text-[var(--vscode-icon-foreground)] hover:bg-[var(--vscode-list-hoverBackground)]"
-            disabled={!isAuthenticated || disabled}
+            disabled={!isAuthenticated || disabled || !onAttach}
             onClick={onAttach}
             data-testid="btn-attach"
           >

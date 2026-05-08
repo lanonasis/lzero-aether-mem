@@ -450,6 +450,8 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                 <Button
                   variant="ghost"
                   size="icon"
+                  disabled
+                  aria-label="More options (coming soon)"
                   className={panelIconButtonClass}
                   data-testid="btn-more"
                 >

@@ -19,6 +19,12 @@ function normalizeApiUrl(raw: string): { ok: true; value: string; changed: boole
   }
 }
 
+function looksLikeJwt(raw: string): boolean {
+  const parts = raw.trim().split('.');
+  if (parts.length !== 3) return false;
+  return parts.every(part => /^[A-Za-z0-9_-]+$/.test(part));
+}
+
 async function ensureHostPermissionForOrigin(origin: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const pattern = `${origin}/*`;
 
@@ -68,8 +74,15 @@ export const Options: React.FC = () => {
 
     try {
       // Validate API key format
-      if (apiKey && !apiKey.startsWith('••') && !apiKey.startsWith('lano_') && !apiKey.startsWith('lns_')) {
-        setMessage({ type: 'error', text: 'Invalid API key format. Keys should start with lano_ or lns_' });
+      const hasNewCredential = apiKey && !apiKey.startsWith('••');
+      const isApiKey = apiKey.startsWith('lano_') || apiKey.startsWith('lns_');
+      const isBearerToken = looksLikeJwt(apiKey);
+
+      if (hasNewCredential && !isApiKey && !isBearerToken) {
+        setMessage({
+          type: 'error',
+          text: 'Invalid credential format. Use an API key starting with lano_/lns_ or a bearer token.',
+        });
         setIsSaving(false);
         return;
       }
@@ -170,17 +183,17 @@ export const Options: React.FC = () => {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                API Key
+                API Key or Bearer Token
               </label>
               <input
                 type={apiKey.startsWith('••') ? 'text' : 'password'}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="lano_xxxxxxxxxxxxxxxx"
+                placeholder="lano_xxxxxxxxxxxxxxxx or eyJ..."
                 className="w-full bg-[#1E1E1E] border border-[#3C3C3C] rounded-lg px-4 py-3 text-white placeholder:text-gray-500 focus:outline-none focus:border-[#007ACC]"
               />
               <p className="text-xs text-gray-500 mt-2">
-                Get your API key from the <a href="https://lanonasis.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-[#007ACC] hover:underline">LanOnasis Dashboard</a>
+                Use a LanOnasis API key from the <a href="https://lanonasis.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-[#007ACC] hover:underline">LanOnasis Dashboard</a> or paste a bearer token from a newer auth flow.
               </p>
             </div>
 

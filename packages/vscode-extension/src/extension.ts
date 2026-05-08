@@ -43,6 +43,19 @@ const getApiBaseUrl = (): string => {
 
 const VALID_API_KEY_PREFIXES = ['lano_', 'lns_'] as const;
 
+const buildCollectionUrl = (apiUrl: string): string => `${apiUrl}/memory`;
+const buildListUrl = (apiUrl: string): string => `${apiUrl}/memory/list?limit=100&sortBy=updated_at&sortOrder=desc`;
+const buildSearchUrl = (apiUrl: string): string => `${apiUrl}/memory/search`;
+const buildUpdateUrl = (apiUrl: string): string => `${apiUrl}/memory/update`;
+const buildDeleteUrl = (apiUrl: string, id: string): string => `${apiUrl}/memory/delete?id=${encodeURIComponent(id)}`;
+
+function withCompatibleMemoryType<T extends { memory_type?: string }>(payload: T): T & { type?: string } {
+  return {
+    ...payload,
+    ...(payload.memory_type ? { type: payload.memory_type } : {}),
+  };
+}
+
 function isValidApiKeyFormat(apiKey: string): boolean {
   return VALID_API_KEY_PREFIXES.some(prefix => apiKey.startsWith(prefix));
 }
@@ -335,21 +348,21 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       for (const pending of pendingQueue) {
         try {
           if (pending._pending === 'create') {
-            // POST /memories
+            // POST /memory
             const createController = new AbortController();
             const createTimeout = setTimeout(() => createController.abort(), 30000);
 
             try {
-              const createResponse = await fetch(`${apiUrl}/memories`, {
+              const createResponse = await fetch(buildCollectionUrl(apiUrl), {
                 method: 'POST',
                 headers,
                 signal: createController.signal,
-                body: JSON.stringify({
+                body: JSON.stringify(withCompatibleMemoryType({
                   title: pending.title,
                   content: pending.content,
                   memory_type: pending.memory_type,
                   tags: pending.tags,
-                }),
+                })),
               });
 
               if (createResponse.ok) {
@@ -366,21 +379,22 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
               clearTimeout(createTimeout);
             }
           } else if (pending._pending === 'update') {
-            // PUT /memories/{id}  (was incorrectly POST /memory/update)
+            // POST /memory/update
             const updateController = new AbortController();
             const updateTimeout = setTimeout(() => updateController.abort(), 30000);
 
             try {
-              const updateResponse = await fetch(`${apiUrl}/memories/${encodeURIComponent(pending.id)}`, {
-                method: 'PUT',
+              const updateResponse = await fetch(buildUpdateUrl(apiUrl), {
+                method: 'POST',
                 headers,
                 signal: updateController.signal,
-                body: JSON.stringify({
+                body: JSON.stringify(withCompatibleMemoryType({
+                  id: pending.id,
                   title: pending.title,
                   content: pending.content,
                   memory_type: pending.memory_type,
                   tags: pending.tags,
-                }),
+                })),
               });
 
               if (updateResponse.ok) {
@@ -396,12 +410,12 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
               clearTimeout(updateTimeout);
             }
           } else if (pending._pending === 'delete') {
-            // DELETE /memories/{id}  (was incorrectly POST /memory/delete)
+            // DELETE /memory/delete?id=...
             const deleteController = new AbortController();
             const deleteTimeout = setTimeout(() => deleteController.abort(), 30000);
 
             try {
-              const deleteResponse = await fetch(`${apiUrl}/memories/${encodeURIComponent(pending.id)}`, {
+              const deleteResponse = await fetch(buildDeleteUrl(apiUrl, pending.id), {
                 method: 'DELETE',
                 headers,
                 signal: deleteController.signal,
@@ -428,12 +442,12 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         this.output.appendLine(`[LanOnasis] Sync results: ${syncResults.success} succeeded, ${syncResults.failed} failed`);
       }
 
-      // Step 2: Fetch fresh data from API - GET /memories
+      // Step 2: Fetch fresh data from API - GET /memory/list
       const listController = new AbortController();
       const listTimeout = setTimeout(() => listController.abort(), 30000);
 
       try {
-        const response = await fetch(`${apiUrl}/memories?limit=100&sortBy=updated_at&sortOrder=desc`, {
+        const response = await fetch(buildListUrl(apiUrl), {
           headers,
           signal: listController.signal
         });
@@ -494,11 +508,11 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         payload: { results: localResults, query, requestId }
       });
 
-      // Then try API semantic search: POST /memories/search
+      // Then try API semantic search: POST /memory/search
       const headers = await this.getEdgeAuthHeaders();
       if (headers) {
         const apiUrl = getMemoryApiUrl();
-        const response = await fetch(`${apiUrl}/memories/search`, {
+        const response = await fetch(buildSearchUrl(apiUrl), {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -579,13 +593,18 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       });
 
       const body = await response.text();
+      const responseHeaders: Array<[string, string]> = [];
+      response.headers.forEach((value, key) => {
+        responseHeaders.push([key, value]);
+      });
+
       webview.postMessage({
         type: 'lanonasis:api:response',
         payload: {
           requestId,
           status: response.status,
           statusText: response.statusText,
-          headers: Array.from(response.headers.entries()),
+          headers: responseHeaders,
           body,
         },
       });

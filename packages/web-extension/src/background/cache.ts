@@ -61,8 +61,11 @@ const DB_NAME = 'l0-memory-cache';
 const DB_VERSION = 2;
 const DEFAULT_API_URL = 'https://api.lanonasis.com';
 const DEFAULT_TIMEOUT_MS = 15000;
+const DEFAULT_LIST_LIMIT = 100;
 
-function normalizeApiUrl(raw: string): string {
+type AuthType = 'apiKey' | 'oauth';
+
+export function normalizeApiUrl(raw: string): string {
   // The SDK always appends `/api/v1`, so treat the configured URL as a base origin.
   // Users often paste `.../api` or `.../api/v1`; normalize those to the origin.
   try {
@@ -71,6 +74,39 @@ function normalizeApiUrl(raw: string): string {
   } catch {
     return raw.trim();
   }
+}
+
+export function looksLikeJwt(token: string): boolean {
+  const parts = token.trim().split('.');
+  if (parts.length !== 3) return false;
+  return parts.every(part => /^[A-Za-z0-9_-]+$/.test(part));
+}
+
+export function inferAuthType(token: string): AuthType {
+  return looksLikeJwt(token) ? 'oauth' : 'apiKey';
+}
+
+export function buildAuthHeaders(auth: { token: string; authType: AuthType }): Record<string, string> {
+  return auth.authType === 'oauth'
+    ? { Authorization: `Bearer ${auth.token}` }
+    : { 'X-API-Key': auth.token };
+}
+
+export function buildListMemoriesEndpoint(limit: number = DEFAULT_LIST_LIMIT): string {
+  const params = new URLSearchParams({
+    limit: String(limit),
+    sortBy: 'updated_at',
+    sortOrder: 'desc',
+  });
+  return `/memory/list?${params.toString()}`;
+}
+
+export function buildSearchMemoriesEndpoint(): string {
+  return '/memory/search';
+}
+
+export function buildCreateMemoryEndpoint(): string {
+  return '/memory';
 }
 
 type ApiResult<T> = { data?: T; error?: string };
@@ -168,15 +204,15 @@ export class MemoryCache {
   /**
    * Get auth + API url from extension storage.
    */
-  private async getAuthConfig(): Promise<{ token: string; apiUrl: string } | null> {
+  private async getAuthConfig(): Promise<{ token: string; apiUrl: string; authType: AuthType } | null> {
     const { authToken, apiUrl } = await chrome.storage.local.get(['authToken', 'apiUrl']);
     if (!authToken) {
-      console.log('[MemoryCache] No API key available');
+      console.log('[MemoryCache] No auth token available');
       return null;
     }
 
     const effectiveApiUrl = normalizeApiUrl(apiUrl || DEFAULT_API_URL);
-    return { token: authToken, apiUrl: effectiveApiUrl };
+    return { token: authToken, apiUrl: effectiveApiUrl, authType: inferAuthType(authToken) };
   }
 
   /**
@@ -206,7 +242,7 @@ export class MemoryCache {
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
-          'X-API-Key': cfg.token,
+          ...buildAuthHeaders(cfg),
           ...(init.headers || {}),
         },
       });
@@ -409,7 +445,7 @@ export class MemoryCache {
       }
 
       // Fetch latest from API (REST endpoints used across this repo)
-      const response = await this.apiRequest<unknown>('/memories/list?limit=100', { method: 'GET' });
+      const response = await this.apiRequest<unknown>(buildListMemoriesEndpoint(), { method: 'GET' });
 
       if (response.data) {
         const list = unwrapListResponse(response.data) as MemoryEntry[];
@@ -417,7 +453,7 @@ export class MemoryCache {
           id: m.id,
           title: m.title,
           content: m.content,
-          memory_type: m.memory_type,
+          memory_type: m.memory_type ?? (m as MemoryEntry & { type?: string }).type ?? 'workflow',
           tags: m.tags,
           created_at: m.created_at,
           updated_at: m.updated_at,
@@ -439,11 +475,12 @@ export class MemoryCache {
       if (!cfg) return;
 
       // Create memory
-      const response = await this.apiRequest<unknown>('/memories', {
+      const response = await this.apiRequest<unknown>(buildCreateMemoryEndpoint(), {
         method: 'POST',
         body: JSON.stringify({
           title: memory.title,
           content: memory.content,
+          type: memory.memory_type as 'context' | 'project' | 'knowledge' | 'reference' | 'personal' | 'workflow',
           memory_type: memory.memory_type as 'context' | 'project' | 'knowledge' | 'reference' | 'personal' | 'workflow',
           tags: memory.tags,
         }),
@@ -455,7 +492,7 @@ export class MemoryCache {
           id: created.id,
           title: created.title,
           content: created.content,
-          memory_type: created.memory_type,
+          memory_type: created.memory_type ?? created.type ?? memory.memory_type,
           tags: created.tags,
           created_at: created.created_at,
           updated_at: created.updated_at,
@@ -482,7 +519,7 @@ export class MemoryCache {
       }
 
       const response = await this.apiRequest<unknown>(
-        '/memories/search',
+        buildSearchMemoriesEndpoint(),
         {
           method: 'POST',
           body: JSON.stringify({
@@ -505,7 +542,7 @@ export class MemoryCache {
           id: r.id,
           title: r.title,
           content: r.content,
-          memory_type: r.memory_type,
+          memory_type: r.memory_type ?? (r as MemoryEntry & { type?: string }).type ?? 'workflow',
           tags: r.tags,
           created_at: r.created_at,
           updated_at: r.updated_at,

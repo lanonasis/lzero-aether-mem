@@ -23,7 +23,7 @@ describe('MemoryService', () => {
         vi.unstubAllGlobals();
     });
 
-    it('lists memories using OAuth Bearer header and correct endpoint', async () => {
+    it('lists memories using OAuth Bearer header and proxy list endpoint', async () => {
         const fetchMock = vi.fn().mockResolvedValue({
             ok: true,
             json: async () => ({ data: [createMemory()] }),
@@ -46,8 +46,7 @@ describe('MemoryService', () => {
         expect(memories).toHaveLength(1);
         expect(fetchMock).toHaveBeenCalledTimes(1);
         const [url, init] = fetchMock.mock.calls[0];
-        // Correct endpoint: GET /memories (not /memories/list)
-        expect(url).toContain('/memories?limit=100');
+        expect(url).toContain('/memory/list?limit=100');
         expect(url).not.toContain('/memories/list');
         expect(init?.headers).toMatchObject({ Authorization: 'Bearer oauth-token' });
     });
@@ -60,8 +59,7 @@ describe('MemoryService', () => {
         vi.stubGlobal('fetch', fetchMock);
 
         const secureApiKeyService = {
-            // type 'apikey' (lowercase) triggers X-API-Key header
-            getStoredCredentials: vi.fn().mockResolvedValue({ type: 'apikey', token: 'lano_test' }),
+            getStoredCredentials: vi.fn().mockResolvedValue({ type: 'apiKey', token: 'lano_test' }),
         };
 
         const service = new MemoryService(
@@ -79,7 +77,7 @@ describe('MemoryService', () => {
 
         expect(created.id).toBe('mem-2');
         const [url, init] = fetchMock.mock.calls[0];
-        expect(url).toContain('/memories');
+        expect(url).toContain('/memory');
         // API keys must use X-API-Key header, not Bearer
         expect(init?.headers).toMatchObject({ 'X-API-Key': 'lano_test' });
         expect(init?.headers).not.toHaveProperty('Authorization');
