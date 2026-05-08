@@ -165,6 +165,7 @@ Cross-referenced with actual repository state. Corrections applied to context do
 | Maintenance Procedures | `docs/context/workflows/maintenance.md` | ✅ As-is |
 | **Audit Report** | `/tmp/lana_vscode_extension_audit_final.md` | ✅ New — 2026-05-08 |
 | **Archived Artifacts** | `_archive/vscode-extension-assets/` | ✅ New — 2026-05-08 |
+| **SDK Intelligence Plan** | `docs/context/execution-plan-sdk-intelligence-surfacing.md` | ✅ New — 2026-05-08 |
 
 ---
 
@@ -180,6 +181,18 @@ Cross-referenced with actual repository state. Corrections applied to context do
 
 ### Next Session Priorities
 
+#### 🔴 High Priority — SDK Intelligence Surfacing
+See `docs/context/execution-plan-sdk-intelligence-surfacing.md` for full plan.
+
+1. **Verify SDK methods exist** — `suggestTags()`, `findRelated()`, `analyzePatterns()`, `detectDuplicates()`
+2. **Create `intelligence-client.ts`** — Thin wrapper around MemoryIntelligenceClient
+3. **Add hooks to `react-hooks.tsx`** — `useIntelligence()`, `useMemoryHealth()`, `useTopics()`, `useEnhancedSearch()`, `useAnalytics()`
+4. **Surface in one platform** — Start with VS Code extension (health score card)
+5. **Roll out to all platforms** — Web extension, Mobile PWA, Mobile native
+
+This unlocks 80% of SDK capabilities currently unused (topics, analytics, enhanced search, pattern analysis, duplicate detection, tag suggestions, related memories).
+
+#### 🟡 Medium Priority
 - **Manual test checklist** (requires live VS Code): OAuth flow, API key auth, memory CRUD, sync spinner, keybindings, chat participant
 - **ADR-006**: Authentication Architecture (if self-hosted server is prioritized)
 - **ADR-007**: State Management

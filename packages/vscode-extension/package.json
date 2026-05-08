@@ -362,20 +362,20 @@
     "vscode:prepublish": "bun run build && bun run build:webview"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.1.17",
-    "@types/node": "^20.19.25",
-    "@types/vscode": "^1.85.0",
-    "@vitejs/plugin-react": "^5.1.1",
-    "autoprefixer": "^10.4.22",
-    "esbuild": "^0.27.2",
-    "postcss": "^8.5.6",
-    "typescript": "^5.9.3",
-    "vite": "^7.2.6"
+    "@tailwindcss/vite": "^4.2.4",
+    "@types/node": "^25.6.2",
+    "@types/vscode": "^1.118.0",
+    "@vitejs/plugin-react": "^6.0.1",
+    "autoprefixer": "^10.5.0",
+    "esbuild": "^0.28.0",
+    "postcss": "^8.5.14",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.11"
   },
   "dependencies": {
     "@lanonasis/memory-client": "^2.2.0",
-    "@lanonasis/oauth-client": "^1.2.1",
-    "@lanonasis/security-sdk": "^1.0.3",
-    "vitest": "^4.0.17"
+    "@lanonasis/oauth-client": "^2.0.4",
+    "@lanonasis/security-sdk": "^1.0.5",
+    "vitest": "^4.1.5"
   }
 }
