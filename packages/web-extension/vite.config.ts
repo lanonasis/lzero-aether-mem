@@ -109,8 +109,11 @@ export default defineConfig({
     },
   },
   define: {
-    'process.env': JSON.stringify({
-      NODE_ENV: process.env.NODE_ENV || 'production',
-    }),
+    // Most-specific first — eliminates React CJS dev/prod splits at compile time.
+    // Same fix as packages/vscode-extension/vite.webview.config.ts.
+    'process.env.NODE_ENV': JSON.stringify('production'),
+    'process.env': JSON.stringify({ NODE_ENV: 'production' }),
+    'process.platform': JSON.stringify('browser'),
+    'process.version': JSON.stringify(''),
   },
 });
