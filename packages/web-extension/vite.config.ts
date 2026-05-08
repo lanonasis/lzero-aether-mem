@@ -87,6 +87,12 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+      },
+    },
     rollupOptions: {
       input: {
         popup: path.resolve(__dirname, 'src/popup/index.html'),
