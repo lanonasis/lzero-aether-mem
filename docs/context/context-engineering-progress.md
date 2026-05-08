@@ -55,6 +55,21 @@ lanonasis memory search "vscode extension audit 0.4.6" --limit 5 --threshold 0.5
 - ✅ **Phase 4**: VSIX bloat fixed (4.3 MB → 183 KB)
 - ⚠️ **Phase 3**: Manual test checklist — requires live VS Code environment
 
+### Phase 4: SDK Intelligence Surfacing (2026-05-08)
+- ✅ **Phase 1**: Foundation — types, feature flags, adapter, intelligence-client
+- ✅ **Phase 2**: Track A hooks — `useMemoryCollectionHealth()`, `useIntelligence()`
+- ✅ **Phase 2.5**: Reasoning/context bundle stubs — gated with flags (inferredConclusions, contextBundle default false)
+- ✅ **Phase 2.5**: Track B+ stubs — `useInferredConclusions()`, `useFlushReasoning()`, `useContextBundle()`
+- ✅ **Phase 2.5**: Concierge stubs — `useMemoryConcierge()` + concierge feature flag
+- ✅ **Phase 2.5**: Agent Relay stubs — relay feature flag
+- ✅ **Phase 2.5**: Integration Hub stubs — integrationHub + contextSpaces flags
+
+### Phase 5: Second Brain Plans (2026-05-08)
+- ✅ Memory Concierge plan — `execution-plan-memory-concierge.md` committed
+- ✅ Agent Relay plan — `execution-plan-agent-relay.md` committed
+- ✅ Integration Hub plan — `execution-plan-integration-hub.md` committed
+- ✅ Web Extension Publishing plan — `execution-plan-web-extension-publishing.md` committed
+
 ---
 
 ## Current Status (Post-Audit — 2026-05-08)
@@ -172,83 +187,59 @@ Cross-referenced with actual repository state. Corrections applied to context do
 | **Web Extension Publishing Plan** | `docs/context/execution-plan-web-extension-publishing.md` | ✅ New v1.0 — 2026-05-08 |
 
 ---
-
 ## Next Steps
 
-### Immediate (Before Any PR Merge)
+### Completed (2026-05-08)
+- ✅ PR #16 merged — artifact hygiene: `.vsix`/`.tgz` removal, route fixes, bug fixes
+- ✅ Phase 1 foundation implemented (types, flags, adapter, hooks)
+- ✅ Phase 2 Track A hooks shipped
+- ✅ Phase 2.5 stubs all committed (reasoning, context bundle, concierge, relay, hub)
+- ✅ Second brain plan documents committed
 
-1. **Merge PR #16** (`origin/pr16`) — artifact hygiene fix: `.vsix`/`.tgz` removal, route fixes, bug fixes
+### Immediate (Remaining)
+
+1. **Merge `align/mobile-pwa-desktop` into main** — `d8f95d9` has correct artifact hygiene fix + SidePanel improvements + route corrections; this is the clean branch to land
 2. **Reject PR #7** (`Devmode-active`) — destructive; documented as critical blocker
 3. **Close PR #3** (`LZ-1`) — Expo mobile conflicts with existing PWA
-4. **Delete `logs/` folder** — untracked, ~40MB of stale Blackbox CLI logs
-5. **Publish cleaned VSIX v0.4.6** — `vsce publish` after PR #16 merge
+4. **Publish cleaned VSIX v0.4.6** — `vsce publish` after align branch lands
+5. **Manual test checklist** (requires live VS Code): OAuth flow, API key auth, memory CRUD, sync spinner, keybindings, chat participant
 
 ### Next Session Priorities
 
-#### 🔴 High Priority — SDK Intelligence Surfacing
-See `docs/context/execution-plan-sdk-intelligence-surfacing.md` for full plan (v2.1 — backend sync amendment).
+#### 🔴 High Priority — Memory Concierge (Backend Phase 2+3 Required)
+See `docs/context/execution-plan-memory-concierge.md` for full plan.
 
-**Phase 0 — Verified (2026-05-08) ✅**
+**What can be done now (frontend only):**
+- `useMemoryConcierge()` hook is already stubbed in `packages/shared/src/sdk/react-hooks.tsx`
+- `concierge` feature flag already defaults `false`
+- UI surfaces (VS Code `chatParticipant.ts`, Mobile PWA `ChatInterface.tsx`, Web Extension `SidePanel.tsx`) need the streaming SSE integration wired to the hook
 
-Key findings from runtime verification:
-- All 6 `mem-intel-sdk` intelligence methods confirmed real, browser-safe (`fetch()` only)
-- **Two SDKs**: `mem-intel-sdk` (in shared deps) = AI intelligence; `memory-client` (root only) = Topics/Analytics/Enhanced Search
-- **Two `healthCheck()`s**: `mem-intel-sdk` returns `MemoryHealth` (collection quality feature); `memory-client` returns `{status, timestamp}` (service ping) — must remain separate
-- `packages/shared` needs `@lanonasis/memory-client` added to its deps for Topics/Analytics/Enhanced Search (Track B)
-- `mem-intel-sdk/react` subpath exists with `MemoryIntelligenceProvider` — use this browser-safe entrypoint
+**Blocked on backend:**
+- `POST /api/v1/concierge/chat` endpoint (backend Phase 2)
+- `/api/v1/context` compiled context bundle (backend Phase 3)
 
-**v2.1 Additions (2026-05-08) — Backend Sync Amendment:**
-- `InferredConclusion` + `ReasoningJob` types added to Phase 1 foundation (stub now, verify against SDK when backend Phase 1 ships)
-- `inferredConclusions` + `contextBundle` feature flags added to `LanonasisConfig.features` (both default `false`)
-- New **Phase 2.5**: `useInferredConclusions()`, `useFlushReasoning()`, `useContextBundle()` hooks — code now, gated by flags
-- New **Phase 6**: "Ask Me Anything" chat interface upgrade — VS Code `chatParticipant.ts`, Mobile PWA `ChatInterface.tsx`, Web Extension `SidePanel.tsx` — all use `useContextBundle()` as the intelligence layer
-- **Two backend handoff points** identified and documented in the execution sequence
+#### 🔴 High Priority — Agent Relay (Backend Phase 3 + Concierge)
+See `docs/context/execution-plan-agent-relay.md` for full plan.
 
-**Backend Dependency Gates:**
-| Gate | Unlocks | Backend Phase |
-|------|---------|---------------|
-| `@lanonasis/memory-client` version with `listInferredConclusions` published | Phase 5 (Track B dep addition) + `inferredConclusions` flag flip | Backend Phase 1 (weeks 1–2) |
-| `POST /api/v1/context` endpoint live, API contract frozen | Phase 6 (chat upgrade) + `contextBundle` flag flip | Backend Phase 3 (week 4) |
+**What can be done now (frontend only):**
+- `agentRelay` feature flag already in `LanonasisFeatureFlags`
+- Relay key schema already in `ApiKey` type
+- VS Code settings UI for "Connect to Claude Code" can be built
 
-**Remaining Sequence:**
-1. **Phase 1** — Foundation: expand `Memory` type, add `features` flags (incl. new `inferredConclusions`/`contextBundle`), create `adapter.ts`, create lazy `intelligence-client.ts`
-2. **Phase 2** — Track A hooks: `useMemoryCollectionHealth()`, `useIntelligence()`
-3. **Phase 2.5** — Reasoning + context bundle hook stubs (gated, flags off by default)
-4. **Phase 3** — Validate on VS Code only (health score card + tag suggestions)
-5. **Phase 4** — Track A rollout to web extension, mobile PWA, mobile native
-6. _(await backend Phase 1 handoff)_
-7. **Phase 5** — Track B: add `memory-client` dep, add `useTopics()` / `useEnhancedSearch()` / `useAnalytics()` / `useInferredConclusions()`
-8. _(await backend Phase 3 handoff)_
-9. **Phase 6** — Chat interface upgrade: VS Code chatParticipant + Mobile PWA Tier 0 + Web Extension conversational AI
+**Blocked on backend:**
+- `POST /mcp/v1` endpoint + `memory_compile_context` + `memory_concierge_chat` MCP tools (backend Phase 3)
 
-#### 🔴 High Priority — Second Brain Intelligence Layer (NEW — 2026-05-08)
+#### 🔴 High Priority — Integration Hub (Backend Phase 4)
+See `docs/context/execution-plan-integration-hub.md` for full plan.
 
-Three new execution plans drafted. These are separate concerns from the SDK surfacing plan but share infrastructure (context bundle, relay keys, feature flags).
+**What can be done now (frontend only):**
+- `integrationHub` and `contextSpaces` feature flags already in place
+- `space: 'personal' | 'team'` field already on `Memory` type
 
-**Memory Concierge** — `docs/context/execution-plan-memory-concierge.md`
-Natural language AI assistant with full memory context. Answers questions, spots drift between entries, streams responses with citations. The core "second brain" user experience.
-- New backend endpoint: `POST /api/v1/concierge/chat` (streaming LLM call with compiled context)
-- New frontend hook: `useMemoryConcierge()` with `send()`, conversation state, drift mode
-- Surfaces: VS Code `chatParticipant.ts` upgrade, Mobile PWA Tier 0, Web Extension chat upgrade
-- Feature flag: `features.concierge` (default `false`)
-- **Depends on**: Backend Phase 2 (profiles) + Backend Phase 3 (`/api/v1/context`)
-
-**Agent Memory Relay** — `docs/context/execution-plan-agent-relay.md`
-Protocol for external AI agents (Claude Code, custom agents, Slack bots, etc.) to access the user's memory bank programmatically during their own live sessions.
-- MCP HTTP endpoint: `POST /mcp/v1` with per-user relay API keys
-- Scoped relay keys: `lms_relay_` prefix, `relay-read` / `relay-write` scope, revocable independently
-- Discovery doc: `GET /.well-known/agent-relay.json`
-- One-click "Connect to Claude Code" flow in VS Code settings
-- Feature flag: `features.agentRelay` (default `false`)
-- **Depends on**: Backend Phase 3 (memory_compile_context MCP tool) + Memory Concierge (memory_concierge_chat MCP tool)
-
-**Integration Hub** — `docs/context/execution-plan-integration-hub.md`
-Platform connectors (Notion, Slack, generic webhook) + personal/team context space separation.
-- Schema: `space: 'personal' | 'team'` column on memories (additive migration, defaults to `'personal'`)
-- Connectors: Slack slash command + 🧠 emoji reaction; Notion OAuth + manual sync; generic `POST /api/v1/integrations/ingest`
-- Context space selector in all UI surfaces; Concierge and search respect space boundaries
-- Feature flag: `features.integrationHub` (default `false`), `features.contextSpaces` (default `true`)
-- **Depends on**: Agent Relay plan (relay-write key for ingest auth) + Backend Phase 4 (visibility policy for team admin controls)
+**Blocked on backend:**
+- Schema migration for `space` column
+- Slack/Notion connector implementations
+- Team visibility policy (backend Phase 4)
 
 #### 🟡 Medium Priority
 - **Manual test checklist** (requires live VS Code): OAuth flow, API key auth, memory CRUD, sync spinner, keybindings, chat participant
@@ -268,4 +259,4 @@ Platform connectors (Notion, Slack, generic webhook) + personal/team context spa
 
 ---
 
-_Last updated: 2026-05-08 by LANA (Chief of Staff / Strategy Orchestrator) — Memory Concierge, Agent Relay, Integration Hub plans added_
+_Last updated: 2026-05-09 by LANA (Chief of Staff / Strategy Orchestrator) — Phase 4 SDK surfacing + Phase 5 second brain plans marked complete; PR #16 confirmed merged; align/mobile-pwa-desktop noted as pending merge_
