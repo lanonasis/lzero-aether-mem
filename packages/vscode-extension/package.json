@@ -361,10 +361,10 @@
     "package": "bun run build && bun run build:webview && vsce package --no-dependencies",
     "vscode:prepublish": "bun run build && bun run build:webview"
   },
-  "devDependencies": {
-    "@tailwindcss/vite": "^4.2.4",
-    "@types/node": "^25.6.2",
-    "@types/vscode": "^1.118.0",
+"devDependencies": {
+    "@tailwindcss/vite": "^4.1.18",
+    "@types/node": "^25.2.3",
+    "@types/vscode": "1.93.0",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.5.0",
     "esbuild": "^0.28.0",
