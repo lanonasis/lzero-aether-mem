@@ -185,6 +185,8 @@ Cross-referenced with actual repository state. Corrections applied to context do
 | **Agent Relay Plan** | `docs/context/execution-plan-agent-relay.md` | ✅ New v1.0 — 2026-05-08 |
 | **Web Extension Publishing Plan** | `docs/context/execution-plan-web-extension-publishing.md` | ✅ New v1.0 — 2026-05-08 |
 | **Ecosystem Grounding** | `docs/context/ecosystem-grounding.md` | ✅ New — 2026-05-08 |
+| **Web Ext Wave 1 Handoff** | `docs/context/handoff-web-extension-wave1.md` | ✅ New — 2026-05-08 |
+| **Web Ext Wave 2 Plan** | `docs/context/execution-plan-web-extension-wave2.md` | ✅ New — 2026-05-08 |
 
 ---
 
@@ -212,16 +214,22 @@ See `docs/context/ecosystem-grounding.md` for full grounding document covering:
 - ✅ Phase 2.5 stubs all committed (reasoning, context bundle, concierge, relay, hub)
 - ✅ Second brain plan documents committed
 - ✅ Ecosystem grounding document created (`ecosystem-grounding.md`)
+- ✅ Web Extension Wave 1 landed — all 6 AC items complete, SidePanel rebuilt, handoff written (`f8678b4`)
+- ✅ Web Extension Wave 2 plan written — version bump, terser console drop, store assets
 
-### Immediate (Remaining)
+### Next: Web Extension Wave 2
 
-1. **Merge `align/mobile-pwa-desktop` into main** — `d8f95d9` has correct artifact hygiene fix + SidePanel improvements + route corrections; this is the clean branch to land
-2. **Reject PR #7** (`Devmode-active`) — destructive; documented as critical blocker
-3. **Close PR #3** (`LZ-1`) — Expo mobile conflicts with existing PWA
-4. **Publish cleaned VSIX v0.4.6** — `vsce publish` after align branch lands
-5. **Manual test checklist** (requires live VS Code): OAuth flow, API key auth, memory CRUD, sync spinner, keybindings, chat participant
+Execute from `docs/context/execution-plan-web-extension-wave2.md`:
 
-### Next Session Priorities
+1. **Phase 1 (Code)**: `manifest.json` 0.1.0→0.2.0 + terser `drop_console` in `vite.config.ts`
+2. **Phase 2 (Assets)**: Privacy policy, screenshots (1280×800), promotional tile (440×280 PNG), short/long descriptions, developer account
+3. **Phase 3 (Package)**: `package:chrome` → `lzero-memory-chrome.zip`, verify < 10 MB, manifest at root
+4. **Phase 4 (Commit)**: Commit all Wave 2 changes
+
+### Long-term (Backend-Gated)
+
+- **Web Extension Wave 3**: Concierge chat — `useMemoryConcierge()` wired to SidePanel, requires backend Phase 2+3
+- **SDK Intelligence Surfacing**: `useIntelligence()` + `useMemoryCollectionHealth()` → all 4 surfaces
 
 #### 🔴 High Priority — Memory Concierge (Backend Phase 2+3 Required)
 See `docs/context/execution-plan-memory-concierge.md` for full plan.
