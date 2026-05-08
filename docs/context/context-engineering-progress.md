@@ -183,10 +183,26 @@ Cross-referenced with actual repository state. Corrections applied to context do
 | **SDK Intelligence Plan** | `docs/context/execution-plan-sdk-intelligence-surfacing.md` | ✅ Updated v2.1 — 2026-05-08 |
 | **Memory Concierge Plan** | `docs/context/execution-plan-memory-concierge.md` | ✅ New v1.0 — 2026-05-08 |
 | **Agent Relay Plan** | `docs/context/execution-plan-agent-relay.md` | ✅ New v1.0 — 2026-05-08 |
-| **Integration Hub Plan** | `docs/context/execution-plan-integration-hub.md` | ✅ New v1.0 — 2026-05-08 |
 | **Web Extension Publishing Plan** | `docs/context/execution-plan-web-extension-publishing.md` | ✅ New v1.0 — 2026-05-08 |
+| **Ecosystem Grounding** | `docs/context/ecosystem-grounding.md` | ✅ New — 2026-05-08 |
 
 ---
+
+## Ecosystem Context
+
+This repository (`lzero-aether-mem`) is a **client platform** with four surfaces (web, VS Code, mobile PWA, browser extension). It connects to a separate **backend platform** (`lan-onasis-monorepo`) via HTTP APIs and npm packages.
+
+**Key isolation rule**: These are two separate git repositories. No submodules, no shared file paths. Connection is through runtime contracts only.
+
+See `docs/context/ecosystem-grounding.md` for full grounding document covering:
+- How the two repos connect at runtime
+- Auth gateway structure (`apps/onasis-core/services/auth-gateway/`)
+- Memory SDK package map (`@lanonasis/memory-client` v2.2.1, `@lanonasis/memory-sdk-standalone` v1.1.0, `@lanonasis/mem-intel-sdk` v2.1.0)
+- MCP server anchor (`apps/mcp-core/`)
+- Canonical truth rules and documentation boundaries
+
+---
+
 ## Next Steps
 
 ### Completed (2026-05-08)
@@ -195,6 +211,7 @@ Cross-referenced with actual repository state. Corrections applied to context do
 - ✅ Phase 2 Track A hooks shipped
 - ✅ Phase 2.5 stubs all committed (reasoning, context bundle, concierge, relay, hub)
 - ✅ Second brain plan documents committed
+- ✅ Ecosystem grounding document created (`ecosystem-grounding.md`)
 
 ### Immediate (Remaining)
 
