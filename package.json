@@ -75,12 +75,23 @@
   "resolutions": {
     "esbuild": "0.27.2"
   },
-  "overrides": {
+ "overrides": {
     "@modelcontextprotocol/sdk": "1.26.0",
     "@isaacs/brace-expansion": "5.0.1",
-    "hono": "4.11.8",
+    "hono": "4.11.10",
     "lodash": "4.17.23",
-    "qs": "6.14.1"
+    "qs": "6.14.1",
+    "protobufjs": "7.5.5",
+    "path-to-regexp": "8.4.0",
+    "express-rate-limit": "8.2.2",
+    "@hono/node-server": "1.19.13",
+    "drizzle-orm": "0.45.2",
+    "@xmldom/xmldom": "0.8.13",
+    "minimatch": "5.1.7",
+    "ip-address": "10.1.1",
+    "postcss": "8.5.10",
+    "ajv": "8.18.0",
+    "serialize-javascript": "7.0.0"
   },
   "dependencies": {
     "@lanonasis/mem-intel-sdk": "^2.1.0",
