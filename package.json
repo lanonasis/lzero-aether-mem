@@ -24,18 +24,21 @@
     "mcp"
   ],
   "workspaces": [
+    "apps/*",
     "packages/*"
   ],
   "scripts": {
     "dev": "turbo run dev",
     "dev:web": "vite dev --port 5000",
     "dev:mobile": "turbo run dev --filter=@lanonasis/mobile-pwa",
+    "dev:mobile-native": "turbo run dev --filter=@lanonasis/mobile-native",
     "dev:extension": "turbo run dev --filter=@lanonasis/vscode-extension",
     "dev:all": "concurrently \"bun run dev:web\" \"bun run dev:mobile\"",
     "dev:server": "tsx watch server/index.ts",
     "build": "turbo run build",
     "build:web": "vite build",
     "build:mobile": "turbo run build --filter=@lanonasis/mobile-pwa",
+    "build:mobile-native": "turbo run build --filter=@lanonasis/mobile-native",
     "build:extension": "turbo run build --filter=@lanonasis/vscode-extension",
     "build:shared": "turbo run build --filter=@lanonasis/shared",
     "test": "turbo run test",

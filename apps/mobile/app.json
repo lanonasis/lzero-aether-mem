@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Aether Memory",
+    "slug": "aether-memory",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.lanonasis.aethermemory"
+    },
+    "android": {
+      "package": "com.lanonasis.aethermemory"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
