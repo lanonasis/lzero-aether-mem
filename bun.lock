@@ -43,7 +43,7 @@
         "clsx": "^2.1.1",
         "cmdk": "^1.1.1",
         "date-fns": "^4.1.0",
-        "drizzle-orm": "^0.45.1",
+        "drizzle-orm": "0.45.2",
         "drizzle-zod": "^0.8.3",
         "embla-carousel-react": "^8.6.0",
         "esbuild": "^0.27.3",
@@ -52,7 +52,7 @@
         "lucide-react": "^0.574.0",
         "next-themes": "^0.4.6",
         "process": "^0.11.10",
-        "qs": "^6.14.1",
+        "qs": "6.14.1",
         "react": "19.2.4",
         "react-day-picker": "^9.13.2",
         "react-dom": "19.2.4",
@@ -80,7 +80,7 @@
         "autoprefixer": "^10.4.24",
         "concurrently": "^9.2.1",
         "express": "^5.2.1",
-        "postcss": "^8.5.6",
+        "postcss": "8.5.10",
         "tailwindcss": "^4.1.18",
         "tsx": "^4.21.0",
         "turbo": "^2.8.9",
@@ -177,9 +177,9 @@
         "vitest": "^4.1.5",
       },
       "devDependencies": {
-        "@tailwindcss/vite": "^4.2.4",
-        "@types/node": "^25.6.2",
-        "@types/vscode": "^1.118.0",
+        "@tailwindcss/vite": "^4.1.18",
+        "@types/node": "^25.2.3",
+        "@types/vscode": "1.93.0",
         "@vitejs/plugin-react": "^6.0.1",
         "autoprefixer": "^10.5.0",
         "esbuild": "^0.28.0",
@@ -1107,7 +1107,7 @@
 
     "@types/use-sync-external-store": ["@types/use-sync-external-store@0.0.6", "", {}, "sha512-zFDAD+tlpf2r4asuHEj0XH6pY6i0g5NeAHPn+15wk3BV6JA69eERFXC1gyGThDkVa1zCyKr5jox1+2LbV/AMLg=="],
 
-    "@types/vscode": ["@types/vscode@1.118.0", "", {}, "sha512-Ah6eTlqDcwIMELEVwQMO++rJAFBRz/oLluLD/vWdYrH1KuI9kfpaM+7pg0OvvascgcJy+ghLCERAYouM4QbzGw=="],
+    "@types/vscode": ["@types/vscode@1.93.0", "", {}, "sha512-kUK6jAHSR5zY8ps42xuW89NLcBpw1kOabah7yv38J8MyiYuOHxLQBi0e7zeXbQgVefDy/mZZetqEFC+Fl5eIEQ=="],
 
     "@types/ws": ["@types/ws@8.18.1", "", { "dependencies": { "@types/node": "*" } }, "sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg=="],
 

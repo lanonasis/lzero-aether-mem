@@ -19,17 +19,15 @@ import {
   BookOpen,
   GitBranch,
   Terminal as TerminalIcon,
-  Cpu,
   Zap,
   X,
   Plus,
   Copy,
   Check,
-  ChevronDown,
-  ChevronUp,
   Database,
-  Wifi,
-  WifiOff,
+  RefreshCw,
+  User,
+  Bot,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useSemanticSearch } from '../hooks/useSemanticSearch';
@@ -83,6 +81,9 @@ function formatMemoryDate(dateString: string): string {
   try {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return 'Recent';
+    const now = Date.now();
+    const diff = now - date.getTime();
+    if (diff < 86_400_000) return format(date, 'h:mm a');
     return format(date, 'MMM d');
   } catch {
     return 'Recent';
@@ -91,7 +92,6 @@ function formatMemoryDate(dateString: string): string {
 
 /**
  * Composes a plain-language response from search results.
- * Replaces the bare "Found N memories:" placeholder with something actually useful.
  */
 function synthesizeResponse(query: string, memories: Memory[]): string {
   if (memories.length === 0) {
@@ -105,11 +105,7 @@ function synthesizeResponse(query: string, memories: Memory[]): string {
     return `Found **${m.title}**${preview ? `: ${preview}${firstLine.length > 140 ? '…' : ''}` : '.'}`;
   }
 
-  const topTitles = memories
-    .slice(0, 3)
-    .map(m => m.title)
-    .join(', ');
-
+  const topTitles = memories.slice(0, 3).map(m => m.title).join(', ');
   const extra = memories.length > 3 ? ` and ${memories.length - 3} more` : '';
   return `Found ${memories.length} memories about "${query}" — including ${topTitles}${extra}.`;
 }
@@ -129,7 +125,7 @@ const MemoryCard: React.FC<{ memory: Memory; onSelect?: (m: Memory) => void }> =
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // clipboard unavailable — ignore silently
+      // clipboard unavailable
     }
   };
 
@@ -138,7 +134,6 @@ const MemoryCard: React.FC<{ memory: Memory; onSelect?: (m: Memory) => void }> =
       onClick={() => onSelect?.(memory)}
       className={`group relative flex flex-col gap-2 rounded-lg border border-[#2D2D2D] bg-gradient-to-br from-[#252526] to-[#1E1E1E] p-3 hover:from-[#2A2D2E] hover:to-[#252526] hover:border-[#007ACC]/50 transition-all duration-200 ${onSelect ? 'cursor-pointer' : ''}`}
     >
-      {/* Copy button — appears on hover */}
       <button
         onClick={handleCopy}
         className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded bg-[#3C3C3C] hover:bg-[#4C4C4C] transition-all"
@@ -164,27 +159,13 @@ const MemoryCard: React.FC<{ memory: Memory; onSelect?: (m: Memory) => void }> =
           <Icon className="h-3 w-3" />
           <span>{formatMemoryDate(memory.created_at)}</span>
         </div>
+        {memory._pending && <span className="text-yellow-400">· pending</span>}
         {memory.tags.slice(0, 3).map((tag) => (
-          <span
-            key={tag}
-            className="bg-[#007ACC]/10 border border-[#007ACC]/20 text-[#007ACC] px-1.5 py-0.5 rounded text-[9px]"
-          >
+          <span key={tag} className="bg-[#007ACC]/10 px-1.5 py-0.5 rounded text-[#007ACC] text-[9px]">
             #{tag}
           </span>
         ))}
-        {memory.tags.length > 3 && (
-          <span className="text-[#666666] text-[9px]">+{memory.tags.length - 3}</span>
-        )}
-        {memory._pending && (
-          <span className="text-yellow-400 ml-auto">⏳ pending</span>
-        )}
       </div>
-
-      {memory.content && (
-        <p className="text-[11px] text-[#AAAAAA] leading-relaxed line-clamp-3">
-          {memory.content}
-        </p>
-      )}
     </div>
   );
 };
@@ -408,7 +389,6 @@ export const SidePanel: React.FC = () => {
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [chatInput, setChatInput] = useState('');
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [isSending, setIsSending] = useState(false);
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [isSavingQuickAdd, setIsSavingQuickAdd] = useState(false);
@@ -419,10 +399,14 @@ export const SidePanel: React.FC = () => {
     isSyncing: false,
     lastSyncAt: null,
   });
-  const [showChatHistory, setShowChatHistory] = useState(true);
+
+  // New state
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [showInlineSettings, setShowInlineSettings] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastAssistantResponse, setLastAssistantResponse] = useState<ChatMessage | null>(null);
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
   const version = chrome.runtime.getManifest?.()?.version ?? '0.2.0';
 
@@ -430,15 +414,13 @@ export const SidePanel: React.FC = () => {
     isAIReady,
     isAILoading,
     loadProgress,
-    error: aiError,
-    deviceInfo,
     initializeAI,
     search: semanticSearch,
   } = useSemanticSearch();
 
   const shouldUseLocalAI = aiMode === 'on' || (aiMode === 'auto' && !syncStatus.isOnline);
 
-  // ── Initial load (routing unchanged) ──────────────────────────────────
+  // ── Initial load ──────────────────────────────────────────────────────
 
   useEffect(() => {
     chrome.runtime.sendMessage({ type: 'GET_AUTH_STATUS' }, (response) => {
@@ -454,16 +436,18 @@ export const SidePanel: React.FC = () => {
       if (response) setSyncStatus(response);
     });
 
-    chrome.storage.local.get(['aiMode'], (result) => {
+    chrome.storage.local.get(['aiMode', 'userEmail'], (result) => {
       if (result.aiMode === 'off' || result.aiMode === 'auto' || result.aiMode === 'on') {
         setAiMode(result.aiMode);
       }
+      if (result.userEmail) setUserEmail(result.userEmail);
     });
 
     const handleStorageChange: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
       if (area !== 'local') return;
       const next = changes.aiMode?.newValue;
       if (next === 'off' || next === 'auto' || next === 'on') setAiMode(next);
+      if (changes.userEmail?.newValue) setUserEmail(changes.userEmail.newValue);
     };
     chrome.storage.onChanged.addListener(handleStorageChange);
 
@@ -482,12 +466,7 @@ export const SidePanel: React.FC = () => {
     };
   }, []);
 
-  // Scroll to latest chat message
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
-
-  // ── Search (debounced, routing unchanged) ────────────────────────────
+  // ── Search ────────────────────────────────────────────────────────────
 
   const triggerSearch = useCallback(async (query: string) => {
     if (!query.trim()) {
@@ -534,7 +513,7 @@ export const SidePanel: React.FC = () => {
     searchDebounceRef.current = setTimeout(() => triggerSearch(value), 280);
   }, [triggerSearch]);
 
-  // ── Auth (routing unchanged) ─────────────────────────────────────────
+  // ── Auth ──────────────────────────────────────────────────────────────
 
   const handleLogin = () => {
     setIsConnecting(true);
@@ -544,12 +523,13 @@ export const SidePanel: React.FC = () => {
   const handleLogout = () => {
     chrome.runtime.sendMessage({ type: 'LOGOUT' }, () => {
       setIsAuthenticated(false);
+      setUserEmail(null);
       setMemories([]);
-      setChatMessages([]);
+      setLastAssistantResponse(null);
     });
   };
 
-  // ── Sync (routing unchanged) ─────────────────────────────────────────
+  // ── Sync & Refresh ────────────────────────────────────────────────────
 
   const handleSync = () => {
     setSyncStatus(prev => ({ ...prev, isSyncing: true }));
@@ -563,7 +543,22 @@ export const SidePanel: React.FC = () => {
     });
   };
 
-  // ── Quick-add (routing unchanged, just new UI) ────────────────────────
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    chrome.runtime.sendMessage({ type: 'GET_MEMORIES' }, (response) => {
+      if (Array.isArray(response)) setMemories(response);
+      setIsRefreshing(false);
+    });
+  };
+
+  // ── AI Mode ───────────────────────────────────────────────────────────
+
+  const handleSetAiMode = (mode: 'off' | 'auto' | 'on') => {
+    setAiMode(mode);
+    chrome.storage.local.set({ aiMode: mode });
+  };
+
+  // ── Quick-add ─────────────────────────────────────────────────────────
 
   const handleQuickAdd = (title: string, content: string, tags: string[]) => {
     setIsSavingQuickAdd(true);
@@ -579,23 +574,17 @@ export const SidePanel: React.FC = () => {
     });
   };
 
-  // ── Chat (routing unchanged, response synthesis improved) ────────────
+  // ── Chat / unified input ──────────────────────────────────────────────
 
   const handleSendChat = async () => {
     const content = chatInput.trim();
     if (!content || isSending) return;
 
-    setChatMessages(prev => [...prev, {
-      id: `user_${Date.now()}`,
-      role: 'user',
-      content,
-      timestamp: Date.now(),
-    }]);
     setChatInput('');
     setIsSending(true);
+    setLastAssistantResponse(null);
 
-    const lower = content.toLowerCase();
-    const isCreate = /^(save|create|remember|store)\s+/i.test(lower);
+    const isCreate = /^(save|create|remember|store)\s+/i.test(content);
 
     if (isCreate) {
       const memoryContent = content.replace(/^(save|create|remember|store)\s+/i, '');
@@ -610,12 +599,12 @@ export const SidePanel: React.FC = () => {
           },
         },
       }, () => {
-        setChatMessages(prev => [...prev, {
+        setLastAssistantResponse({
           id: `assistant_${Date.now()}`,
           role: 'assistant',
-          content: `Saved to your memory bank.`,
+          content: 'Saved to your memory bank.',
           timestamp: Date.now(),
-        }]);
+        });
         setIsSending(false);
         chrome.runtime.sendMessage({ type: 'GET_MEMORIES' }, (response) => {
           if (Array.isArray(response)) setMemories(response);
@@ -626,13 +615,13 @@ export const SidePanel: React.FC = () => {
         { type: 'SEARCH_MEMORIES', payload: { query: content } },
         (response) => {
           const results: Memory[] = Array.isArray(response) ? response : [];
-          setChatMessages(prev => [...prev, {
+          setLastAssistantResponse({
             id: `assistant_${Date.now()}`,
             role: 'assistant',
             content: synthesizeResponse(content, results),
             memories: results.slice(0, 3),
             timestamp: Date.now(),
-          }]);
+          });
           setIsSending(false);
         }
       );
@@ -640,10 +629,6 @@ export const SidePanel: React.FC = () => {
   };
 
   // ── Render ────────────────────────────────────────────────────────────
-
-  const aiStatusColor = isAIReady ? 'text-green-400' : isAILoading ? 'text-purple-400' : 'text-[#666666]';
-  const aiStatusIcon = isAIReady ? Zap : isAILoading ? Loader2 : Cpu;
-  const AiIcon = aiStatusIcon;
 
   return (
     <div className="flex h-screen w-full bg-gradient-to-b from-[#1E1E1E] to-[#0D0D0D] text-[#CCCCCC] font-mono overflow-hidden flex-col">
@@ -660,112 +645,135 @@ export const SidePanel: React.FC = () => {
           </div>
         </div>
 
-        {isAuthenticated && (
-          <div className="flex items-center gap-1">
+        {isAuthenticated ? (
+          <div className="flex items-center gap-1.5">
+            {/* Online/sync dot */}
+            <div
+              className={`h-1.5 w-1.5 rounded-full shrink-0 ${syncStatus.isOnline ? 'bg-green-400' : 'bg-yellow-400'} ${syncStatus.isSyncing ? 'animate-pulse' : ''}`}
+              title={syncStatus.isOnline ? 'Online' : 'Offline'}
+            />
+
+            {/* Refresh */}
             <button
-              onClick={() => chrome.runtime.openOptionsPage()}
+              onClick={handleRefresh}
+              disabled={isRefreshing}
               className="p-1.5 hover:bg-[#3C3C3C] rounded-md transition-colors"
+              title="Refresh memories"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 text-[#888888] hover:text-white transition-colors ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
+
+            {/* User avatar */}
+            <div
+              className="h-6 w-6 rounded-full bg-[#007ACC]/15 border border-[#007ACC]/30 flex items-center justify-center text-[10px] text-[#007ACC] font-bold select-none cursor-default"
+              title={userEmail || 'Connected'}
+            >
+              {userEmail ? userEmail[0].toUpperCase() : <User className="h-3 w-3" />}
+            </div>
+
+            {/* Settings toggle */}
+            <button
+              onClick={() => setShowInlineSettings(v => !v)}
+              className={`p-1.5 rounded-md transition-colors ${showInlineSettings ? 'bg-[#007ACC]/20 text-[#007ACC]' : 'hover:bg-[#3C3C3C] text-[#888888] hover:text-white'}`}
               title="Settings"
             >
-              <Settings className="h-4 w-4 text-[#888888] hover:text-white" />
-            </button>
-            <button
-              onClick={handleLogout}
-              className="p-1.5 hover:bg-[#3C3C3C] rounded-md transition-colors"
-              title="Logout"
-            >
-              <LogOut className="h-4 w-4 text-[#888888] hover:text-white" />
+              <Settings className="h-3.5 w-3.5" />
             </button>
           </div>
-        )}
+        ) : null}
       </header>
+
+      {/* ── Inline settings panel ── */}
+      {isAuthenticated && showInlineSettings && (
+        <div className="px-4 py-3 bg-[#161616] border-b border-[#3C3C3C] shrink-0 space-y-3">
+          {userEmail && (
+            <div className="flex items-center gap-2">
+              <div className="h-5 w-5 rounded-full bg-[#007ACC]/20 border border-[#007ACC]/40 flex items-center justify-center text-[9px] text-[#007ACC] font-bold shrink-0">
+                {userEmail[0].toUpperCase()}
+              </div>
+              <span className="text-xs text-[#CCCCCC] truncate">{userEmail}</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-[#888888]">AI Mode</span>
+            <div className="flex gap-1">
+              {(['off', 'auto', 'on'] as const).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => handleSetAiMode(mode)}
+                  className={`text-[9px] px-2 py-0.5 rounded capitalize transition-colors ${
+                    aiMode === mode ? 'bg-[#007ACC] text-white' : 'bg-[#2D2D2D] text-[#888888] hover:bg-[#3C3C3C]'
+                  }`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {isAILoading && (
+            <div className="h-0.5 bg-purple-900/30 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300"
+                style={{ width: `${loadProgress}%` }}
+              />
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-1 border-t border-[#2D2D2D]">
+            <button
+              onClick={() => { chrome.runtime.openOptionsPage(); setShowInlineSettings(false); }}
+              className="text-[10px] text-[#007ACC] hover:text-[#0E9CED] transition-colors"
+            >
+              Full Settings →
+            </button>
+            <button
+              onClick={() => { handleLogout(); setShowInlineSettings(false); }}
+              className="text-[10px] text-red-400 hover:text-red-300 transition-colors flex items-center gap-1"
+            >
+              <LogOut className="h-2.5 w-2.5" />
+              Log out
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Scrollable content ── */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-3 space-y-3">
           {isAuthenticated ? (
             <>
-              {/* Compact combined status bar */}
-              <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#252526] border border-[#3C3C3C] text-[10px]">
-                <div className="flex items-center gap-3">
-                  {/* Online status */}
-                  <div className="flex items-center gap-1.5">
-                    {syncStatus.isOnline
-                      ? <Wifi className="h-3 w-3 text-green-400" />
-                      : <WifiOff className="h-3 w-3 text-yellow-400" />
-                    }
-                    <span className={syncStatus.isOnline ? 'text-green-400' : 'text-yellow-400'}>
-                      {syncStatus.isOnline ? 'Online' : 'Offline'}
-                    </span>
-                  </div>
-
-                  {/* Divider */}
-                  <span className="text-[#3C3C3C]">|</span>
-
-                  {/* AI status */}
-                  <div className="flex items-center gap-1.5">
-                    <AiIcon className={`h-3 w-3 ${aiStatusColor} ${isAILoading ? 'animate-spin' : ''}`} />
-                    <span className={aiStatusColor}>
-                      {isAIReady ? `AI Ready${deviceInfo ? ` · ${deviceInfo}` : ''}` : isAILoading ? `Loading ${loadProgress}%` : 'AI Off'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Sync button */}
-                {syncStatus.pendingCount > 0 ? (
-                  <button
-                    onClick={handleSync}
-                    disabled={syncStatus.isSyncing}
-                    className="text-yellow-400 hover:text-yellow-300 disabled:opacity-50"
-                  >
-                    {syncStatus.isSyncing ? 'Syncing…' : `${syncStatus.pendingCount} pending · Sync`}
-                  </button>
-                ) : (
-                  <span className="text-[#555555]">Synced</span>
-                )}
-              </div>
-
-              {/* AI loading progress bar (only when loading) */}
-              {isAILoading && (
-                <div className="h-1 bg-purple-900/30 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300"
-                    style={{ width: `${loadProgress}%` }}
-                  />
-                </div>
-              )}
-
-              {/* Search + New button */}
+              {/* Filter bar + New button */}
               <div className="flex gap-2">
                 <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#888888] pointer-events-none" />
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#555555] pointer-events-none" />
                   <input
                     type="text"
-                    placeholder="Search memories…"
+                    placeholder="Filter memories…"
                     value={searchQuery}
                     onChange={(e) => handleSearchChange(e.target.value)}
-                    className="w-full bg-[#252526] border border-[#3C3C3C] rounded-lg pl-9 pr-8 py-2 text-sm text-white placeholder:text-[#666666] focus:outline-none focus:border-[#007ACC] focus:ring-1 focus:ring-[#007ACC]/20 transition-all"
+                    className="w-full bg-[#1A1A1A] border border-[#2A2A2A] rounded-lg pl-8 pr-7 py-1.5 text-xs text-white placeholder:text-[#444444] focus:outline-none focus:border-[#007ACC]/50 transition-all"
                   />
                   {searchQuery && (
                     <button
                       onClick={() => handleSearchChange('')}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#666666] hover:text-[#CCCCCC] transition-colors"
-                      aria-label="Clear search"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[#555555] hover:text-[#CCCCCC] transition-colors"
                     >
-                      <X className="h-3.5 w-3.5" />
+                      <X className="h-3 w-3" />
                     </button>
                   )}
                 </div>
                 <button
                   onClick={() => setShowQuickAdd(v => !v)}
-                  className={`shrink-0 h-9 w-9 flex items-center justify-center rounded-lg border transition-colors ${
+                  className={`shrink-0 h-8 w-8 flex items-center justify-center rounded-lg border transition-colors ${
                     showQuickAdd
                       ? 'bg-[#007ACC] border-[#007ACC] text-white'
-                      : 'bg-[#252526] border-[#3C3C3C] text-[#888888] hover:text-white hover:border-[#007ACC]'
+                      : 'bg-[#1A1A1A] border-[#2A2A2A] text-[#555555] hover:text-white hover:border-[#007ACC]/50'
                   }`}
                   title="New memory"
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-3.5 w-3.5" />
                 </button>
               </div>
 
@@ -778,72 +786,50 @@ export const SidePanel: React.FC = () => {
                 />
               )}
 
-              {/* Chat history (collapsible) */}
-              {chatMessages.length > 0 && (
-                <div className="rounded-lg border border-[#3C3C3C] overflow-hidden">
-                  <button
-                    onClick={() => setShowChatHistory(v => !v)}
-                    className="w-full flex items-center justify-between px-3 py-2 bg-[#252526] hover:bg-[#2A2D2E] transition-colors text-[10px] text-[#888888]"
-                  >
-                    <span>Chat ({chatMessages.length} messages)</span>
-                    {showChatHistory ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                  </button>
-                  {showChatHistory && (
-                    <div className="p-3 bg-[#1E1E1E]/60 space-y-2 max-h-[280px] overflow-y-auto">
-                      {chatMessages.slice(-8).map((msg) => (
-                        <div key={msg.id} className={`flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                          <div className={`max-w-[88%] rounded-lg px-3 py-2 text-[12px] leading-relaxed ${
-                            msg.role === 'user'
-                              ? 'bg-[#007ACC] text-white rounded-br-sm'
-                              : 'bg-[#252526] text-[#CCCCCC] border border-[#3C3C3C] rounded-bl-sm'
-                          }`}>
-                            {msg.content}
-                          </div>
-                          {msg.memories && msg.memories.length > 0 && (
-                            <div className="w-full space-y-1.5 mt-1">
-                              {msg.memories.map((memory) => (
-                                <MemoryCard key={memory.id} memory={memory} onSelect={setSelectedMemory} />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      <div ref={chatEndRef} />
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Memory list header */}
-              <div className="flex items-center justify-between text-[10px] text-[#666666] px-1">
+              {/* Memory count + status row */}
+              <div className="flex items-center justify-between text-[9px] text-[#444444] px-0.5">
                 <span>
                   {searchQuery
                     ? `${memories.length} result${memories.length !== 1 ? 's' : ''} for "${searchQuery}"`
-                    : `${memories.length} memor${memories.length !== 1 ? 'ies' : 'y'}`
+                    : `${memories.length} memor${memories.length !== 1 ? 'ies' : 'y'} · most recent first`
                   }
                 </span>
-                {!searchQuery && memories.length > 0 && (
-                  <span className="text-[#555555]">most recent first</span>
-                )}
+                <div className="flex items-center gap-2">
+                  {isAIReady && (
+                    <span className="flex items-center gap-0.5 text-green-400">
+                      <Zap className="h-2.5 w-2.5" />
+                      <span>AI</span>
+                    </span>
+                  )}
+                  {syncStatus.pendingCount > 0 && (
+                    <button
+                      onClick={handleSync}
+                      disabled={syncStatus.isSyncing}
+                      className="text-yellow-400 hover:text-yellow-300 disabled:opacity-50"
+                    >
+                      {syncStatus.isSyncing ? 'Syncing…' : `${syncStatus.pendingCount} pending · Sync`}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Memory list */}
               <div className="space-y-2">
                 {isLoadingMemories ? (
                   <div className="flex flex-col items-center justify-center py-12 gap-3">
-                    <Loader2 className="h-6 w-6 text-[#007ACC] animate-spin" />
+                    <Loader2 className="h-5 w-5 text-[#007ACC] animate-spin" />
                     <p className="text-xs text-[#888888]">Loading memories…</p>
                   </div>
                 ) : memories.length === 0 ? (
                   <div className="text-center py-10">
-                    <div className="h-10 w-10 mx-auto mb-3 rounded-full bg-[#252526] flex items-center justify-center">
-                      <Search className="h-4 w-4 text-[#666666]" />
+                    <div className="h-10 w-10 mx-auto mb-3 rounded-full bg-[#1E1E1E] flex items-center justify-center">
+                      <Search className="h-4 w-4 text-[#444444]" />
                     </div>
-                    <p className="text-sm text-[#888888]">
+                    <p className="text-sm text-[#666666]">
                       {searchQuery ? `No memories matched "${searchQuery}"` : 'No memories yet'}
                     </p>
-                    <p className="text-xs text-[#666666] mt-1">
-                      {searchQuery ? 'Try different terms or clear search' : 'Use the + button or ask below to add one'}
+                    <p className="text-xs text-[#444444] mt-1">
+                      {searchQuery ? 'Try different terms' : 'Type below to save your first memory'}
                     </p>
                   </div>
                 ) : (
@@ -863,10 +849,36 @@ export const SidePanel: React.FC = () => {
         <MemoryDetailModal memory={selectedMemory} onClose={() => setSelectedMemory(null)} />
       )}
 
-      {/* ── Chat input ── */}
+      {/* ── Assistant response (inline, dismissible) ── */}
+      {lastAssistantResponse && isAuthenticated && (
+        <div className="px-3 pt-2 shrink-0">
+          <div className="relative rounded-lg border border-[#007ACC]/20 bg-[#007ACC]/5 p-3">
+            <div className="flex items-center gap-1.5 mb-1.5 text-[9px] text-[#007ACC]">
+              <Bot className="h-3 w-3" />
+              <span>Memory assistant</span>
+            </div>
+            <p className="text-xs text-[#CCCCCC] leading-relaxed">{lastAssistantResponse.content}</p>
+            {lastAssistantResponse.memories && lastAssistantResponse.memories.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {lastAssistantResponse.memories.map((m) => (
+                  <MemoryCard key={m.id} memory={m} onSelect={setSelectedMemory} />
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => setLastAssistantResponse(null)}
+              className="absolute top-2 right-2 text-[#444444] hover:text-[#888888] transition-colors"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Unified input ── */}
       <footer className="p-3 bg-[#1E1E1E] border-t border-[#3C3C3C] shrink-0">
         <div className="relative">
-          <div className="absolute left-3 top-3 text-[#007ACC] pointer-events-none">
+          <div className="absolute left-3 top-3 text-[#007ACC]/70 pointer-events-none">
             <Terminal className="h-4 w-4" />
           </div>
           <textarea
@@ -878,10 +890,10 @@ export const SidePanel: React.FC = () => {
                 handleSendChat();
               }
             }}
-            placeholder={isAuthenticated ? 'Ask your memory assistant…' : 'Connect to access orchestrator…'}
+            placeholder={isAuthenticated ? 'Search, save, or ask your memory assistant…' : 'Connect to access orchestrator…'}
             disabled={!isAuthenticated}
             rows={2}
-            className="w-full bg-[#252526] border border-[#3C3C3C] rounded-lg pl-9 pr-12 py-2.5 text-sm text-[#CCCCCC] placeholder:text-[#666666] resize-none focus:outline-none focus:border-[#007ACC] focus:ring-1 focus:ring-[#007ACC]/20 disabled:opacity-50 transition-all"
+            className="w-full bg-[#252526] border border-[#3C3C3C] rounded-lg pl-9 pr-12 py-2.5 text-sm text-[#CCCCCC] placeholder:text-[#555555] resize-none focus:outline-none focus:border-[#007ACC] focus:ring-1 focus:ring-[#007ACC]/20 disabled:opacity-50 transition-all"
           />
           <button
             onClick={handleSendChat}
@@ -896,9 +908,9 @@ export const SidePanel: React.FC = () => {
           </button>
         </div>
         {isAuthenticated && (
-          <div className="flex justify-between items-center px-1 mt-1.5">
-            <span className="text-[9px] text-[#555555]">Enter to send · Shift+Enter for newline</span>
-            <span className="text-[9px] text-[#444444]">v{version}</span>
+          <div className="flex justify-between items-center px-1 mt-1">
+            <span className="text-[9px] text-[#3C3C3C]">Enter to send · Shift+Enter for newline</span>
+            <span className="text-[9px] text-[#333333]">v{version}</span>
           </div>
         )}
       </footer>

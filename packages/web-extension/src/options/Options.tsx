@@ -54,8 +54,8 @@ export const Options: React.FC = () => {
 
   useEffect(() => {
     // Load saved settings
-    chrome.storage.local.get(['authToken', 'apiUrl', 'aiMode'], (result) => {
-      if (result.authToken) {
+    chrome.storage.local.get(['l0_auth_token', 'apiUrl', 'aiMode'], (result) => {
+      if (result.l0_auth_token) {
         setApiKey('••••••••••••••••');
         setIsAuthenticated(true);
       }
@@ -112,7 +112,7 @@ export const Options: React.FC = () => {
       const updates: Record<string, string> = { apiUrl: normalized.value, aiMode };
 
       if (apiKey && !apiKey.startsWith('••')) {
-        updates.authToken = apiKey;
+        updates.l0_auth_token = apiKey;
       }
 
       await chrome.storage.local.set(updates);
@@ -140,7 +140,7 @@ export const Options: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    await chrome.storage.local.remove(['authToken']);
+    await chrome.storage.local.remove(['l0_auth_token']);
     setIsAuthenticated(false);
     setApiKey('');
     setMessage({ type: 'success', text: 'Logged out successfully' });

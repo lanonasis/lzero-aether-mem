@@ -53,7 +53,8 @@
     "sidePanel",
     "activeTab",
     "alarms",
-    "offscreen"
+    "offscreen",
+    "scripting"
   ],
 
   "host_permissions": [

@@ -18,8 +18,8 @@ export function setupSync(cache: MemoryCache): void {
   chrome.alarms.onAlarm.addListener(async (alarm) => {
     if (alarm.name === SYNC_ALARM_NAME) {
       // Only sync if authenticated
-      const { authToken } = await chrome.storage.local.get('authToken');
-      if (authToken) {
+      const { l0_auth_token } = await chrome.storage.local.get('l0_auth_token');
+      if (l0_auth_token) {
         console.log('[L0 Memory] Background sync triggered');
         await cache.sync();
       }
@@ -28,8 +28,8 @@ export function setupSync(cache: MemoryCache): void {
 
   // Initial sync on startup - only if authenticated
   setTimeout(async () => {
-    const { authToken } = await chrome.storage.local.get('authToken');
-    if (authToken) {
+    const { l0_auth_token } = await chrome.storage.local.get('l0_auth_token');
+    if (l0_auth_token) {
       cache.sync().catch(console.error);
     } else {
       console.log('[L0 Memory] Skipping initial sync - not authenticated');

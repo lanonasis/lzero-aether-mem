@@ -67,12 +67,15 @@ chrome.commands.onCommand.addListener(async (command) => {
 
 // Handle messages from popup, sidepanel, content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[L0 Memory] Message:', message.type, 'from:', sender.id);
-  
+  if (!message || typeof message !== 'object' || !('type' in message)) {
+    sendResponse({ error: 'Malformed message' });
+    return false;
+  }
+
   handleMessage(message, sender)
     .then(sendResponse)
     .catch((err) => sendResponse({ error: err.message }));
-  
+
   return true; // Keep channel open for async response
 });
 
@@ -98,15 +101,15 @@ async function handleMessage(
       return cache.getStatus();
     
     case 'GET_AUTH_STATUS':
-      const token = await chrome.storage.local.get('authToken');
-      return { isAuthenticated: !!token.authToken };
-    
+      const token = await chrome.storage.local.get('l0_auth_token');
+      return { isAuthenticated: !!token.l0_auth_token };
+
     case 'SET_AUTH_TOKEN':
-      await chrome.storage.local.set({ authToken: message.payload?.token });
+      await chrome.storage.local.set({ l0_auth_token: message.payload?.token });
       return { success: true };
-    
+
     case 'LOGOUT':
-      await chrome.storage.local.remove(['authToken', 'userEmail']);
+      await chrome.storage.local.remove(['l0_auth_token', 'userEmail']);
       await cache.clear();
       return { success: true };
 

@@ -97,6 +97,7 @@ export default defineConfig({
         content: path.resolve(__dirname, 'src/content/index.ts'),
       },
       output: {
+        banner: 'var process=typeof process!=="undefined"?process:{env:{NODE_ENV:"production"},platform:"browser",version:"",versions:{},browser:true,nextTick:function(cb){return setTimeout(cb,0)}};',
         entryFileNames: (chunkInfo) => {
           if (chunkInfo.name === 'background' || chunkInfo.name === 'content') {
             return `${chunkInfo.name}/index.js`;

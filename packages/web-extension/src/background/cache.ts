@@ -205,14 +205,14 @@ export class MemoryCache {
    * Get auth + API url from extension storage.
    */
   private async getAuthConfig(): Promise<{ token: string; apiUrl: string; authType: AuthType } | null> {
-    const { authToken, apiUrl } = await chrome.storage.local.get(['authToken', 'apiUrl']);
-    if (!authToken) {
+    const { l0_auth_token, apiUrl } = await chrome.storage.local.get(['l0_auth_token', 'apiUrl']);
+    if (!l0_auth_token) {
       console.log('[MemoryCache] No auth token available');
       return null;
     }
 
     const effectiveApiUrl = normalizeApiUrl(apiUrl || DEFAULT_API_URL);
-    return { token: authToken, apiUrl: effectiveApiUrl, authType: inferAuthType(authToken) };
+    return { token: l0_auth_token, apiUrl: effectiveApiUrl, authType: inferAuthType(l0_auth_token) };
   }
 
   /**
