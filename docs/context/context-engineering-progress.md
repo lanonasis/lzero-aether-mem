@@ -1,9 +1,13 @@
-# Context Engineering Progress - LanOnasis Aether Memory
+# Context Engineering Progress — LanOnasis Aether Memory
 
 ## Workflow Instructions
 
-This file tracks all context engineering work for the LanOnasis Aether Memory project. When continuing in a new chat, start with:
-> "Continue context engineering - read `docs/context/context-engineering-progress.md` for project settings and current status, then help with the next phase."
+When continuing in a new session, start by reading this file and the referenced audit report:
+
+```
+lanonasis memory search "vscode extension audit 0.4.6" --limit 5 --threshold 0.5
+# Then read: /tmp/lana_vscode_extension_audit_final.md
+```
 
 ## Documentation Guidelines
 
@@ -33,94 +37,164 @@ This file tracks all context engineering work for the LanOnasis Aether Memory pr
 - ✅ Read all key documentation files (README, ARCHITECTURE, ROADMAP, MIGRATION, DEPLOYMENT, SETUP_CHECKLIST)
 - ✅ Identified major architectural decisions and components
 - ✅ Created directory structure: `docs/context/`
-- ✅ Created `context-engineering-progress.md`
-- ✅ Created `project-overview.md`
-- ✅ Created ADR-001: SDK Migration (local engine -> npm package)
-- ✅ Created ADR-002: Monorepo Structure (Turbo + Bun workspaces)
-- ✅ Created ADR-003: On-Device AI Architecture (Transformers.js + ONNX)
-- ✅ Created component context: shared-package
-- ✅ Created component context: server-backend
-- ✅ Created component context: client-web-app
-- ✅ Created component context: vscode-extension
-- ✅ Created component context: mobile-pwa
-- ✅ Created component context: web-extension
+- ✅ Created all component and architecture context files
+- ✅ Created 5 ADRs
 
 ### Phase 2: Core Documentation
 - ✅ Created ADR-004: Offline-First Architecture
 - ✅ Created ADR-005: Database Choice (PostgreSQL + Drizzle)
 - ✅ Created `architecture/system-design.md` with detailed data flow
-- ✅ Created workflow documentation: `workflows/development.md`
-- ✅ Created workflow documentation: `workflows/deployment.md`
+- ✅ Created workflow documentation: `development.md`, `deployment.md`
 
-## Current Status / Findings
+### Phase 3: VS Code Extension v0.4.6 Audit (2026-05-08) ⚠️ PRIORITY
+- ✅ **Phase 1**: Git history reconstructed (0.3.1 → 0.4.6)
+- ✅ **Phase 1**: CHANGELOG entries written for 0.4.2, 0.4.3, 0.4.4, 0.4.5
+- ✅ **Phase 2**: Security audit — all 4 critical fixes verified in source
+- ✅ **Phase 3**: Unit tests — 10/10 passing
+- ✅ **Phase 4**: TypeScript clean, build clean
+- ✅ **Phase 4**: VSIX bloat fixed (4.3 MB → 183 KB)
+- ⚠️ **Phase 3**: Manual test checklist — requires live VS Code environment
 
-### Key Architectural Discoveries
-1. **Build System Fix**: Migration from local `context-intelligence-engine` (1,468 lines, OOM errors) to `@lanonasis/mem-intel-sdk` reduced build time from failure to ~30s.
-2. **Cross-Platform SDK Pattern**: All packages consume `packages/shared` which re-exports `@lanonasis/mem-intel-sdk` types.
-3. **Offline-First PWA**: Mobile PWA uses service workers with local embedding generation (no network required for semantic search).
-4. **Backend Simplicity**: Express server with Drizzle ORM, simple REST API for memories + API keys. No complex microservices.
-5. **Core Module**: `core/` exports compliance manager, version manager, and brand constants (seems like a branding/governance layer).
+---
+
+## Current Status (Post-Audit — 2026-05-08)
+
+### VS Code Extension v0.4.6 — Audit Results
+
+**Overall**: All critical security fixes verified. One blocker (VSIX bloat) resolved. CHANGELOG completed. **Go/No-Go: Conditional GO** — pending manual test checklist.
+
+#### 4 Critical Fixes Verified ✅
+
+| Fix | Risk | Status | Evidence |
+|-----|------|--------|----------|
+| OAuth XSS (`escapeHtml`) | CRITICAL | ✅ VERIFIED | `SecureApiKeyService.ts` — all error paths escaped |
+| Webview Credential Removal | CRITICAL | ✅ VERIFIED | `sendConfigToWebview()` sends zero secrets; proxy bridge handles auth |
+| AI Search Correlation | HIGH | ✅ VERIFIED | `requestId` + `activeAiRequestIdRef` in `IDEPanel.tsx` |
+| Sync State Stuck | HIGH | ✅ VERIFIED | `setSyncing(false)` before `sync:complete` in `extension.ts` |
+
+#### Test & Build Results
+
+| Check | Result |
+|-------|--------|
+| Unit tests | ✅ 10/10 pass (vitest, 247ms) |
+| TypeScript | ✅ Zero errors |
+| Build | ✅ Clean (desktop + web) |
+| VSIX size (before) | 🔴 4.3 MB |
+| VSIX size (after fix) | ✅ **183 KB** |
+
+#### Blocker Resolution
+
+| Blocker | Fix Applied |
+|---------|-------------|
+| VSIX bloat (4.3 MB from stale `lzero-memory-0.4.3.tgz`) | ✅ Fixed — added `*.tgz` to `.vscodeignore`, rebuilt at 183 KB |
+| CHANGELOG gaps (0.4.2–0.4.5) | ✅ Fixed — entries written to `packages/vscode-extension/CHANGELOG.md` |
 
 ### Codemap Reconciliation (2026-05-08)
-Cross-referenced the AI-generated codemap with actual file system. Key corrections applied to context docs:
 
-1. **Server routes split**: `server/routes/` contains `index.ts`, `memories.routes.ts`, `keys.routes.ts`. Legacy `server/routes.ts` exists but is superseded.
-2. **Client packages embedding**: `client/src/packages/vscode-extension/` contains a copy/bridge of VSCode extension UI (`IDEPanel.tsx`, components, hooks) embedded inside the web dashboard. `client/src/packages/shared/` has local types and mock data. This duplication pattern was missed in initial discovery.
-3. **SDK TTL cache**: `packages/shared/src/sdk/index.ts` implements a 5-minute TTL cache (`ttl = 5 * 60 * 1000`) with `load()` persistence. Not documented in initial component context.
-4. **Codemap inaccuracies**: `/api/auth/validate` endpoint is referenced in codemap (mobile auth flow) but does NOT exist in `server/routes/`. Likely aspirational/planned.
-5. **Codemap stale line numbers**: Header notes line numbers may be outdated — verified key paths against actual files.
+Cross-referenced with actual repository state. Corrections applied to context docs:
 
-### Repo State Review (from logs investigation)
-- **`logs/` folder**: ~40MB of untracked OpenAI API logs from Blackbox CLI. Should be deleted or added to `.gitignore`.
-- **Branch state**: Current branch `align/mobile-pwa-desktop` (2 commits ahead of local `main`). Local `main` is 1 commit ahead, 1 behind `origin/main`.
-- **PR #7 (`Devmode-active`)**: CRITICAL — would delete entire `packages/web-extension/`, server routes, `vercel.json`, and 11 documentation files. **DO NOT MERGE**.
-- **PR #3 (`LZ-1`)**: Architectural refactor adding `apps/mobile/` (Expo/React Native). Conflicts with existing mobile PWA. Requires rebase/review before merge.
-- **PR #15**: Safe — documentation-only changes to web-extension optimization guides.
+#### ✅ Where Codemap Was More Accurate — Context Fixed
 
-### File Locations
-| Document | Path |
-|----------|------|
-| Progress tracker | `docs/context/context-engineering-progress.md` |
-| Master overview | `docs/context/project-overview.md` |
-| ADR-001 SDK Migration | `docs/context/architecture/decisions/adr-001-sdk-migration.md` |
-| ADR-002 Monorepo | `docs/context/architecture/decisions/adr-002-monorepo-structure.md` |
-| ADR-003 On-Device AI | `docs/context/architecture/decisions/adr-003-on-device-ai.md` |
-| Shared Package | `docs/context/components/shared-package-context.md` |
-| Server Backend | `docs/context/components/server-backend-context.md` |
-| Client Web App | `docs/context/components/client-web-app-context.md` |
-| VSCode Extension | `docs/context/components/vscode-extension-context.md` |
-| Mobile PWA | `docs/context/components/mobile-pwa-context.md` |
-| Web Extension | `docs/context/components/web-extension-context.md` |
-| System Design | `docs/context/architecture/system-design.md` |
-| Development Workflow | `docs/context/workflows/development.md` |
-| Deployment Workflow | `docs/context/workflows/deployment.md` |
-| Testing Strategy | `docs/context/workflows/testing.md` |
-| Environment Variables | `docs/context/workflows/environment.md` |
-| Maintenance Procedures | `docs/context/workflows/maintenance.md` |
-| Codemap (AI-generated) | `docs/context/architecture/codemap-sample.md` |
+| Finding | Before (Context) | After (Fixed) |
+|---------|-----------------|---------------|
+| **Server routes split** | Listed only `server/routes.ts` | Updated: `routes/index.ts`, `memories.routes.ts`, `keys.routes.ts` documented; `routes.ts` marked legacy |
+| **Client packages embedding** | Not documented | `client/src/packages/vscode-extension/` (embedded IDE copy) + `client/src/packages/shared/` documented |
+| **SDK TTL cache** | Not documented | `packages/shared/src/sdk/index.ts` — 5-min TTL documented |
+
+#### ⚠️ Where Codemap Was Wrong/Aspirational
+
+| Claim | Actual State |
+|-------|-------------|
+| **`/api/auth/validate` endpoint** | Does NOT exist in `server/routes/`. Mobile auth flow is aspirational. |
+| **Specific line numbers in headers** | Stale — verified against actual source files |
+
+### Repo State Review
+
+#### Branch Status
+
+| Branch | Status | Action Required |
+|--------|--------|----------------|
+| `main` | ✅ Current working branch | None |
+| `origin/Devmode-active` (PR #7) | 🔴 **CRITICAL — DO NOT MERGE** | **Reject** — would delete `packages/web-extension/`, server routes, `vercel.json`, 11 docs |
+| `origin/LZ-1` (PR #3) | ⚠️ Review needed | Conflicts with existing PWA; close or rebase |
+| `origin/align/mobile-pwa-desktop` | Side branch | Not on main |
+| `origin/pr16` | ✅ Has correct artifact hygiene fix | **Merge** — `.vsix`/`.tgz` removal + bug fixes |
+
+#### Artifact Hygiene
+
+| Item | Status | Action |
+|------|--------|--------|
+| `logs/` folder (~40MB) | 🔴 Untracked | Delete — Blackbox CLI API logs, not needed |
+| Tracked `.vsix` files | 🔴 Should not be in git | Fix via PR #16 (`git rm --cached`) |
+| `lzero-memory-0.4.3.tgz` in VSIX | ✅ Fixed 2026-05-08 | `*.tgz` in `.vscodeignore`; archived in `_archive/vscode-extension-assets/` |
+| `.vsixignore` missing `*.tgz` | ✅ Fixed 2026-05-08 | Added to `packages/vscode-extension/.vscodeignore` |
+| `_archive/vscode-extension-assets/` | ✅ Created 2026-05-08 | Preserves bloated VSIX + historical notes |
+
+### Known Risks
+
+| Risk | Severity | Mitigation |
+|------|---------|------------|
+| PR #7 (`Devmode-active`) destructive | 🔴 CRITICAL | Reject the PR |
+| PR #3 (`LZ-1`) Expo conflict | ⚠️ MEDIUM | Rebase or close |
+| VSIX artifacts in git | 🟡 LOW | Merge PR #16 |
+| `logs/` folder bloating repo | 🟡 LOW | Delete untracked |
+| `/api/auth/validate` aspirational | 🟢 INFO | Documented as planned |
+
+---
+
+## File Locations
+
+| Document | Path | Status |
+|----------|------|--------|
+| Progress tracker | `docs/context/context-engineering-progress.md` | ✅ Updated 2026-05-08 |
+| Master overview | `docs/context/project-overview.md` | ✅ Updated 2026-05-08 |
+| VSCode Extension | `docs/context/components/vscode-extension-context.md` | ✅ Updated 2026-05-08 |
+| Server Backend | `docs/context/components/server-backend-context.md` | ✅ Updated 2026-05-08 |
+| Client Web App | `docs/context/components/client-web-app-context.md` | ✅ Updated 2026-05-08 |
+| ADR-001 SDK Migration | `docs/context/architecture/decisions/adr-001-sdk-migration.md` | ✅ As-is |
+| ADR-002 Monorepo | `docs/context/architecture/decisions/adr-002-monorepo-structure.md` | ✅ As-is |
+| ADR-003 On-Device AI | `docs/context/architecture/decisions/adr-003-on-device-ai.md` | ✅ As-is |
+| Shared Package | `docs/context/components/shared-package-context.md` | ✅ As-is |
+| Mobile PWA | `docs/context/components/mobile-pwa-context.md` | ✅ As-is |
+| Web Extension | `docs/context/components/web-extension-context.md` | ✅ As-is |
+| System Design | `docs/context/architecture/system-design.md` | ✅ As-is |
+| Development Workflow | `docs/context/workflows/development.md` | ✅ As-is |
+| Deployment Workflow | `docs/context/workflows/deployment.md` | ✅ As-is |
+| Testing Strategy | `docs/context/workflows/testing.md` | ✅ As-is |
+| Environment Variables | `docs/context/workflows/environment.md` | ✅ As-is |
+| Maintenance Procedures | `docs/context/workflows/maintenance.md` | ✅ As-is |
+| **Audit Report** | `/tmp/lana_vscode_extension_audit_final.md` | ✅ New — 2026-05-08 |
+| **Archived Artifacts** | `_archive/vscode-extension-assets/` | ✅ New — 2026-05-08 |
+
+---
 
 ## Next Steps
 
-### ✅ All 3 Phases Complete
+### Immediate (Before Any PR Merge)
 
-The core context engineering system is fully documented. Optional enhancements if needed:
+1. **Merge PR #16** (`origin/pr16`) — artifact hygiene fix: `.vsix`/`.tgz` removal, route fixes, bug fixes
+2. **Reject PR #7** (`Devmode-active`) — destructive; documented as critical blocker
+3. **Close PR #3** (`LZ-1`) — Expo mobile conflicts with existing PWA
+4. **Delete `logs/` folder** — untracked, ~40MB of stale Blackbox CLI logs
+5. **Publish cleaned VSIX v0.4.6** — `vsce publish` after PR #16 merge
 
-- **ADR-006**: Authentication Architecture (Clerk/Auth.js vs alternatives)
-- **ADR-007**: State Management (TanStack Query + Zustand vs Redux/MobX)
-- **Component deep-dive**: `core/` module (compliance, versioning)
-- **Troubleshooting guide**: Common errors and resolutions
-- **API reference**: Full REST endpoint documentation
-- **Onboarding guide**: New developer quick-start from context docs
+### Next Session Priorities
 
-### 🔴 Urgent Repo Hygiene (from branch audit)
-- **Delete `logs/` folder** (~40MB untracked Blackbox CLI logs) or add to `.gitignore`
-- **Reconcile `main` branch**: Local main is 1 ahead / 1 behind origin — push or reset
-- **Close/Reject PR #7 (`Devmode-active`)**: Would destroy web-extension, server routes, deployment docs
-- **Review PR #3 (`LZ-1`)**: Adds Expo mobile app that conflicts with existing PWA — needs rebase
-- **Clean stale branches**: `Devmode-active`, `LZ-1` branches are conflicting and divergent
+- **Manual test checklist** (requires live VS Code): OAuth flow, API key auth, memory CRUD, sync spinner, keybindings, chat participant
+- **ADR-006**: Authentication Architecture (if self-hosted server is prioritized)
+- **ADR-007**: State Management
+- **`core/` module** deep-dive
+- **API reference**: Full REST endpoint documentation (especially the `/api/auth/validate` gap)
+
+---
 
 ## Methodology Notes
 
 - **Phase limit**: Maximum 3 phases per session to avoid context overload.
 - **Confirmation required**: Before any file overwrites or structural changes.
 - **Backup policy**: Existing docs are preserved; context files are additive.
+- **Memory search**: Always check `lanonasis memory search` before creating new context entries.
+
+---
+
+_Last updated: 2026-05-08 by LANA (Chief of Staff / Strategy Orchestrator)_

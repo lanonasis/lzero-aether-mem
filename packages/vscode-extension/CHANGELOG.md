@@ -19,6 +19,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Webview API calls now proxy through the extension host for authenticated `/api/*` requests
 - Refined sidebar auth state updates so the UI reflects successful sign-in and sync completion more reliably
 
+## [0.4.5] - 2026-01-24
+
+### Fixed
+
+- **API Key Endpoint** - Corrected endpoint path from `/api/v1/auth/api-keys` to `/api/v1/api-keys` to match actual backend route structure
+- **Memory Assistant Visibility** - Fixed visibility toggle so Memory Assistant panel displays correctly when activated
+
+### Changed
+
+- Build scripts updated from `npm` to `bun` for faster installs and builds
+
+## [0.4.4] - 2026-01-23
+
+### Fixed
+
+- **API Route Migration** - Migrated from Supabase Edge Function paths to REST API endpoints (`/functions/v1/memory-*` → `/memory/*`)
+- **Sync Timeout Handling** - Added explicit timeout handling to sync operations to prevent perpetual loading states
+
+### Changed
+
+- API endpoint routing now uses direct REST paths rather than Supabase Edge Function proxies
+
+## [0.4.3] - 2026-01-16
+
+### Added
+
+- **MemoryService** - Core service class handling memory CRUD operations (create, update, delete, search) with consistent error handling
+- **SecureApiKeyService** - Credential management service for secure storage and retrieval of API keys and OAuth tokens via VS Code SecretStorage
+- **Diagnostics Utility** - Extension health check combining configuration validation, authentication status, and network connectivity checks
+
+### Technical
+
+- Created unified `memory-aligned.ts` types file for consistent MemoryEntry interfaces across the extension
+- Refactored credential storage to use VS Code SecretStorage with migration path from legacy storage keys
+
+## [0.4.2] - 2026-01-15
+
+### Changed
+
+- **API URL Resolution** - Introduced `getEdgeFunctionsUrl()` helper to dynamically determine correct Supabase Edge Function URL based on configuration
+- Updated `MemorySidebarProvider` to use edge function URL strategy instead of direct API URL
+
+### Fixed
+
+- **Local Memory Deletion** - `IDEPanel` now correctly handles deletion of locally-cached memories before API sync
+- Improved API call reliability by selecting appropriate endpoint based on available configuration
+
 ## [0.3.1] - 2025-06-20
 
 ### Fixed
@@ -117,6 +164,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Credentials stored securely in VS Code SecretStorage
 - Content Security Policy (CSP) for webview protection
 
+[0.4.6]: https://github.com/lanonasis/lzero-aether-mem/releases/tag/vscode-extension-v0.4.6
+[0.4.5]: https://github.com/lanonasis/lzero-aether-mem/releases/tag/vscode-extension-v0.4.5
+[0.4.4]: https://github.com/lanonasis/lzero-aether-mem/releases/tag/vscode-extension-v0.4.4
+[0.4.3]: https://github.com/lanonasis/lzero-aether-mem/releases/tag/vscode-extension-v0.4.3
+[0.4.2]: https://github.com/lanonasis/lzero-aether-mem/releases/tag/vscode-extension-v0.4.2
+[0.3.1]: https://github.com/lanonasis/lzero-aether-mem/releases/tag/vscode-extension-v0.3.1
+[0.3.0]: https://github.com/lanonasis/lzero-aether-mem/releases/tag/vscode-extension-v0.3.0
 [0.2.0]: https://github.com/lanonasis/lzero-aether-mem/releases/tag/vscode-extension-v0.2.0
 [0.1.1]: https://github.com/lanonasis/lzero-aether-mem/releases/tag/vscode-extension-v0.1.1
 [0.1.0]: https://github.com/lanonasis/lzero-aether-mem/releases/tag/vscode-extension-v0.1.0

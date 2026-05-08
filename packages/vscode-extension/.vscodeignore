@@ -16,6 +16,7 @@ src/**
 *.ts
 *.tsx
 *.vsix
+*.tgz
 .turbo/**
 .vscode/**
 .vscode-test/**
