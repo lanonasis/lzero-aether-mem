@@ -15,6 +15,7 @@ import { MemoryCache } from './cache';
 import { setupSync } from './sync';
 import {
   ensureOffscreenDocument,
+  hasOffscreenDocument,
   initializeOffscreenAI,
   generateEmbedding,
   getOffscreenAIStatus,
@@ -132,7 +133,11 @@ async function handleMessage(
 
     case 'OFFSCREEN_STATUS':
       try {
-        await ensureOffscreenDocument();
+        // Only query status if the offscreen document already exists.
+        // Do NOT create it here — that would eagerly spin up the AI context.
+        if (!(await hasOffscreenDocument())) {
+          return { isReady: false, loadProgress: 0, deviceInfo: '' };
+        }
         return await getOffscreenAIStatus();
       } catch (error) {
         return { isReady: false, loadProgress: 0, deviceInfo: '' };

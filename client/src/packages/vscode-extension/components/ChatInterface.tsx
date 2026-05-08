@@ -39,38 +39,34 @@ export const ChatInterface = ({
   onAttach,
 }: ChatInterfaceProps) => {
   return (
-    <div className="p-3 bg-[var(--vscode-sideBar-background)] border-t border-[var(--vscode-panel-border)]">
-      <div className="relative bg-[var(--vscode-input-background)] border border-[var(--vscode-input-border)] focus-within:border-[var(--vscode-focusBorder)] rounded-[2px] transition-colors">
-        <div className="p-2 pb-8">
-          <textarea
-            value={value}
-            onChange={e => onChange(e.target.value)}
-            placeholder={
-              isAuthenticated ? 'Refine context...' : 'Connect to chat'
-            }
-            disabled={!isAuthenticated || disabled}
-            className="w-full min-h-[40px] bg-transparent border-none text-[13px] text-[var(--vscode-input-foreground)] placeholder:text-[var(--vscode-input-placeholderForeground)] resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed font-sans"
-            data-testid="textarea-chat"
-          />
-        </div>
+    <div className="border-t border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] px-3 py-2.5">
+      <div className="relative rounded-[2px] border border-[var(--vscode-input-border)] bg-[var(--vscode-input-background)] transition-colors focus-within:border-[var(--vscode-focusBorder)]">
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={
+            isAuthenticated ? "Refine context..." : "Connect to chat"
+          }
+          disabled={!isAuthenticated || disabled}
+          className="min-h-[58px] w-full resize-none border-none bg-transparent px-2.5 pt-2 pb-9 text-[13px] text-[var(--vscode-input-foreground)] placeholder:text-[var(--vscode-input-placeholderForeground)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 font-sans"
+          data-testid="textarea-chat"
+        />
 
-        <div className="absolute left-2 bottom-1.5 flex gap-1">
+        <div className="absolute inset-x-2 bottom-1.5 flex items-center justify-between">
           <Button
             size="icon"
             variant="ghost"
-            className="h-6 w-6 text-[var(--vscode-icon-foreground)] hover:bg-[var(--vscode-list-hoverBackground)] rounded-[2px]"
+            className="h-6 w-6 rounded-[2px] text-[var(--vscode-icon-foreground)] hover:bg-[var(--vscode-list-hoverBackground)]"
             disabled={!isAuthenticated || disabled}
             onClick={onAttach}
             data-testid="btn-attach"
           >
             <PaperclipIcon className="h-3.5 w-3.5" />
           </Button>
-        </div>
 
-        <div className="absolute right-2 bottom-1.5">
           <Button
             size="icon"
-            className="h-6 w-6 bg-[var(--vscode-button-background)] hover:bg-[var(--vscode-button-hoverBackground)] text-[var(--vscode-button-foreground)] rounded-[2px] disabled:opacity-50"
+            className="h-6 w-6 rounded-[2px] bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] hover:bg-[var(--vscode-button-hoverBackground)] disabled:opacity-50"
             disabled={!isAuthenticated || disabled}
             onClick={onSend}
             data-testid="btn-send"

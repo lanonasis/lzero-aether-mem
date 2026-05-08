@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { LanonasisProvider } from '@lanonasis/shared/sdk/react-hooks';
+import { LanonasisProvider } from '@lanonasis/shared';
 import { MobileApp } from './MobileApp';
 import './index.css';
 

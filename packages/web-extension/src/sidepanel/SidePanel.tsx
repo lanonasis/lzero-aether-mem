@@ -1,7 +1,7 @@
 /**
  * Side Panel Component
  * Full-featured memory panel matching the demo RichPanel
- * 
+ *
  * This is adapted from client/src/packages/web-extension/RichPanel.tsx
  */
 
@@ -24,6 +24,7 @@ import {
   Terminal as TerminalIcon,
   Cpu,
   Zap,
+  X,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useSemanticSearch } from '../hooks/useSemanticSearch';
@@ -228,9 +229,9 @@ const WelcomeView: React.FC<{ onLogin: () => void; isConnecting: boolean }> = ({
         Connect to your personal AI orchestrator. Store, search, and recall your development context instantly.
       </p>
     </div>
-    <button 
-      onClick={onLogin} 
-      disabled={isConnecting} 
+    <button
+      onClick={onLogin}
+      disabled={isConnecting}
       className="bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-lg hover:shadow-[#007ACC]/50 text-white font-medium w-full max-w-[220px] py-2 px-4 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
     >
       {isConnecting ? (
@@ -266,6 +267,7 @@ export const SidePanel: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [memories, setMemories] = useState<Memory[]>([]);
+  const [isLoadingMemories, setIsLoadingMemories] = useState(true);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [chatInput, setChatInput] = useState('');
@@ -304,6 +306,7 @@ export const SidePanel: React.FC = () => {
       if (Array.isArray(response)) {
         setMemories(response);
       }
+      setIsLoadingMemories(false);
     });
 
     // Get sync status
@@ -344,12 +347,10 @@ export const SidePanel: React.FC = () => {
     };
   }, []);
 
-  // Initialize local AI only when needed to avoid heavy preload/memory use.
-  useEffect(() => {
-    if (shouldUseLocalAI && !isAIReady && !isAILoading) {
-      void initializeAI();
-    }
-  }, [shouldUseLocalAI, isAIReady, isAILoading, initializeAI]);
+  // NOTE: Local AI is intentionally NOT initialized here on mount.
+  // It is initialized lazily the first time the user triggers a search
+  // with shouldUseLocalAI === true (see handleSearch below).
+  // This avoids downloading a large model on every panel open.
 
   const handleSearch = useCallback(async (query: string) => {
     if (!query.trim()) {
@@ -478,7 +479,7 @@ export const SidePanel: React.FC = () => {
         };
         setChatMessages(prev => [...prev, assistantMessage]);
         setIsSending(false);
-        
+
         // Refresh memories
         chrome.runtime.sendMessage({ type: 'GET_MEMORIES' }, (response) => {
           if (Array.isArray(response)) {
@@ -495,7 +496,7 @@ export const SidePanel: React.FC = () => {
           const assistantMessage: ChatMessage = {
             id: `assistant_${Date.now()}`,
             role: 'assistant',
-            content: results.length > 0 
+            content: results.length > 0
               ? `Found ${results.length} relevant memories:`
               : `No memories found for "${content}"`,
             memories: results,
@@ -521,7 +522,7 @@ export const SidePanel: React.FC = () => {
             <span className="text-[9px] text-[#888888] leading-none mt-0.5">Memory Orchestrator</span>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-1">
           {isAuthenticated && (
             <>
@@ -622,16 +623,29 @@ export const SidePanel: React.FC = () => {
               {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#888888]" />
-                <input 
+                <input
                   type="text"
-                  placeholder="Search your memory..." 
+                  placeholder="Search memories..."
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
                     handleSearch(e.target.value);
                   }}
-                  className="w-full bg-[#252526] border border-[#3C3C3C] rounded-lg pl-9 pr-3 py-2.5 text-sm text-white placeholder:text-[#666666] focus:outline-none focus:border-[#007ACC] focus:ring-1 focus:ring-[#007ACC]/20 transition-all"
+                  className="w-full bg-[#252526] border border-[#3C3C3C] rounded-lg pl-9 pr-8 py-2.5 text-sm text-white placeholder:text-[#666666] focus:outline-none focus:border-[#007ACC] focus:ring-1 focus:ring-[#007ACC]/20 transition-all"
                 />
+                {searchQuery && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery('');
+                      handleSearch('');
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#666666] hover:text-[#CCCCCC] transition-colors"
+                    title="Clear search"
+                    aria-label="Clear search"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
 
               {/* Chat Messages */}
@@ -640,7 +654,7 @@ export const SidePanel: React.FC = () => {
                   {chatMessages.slice(-5).map((msg) => (
                     <div key={msg.id} className={`flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                       <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
-                        msg.role === 'user' 
+                        msg.role === 'user'
                           ? 'bg-[#007ACC] text-white'
                           : 'bg-[#1E1E1E] text-[#CCCCCC] border border-[#3C3C3C]'
                       }`}>
@@ -660,7 +674,12 @@ export const SidePanel: React.FC = () => {
 
               {/* Memories List */}
               <div className="space-y-2">
-                {memories.length === 0 ? (
+                {isLoadingMemories ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-3">
+                    <Loader2 className="h-6 w-6 text-[#007ACC] animate-spin" />
+                    <p className="text-xs text-[#888888]">Loading memories...</p>
+                  </div>
+                ) : memories.length === 0 ? (
                   <div className="text-center py-12">
                     <div className="h-12 w-12 mx-auto mb-3 rounded-full bg-[#252526] flex items-center justify-center">
                       <Search className="h-5 w-5 text-[#666666]" />
@@ -688,7 +707,7 @@ export const SidePanel: React.FC = () => {
       {selectedMemory && (
         <MemoryDetailModal memory={selectedMemory} onClose={() => setSelectedMemory(null)} />
       )}
-      
+
       {/* Chat Input - Fixed at bottom */}
       <footer className="p-3 bg-[#1E1E1E] border-t border-[#3C3C3C] shrink-0">
         <div className="relative">

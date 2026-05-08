@@ -102,6 +102,12 @@ const toMemoryRequestType = (
   }
 };
 
+const panelMetaChipClass =
+  "inline-flex min-h-6 items-center gap-1.5 rounded-full border border-[var(--vscode-panel-border)] bg-[var(--vscode-editor-background)] px-2 py-1 text-[10px] font-medium leading-none text-[var(--vscode-descriptionForeground)]";
+
+const panelIconButtonClass =
+  "h-6 w-6 shrink-0 rounded-sm text-[var(--vscode-icon-foreground)] hover:bg-[var(--vscode-list-hoverBackground)]";
+
 interface MemoryEditDraft {
   title: string;
   content: string;
@@ -384,109 +390,128 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
         {/* Sidebar Container */}
         <div className="w-full max-w-[400px] h-full flex flex-col bg-[var(--vscode-sideBar-background)] relative">
           {/* Top Header */}
-          <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--vscode-sideBar-background)]">
-            <div className="flex items-center gap-2">
-              <L0Logo className="h-4 w-4 text-[var(--vscode-icon-foreground)]" />
-              <span className="text-[11px] font-bold uppercase tracking-wide text-[var(--vscode-sideBarTitle-foreground)]">
-                LanOnasis Memory
-              </span>
+          <div className="border-b border-[var(--vscode-panel-border)] bg-[var(--vscode-sideBar-background)] px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <L0Logo className="h-4 w-4 shrink-0 text-[var(--vscode-icon-foreground)]" />
+                <span className="truncate text-[11px] font-bold uppercase tracking-wide text-[var(--vscode-sideBarTitle-foreground)]">
+                  LanOnasis Memory
+                </span>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1">
+                {isAuthenticated && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={panelIconButtonClass}
+                        data-testid="btn-user-menu"
+                      >
+                        <Settings className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="bg-[var(--vscode-menu-background)] border-[var(--vscode-panel-border)] text-[var(--vscode-menu-foreground)] min-w-[160px] p-1 gap-0.5 shadow-xl"
+                    >
+                      <DropdownMenuLabel className="text-[11px] text-[var(--vscode-descriptionForeground)] px-2 py-1.5 font-normal">
+                        My Account
+                      </DropdownMenuLabel>
+                      <DropdownMenuSeparator className="bg-[var(--vscode-panel-border)] my-1" />
+                      <DropdownMenuItem
+                        className="text-[13px] hover:bg-[var(--vscode-menu-selectionBackground)] hover:text-[var(--vscode-menu-selectionForeground)] cursor-pointer rounded-sm px-2 py-1.5"
+                        onClick={() => setShowApiKeys(true)}
+                        data-testid="menu-api-keys"
+                      >
+                        <Key className="mr-2 h-3.5 w-3.5 opacity-70" />
+                        <span>API Keys</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-[13px] hover:bg-[var(--vscode-menu-selectionBackground)] hover:text-[var(--vscode-menu-selectionForeground)] cursor-pointer rounded-sm px-2 py-1.5"
+                        data-testid="menu-profile"
+                      >
+                        <User className="mr-2 h-3.5 w-3.5 opacity-70" />
+                        <span>Profile</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator className="bg-[var(--vscode-panel-border)] my-1" />
+                      <DropdownMenuItem
+                        className="text-[13px] hover:bg-[var(--vscode-menu-selectionBackground)] hover:text-[var(--vscode-menu-selectionForeground)] cursor-pointer rounded-sm px-2 py-1.5"
+                        onClick={logout}
+                        data-testid="menu-logout"
+                      >
+                        <LogOut className="mr-2 h-3.5 w-3.5 opacity-70" />
+                        <span>Log out</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={panelIconButtonClass}
+                  data-testid="btn-more"
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-1">
-              <div className="flex items-center gap-1 text-[10px] text-[var(--vscode-descriptionForeground)] mr-1">
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <div
+                className={cn(
+                  panelMetaChipClass,
+                  isAuthenticated ? "text-green-300" : "text-yellow-300"
+                )}
+              >
                 <div
-                  className={`h-1.5 w-1.5 rounded-full ${
+                  className={cn(
+                    "h-1.5 w-1.5 rounded-full",
                     isAuthenticated ? "bg-green-500" : "bg-yellow-500"
-                  }`}
+                  )}
                   title={isAuthenticated ? "Online" : "Local"}
                 />
-                <span>{isAuthenticated ? "Online" : "Local"}</span>
+                <span>{isAuthenticated ? "Online" : "Local mode"}</span>
               </div>
-              <span className="text-[10px] text-[var(--vscode-descriptionForeground)] opacity-80">
-                {isAuthenticated
-                  ? isSyncing
-                    ? "Syncing..."
-                    : lastSyncAt
-                    ? `Synced ${formatDateShort(lastSyncAt)}`
-                    : "Not synced"
-                  : "Local mode"}
-              </span>
+
+              <div className={panelMetaChipClass}>
+                <RefreshCw
+                  className={cn("h-2.5 w-2.5", isSyncing && "animate-spin")}
+                />
+                <span>
+                  {isAuthenticated
+                    ? isSyncing
+                      ? "Syncing"
+                      : lastSyncAt
+                      ? `Synced ${formatDateShort(lastSyncAt)}`
+                      : "Not synced"
+                    : "Sync unavailable"}
+                </span>
+              </div>
+
               {userDisplayName && (
-                <span
-                  className="text-[10px] text-[var(--vscode-descriptionForeground)] max-w-[120px] truncate"
+                <div
+                  className={cn(panelMetaChipClass, "min-w-0 max-w-full")}
                   title={userDisplayName}
                 >
-                  {userDisplayName}
-                </span>
+                  <User className="h-2.5 w-2.5 shrink-0" />
+                  <span className="truncate">{userDisplayName}</span>
+                </div>
               )}
-              {isAuthenticated ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5 hover:bg-[var(--vscode-list-hoverBackground)] rounded-sm"
-                      data-testid="btn-user-menu"
-                    >
-                      <Settings className="h-3.5 w-3.5 text-[var(--vscode-icon-foreground)]" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    className="bg-[var(--vscode-menu-background)] border-[var(--vscode-panel-border)] text-[var(--vscode-menu-foreground)] min-w-[160px] p-1 gap-0.5 shadow-xl"
-                  >
-                    <DropdownMenuLabel className="text-[11px] text-[var(--vscode-descriptionForeground)] px-2 py-1.5 font-normal">
-                      My Account
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator className="bg-[var(--vscode-panel-border)] my-1" />
-                    <DropdownMenuItem
-                      className="text-[13px] hover:bg-[var(--vscode-menu-selectionBackground)] hover:text-[var(--vscode-menu-selectionForeground)] cursor-pointer rounded-sm px-2 py-1.5"
-                      onClick={() => setShowApiKeys(true)}
-                      data-testid="menu-api-keys"
-                    >
-                      <Key className="mr-2 h-3.5 w-3.5 opacity-70" />
-                      <span>API Keys</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      className="text-[13px] hover:bg-[var(--vscode-menu-selectionBackground)] hover:text-[var(--vscode-menu-selectionForeground)] cursor-pointer rounded-sm px-2 py-1.5"
-                      data-testid="menu-profile"
-                    >
-                      <User className="mr-2 h-3.5 w-3.5 opacity-70" />
-                      <span>Profile</span>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator className="bg-[var(--vscode-panel-border)] my-1" />
-                    <DropdownMenuItem
-                      className="text-[13px] hover:bg-[var(--vscode-menu-selectionBackground)] hover:text-[var(--vscode-menu-selectionForeground)] cursor-pointer rounded-sm px-2 py-1.5"
-                      onClick={logout}
-                      data-testid="menu-logout"
-                    >
-                      <LogOut className="mr-2 h-3.5 w-3.5 opacity-70" />
-                      <span>Log out</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : (
-                <div className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-5 w-5 hover:bg-[var(--vscode-list-hoverBackground)] rounded-sm"
-                data-testid="btn-more"
-              >
-                <MoreHorizontal className="h-3.5 w-3.5 text-[var(--vscode-icon-foreground)]" />
-              </Button>
             </div>
           </div>
 
           <ScrollArea className="flex-1">
             <div className="flex flex-col min-h-full">
               {isLocalMode && (
-                <div className="px-4 py-2 text-[11px] flex items-center justify-between bg-blue-500/10 text-blue-300 border-b border-blue-500/20">
-                  <span>Local mode — connect for sync and AI features.</span>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-blue-500/20 bg-blue-500/10 px-4 py-2.5 text-[11px] text-blue-300">
+                  <span className="leading-relaxed">
+                    Local mode. Connect for sync and AI features.
+                  </span>
                   <Button
                     size="sm"
-                    className="h-6"
+                    className="vscode-button h-6 shrink-0 px-2.5 text-[12px]"
                     onClick={loginWithOAuth}
                     disabled={authLoading}
                   >
@@ -500,7 +525,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                 onOpenChange={setIsAssistantOpen}
               >
                 <div
-                  className="vscode-section-header group"
+                  className="vscode-section-header group px-4 py-2.5"
                   onClick={() => setIsAssistantOpen(!isAssistantOpen)}
                   data-testid="header-assistant"
                 >
@@ -515,7 +540,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                   </span>
                 </div>
                 <CollapsibleContent>
-                  <div className="min-h-[80px] p-4 text-[13px] text-[var(--vscode-descriptionForeground)] flex items-center justify-center text-center italic opacity-80">
+                  <div className="min-h-[84px] px-4 py-5 text-[13px] text-[var(--vscode-descriptionForeground)] flex items-center justify-center text-center italic leading-relaxed opacity-80">
                     {isAuthenticated
                       ? "Ready to assist. Ask me to recall context or refine prompts."
                       : "Local mode: connect to enable AI assistance."}
@@ -530,11 +555,11 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                 className="flex-1 flex flex-col"
               >
                 <div
-                  className="vscode-section-header group"
+                  className="vscode-section-header group justify-between gap-2 px-4 py-2.5"
                   onClick={() => setIsMemoriesOpen(!isMemoriesOpen)}
                   data-testid="header-memories"
                 >
-                  <div className="flex items-center">
+                  <div className="flex min-w-0 items-center">
                     <ChevronRight
                       className={cn(
                         "h-4 w-4 text-[var(--vscode-icon-foreground)] transition-transform mr-0.5 opacity-80",
@@ -545,40 +570,48 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                       Memories
                     </span>
                   </div>
-                  <div className="flex items-center gap-1 ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="ml-auto flex items-center gap-1 opacity-60 transition-opacity group-hover:opacity-100">
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-5 w-5 hover:bg-[var(--vscode-list-hoverBackground)] rounded-sm"
+                      className={panelIconButtonClass}
                       data-testid="btn-search"
-                      onClick={() => searchInputRef.current?.focus()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        searchInputRef.current?.focus();
+                      }}
                     >
-                      <Search className="h-3.5 w-3.5 text-[var(--vscode-icon-foreground)]" />
+                      <Search className="h-3.5 w-3.5" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-5 w-5 hover:bg-[var(--vscode-list-hoverBackground)] rounded-sm"
+                      className={panelIconButtonClass}
                       data-testid="btn-refresh"
-                      onClick={handleSync}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleSync();
+                      }}
                     >
-                      <RefreshCw className="h-3.5 w-3.5 text-[var(--vscode-icon-foreground)]" />
+                      <RefreshCw
+                        className={cn("h-3.5 w-3.5", isSyncing && "animate-spin")}
+                      />
                     </Button>
                   </div>
                 </div>
 
                 <CollapsibleContent className="flex-1">
                   {isAuthenticated ? (
-                    <div className="p-2 space-y-2">
+                    <div className="space-y-3 p-3">
                       <SearchBar
                         value={searchQuery}
                         onChange={setSearchQuery}
                         inputRef={searchInputRef}
                       />
 
-                      <div className="flex gap-2 mb-4">
+                      <div className="grid grid-cols-2 gap-2">
                         <Button
-                          className="flex-1 vscode-button h-7 gap-1.5"
+                          className="vscode-button h-7 gap-1.5"
                           data-testid="btn-create"
                           onClick={handleCreate}
                           disabled={memoriesLoading}
@@ -587,7 +620,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                           Create
                         </Button>
                         <Button
-                          className="flex-1 vscode-button vscode-button-secondary h-7 gap-1.5"
+                          className="vscode-button vscode-button-secondary h-7 gap-1.5"
                           data-testid="btn-sync"
                           onClick={handleSync}
                           disabled={isSyncing || memoriesLoading}
@@ -602,7 +635,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
                         </Button>
                       </div>
 
-                      <div className="space-y-0.5">
+                      <div className="space-y-1">
                         {filteredMemories.map((memory) => (
                           <MemoryCard
                             key={memory.id}

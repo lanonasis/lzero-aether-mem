@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Save, Key, LogOut, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Save, Key, LogOut, Check, AlertCircle, Loader2, Globe, Cpu } from 'lucide-react';
 
 function normalizeApiUrl(raw: string): { ok: true; value: string; changed: boolean } | { ok: false; error: string } {
   const trimmed = raw.trim();
@@ -97,13 +97,13 @@ export const Options: React.FC = () => {
 
       // Save settings
       const updates: Record<string, string> = { apiUrl: normalized.value, aiMode };
-      
+
       if (apiKey && !apiKey.startsWith('••')) {
         updates.authToken = apiKey;
       }
 
       await chrome.storage.local.set(updates);
-      
+
       if (apiKey && !apiKey.startsWith('••')) {
         setIsAuthenticated(true);
         setApiKey('••••••••••••••••');
@@ -151,11 +151,11 @@ export const Options: React.FC = () => {
         {/* Status */}
         {message && (
           <div className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${
-            message.type === 'success' 
+            message.type === 'success'
               ? 'bg-green-500/10 border border-green-500/20 text-green-400'
               : 'bg-red-500/10 border border-red-500/20 text-red-400'
           }`}>
-            {message.type === 'success' ? <Check className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
+            {message.type === 'success' ? <Check className="h-5 w-5 shrink-0" /> : <AlertCircle className="h-5 w-5 shrink-0" />}
             {message.text}
           </div>
         )}
@@ -166,7 +166,7 @@ export const Options: React.FC = () => {
             <Key className="h-5 w-5 text-[#007ACC]" />
             Authentication
           </h2>
-          
+
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -204,8 +204,11 @@ export const Options: React.FC = () => {
 
         {/* API Settings */}
         <div className="bg-[#252526] border border-[#3C3C3C] rounded-xl p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">API Settings</h2>
-          
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Globe className="h-5 w-5 text-[#007ACC]" />
+            API Settings
+          </h2>
+
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               API URL
@@ -224,7 +227,10 @@ export const Options: React.FC = () => {
 
         {/* AI Settings */}
         <div className="bg-[#252526] border border-[#3C3C3C] rounded-xl p-6 mb-6">
-          <h2 className="text-lg font-semibold mb-4">On-Device AI</h2>
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Cpu className="h-5 w-5 text-[#007ACC]" />
+            On-Device AI
+          </h2>
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -274,6 +280,10 @@ export const Options: React.FC = () => {
             {' • '}
             <a href="https://github.com/lanonasis/lzero-aether-mem" target="_blank" rel="noopener noreferrer" className="text-[#007ACC] hover:underline">
               GitHub
+            </a>
+            {' • '}
+            <a href="https://lanonasis.com/privacy" target="_blank" rel="noopener noreferrer" className="text-[#007ACC] hover:underline">
+              Privacy Policy
             </a>
           </p>
         </div>

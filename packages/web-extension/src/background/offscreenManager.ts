@@ -11,9 +11,9 @@ const OFFSCREEN_DOCUMENT_PATH = 'src/offscreen/index.html';
 let creating: Promise<void> | null = null;
 
 /**
- * Check if the offscreen document exists
+ * Check if the offscreen document exists (exported for status checks)
  */
-async function hasOffscreenDocument(): Promise<boolean> {
+export async function hasOffscreenDocument(): Promise<boolean> {
   // Chrome 116+ has runtime.getContexts
   if ('getContexts' in chrome.runtime) {
     const contexts = await (chrome.runtime as any).getContexts({

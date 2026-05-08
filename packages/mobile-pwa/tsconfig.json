@@ -47,10 +47,5 @@
     "node_modules",
     "dist",
     "dev-dist"
-  ],
-  "references": [
-    {
-      "path": "../shared"
-    }
   ]
 }
