@@ -1,862 +1,480 @@
 # Execution Plan: SDK Intelligence Feature Surfacing
 
+_Version: 2.0 — Updated 2026-05-08 after Phase 0 verification_
+_Status: Ready for Implementation — Phase 1 foundation_
+
+---
+
 ## Executive Summary
 
-**Objective**: Surface the 80% of `@lanonasis/memory-client` v2.2.0 and `@lanonasis/mem-intel-sdk` capabilities that are currently unused across all application surfaces.
+**Objective**: Surface the ~80% of `@lanonasis/memory-client` v2.2.0 and `@lanonasis/mem-intel-sdk` v2.1.0 capabilities currently unused across all application surfaces.
 
-**Current State**: Apps use ~20% of SDK (basic CRUD, basic search). Intelligence features (topics, analytics, enhanced search, pattern analysis, duplicate detection) are available in SDK but wired to zero surfaces.
+**Current State**: Apps use basic CRUD and basic search only. Intelligence features (pattern analysis, tag suggestions, related memories, duplicates, insights, health score) are available in the SDK but wired to zero surfaces.
 
-**Target State**: All intelligence features accessible via `packages/shared` React hooks, surfaced consistently across VS Code extension, web extension, mobile PWA, and mobile native.
-
----
-
-## 1. Gap Analysis Summary
-
-### 1.1 @lanonasis/memory-client v2.2.0 — Capability Matrix
-
-| Capability | SDK Status | Surfaced Status | Gap Impact |
-|------------|-----------|-----------------|------------|
-| **Memory CRUD** | ✅ Available | ✅ All surfaces | None |
-| **Basic search** | ✅ Available | ✅ All surfaces | None |
-| **Memory Topics** (hierarchical) | ✅ Available | ❌ Nowhere | **HIGH** — Organization primitive missing |
-| **Enhanced Search** (vector/text/hybrid) | ✅ Available | ❌ Basic only | **HIGH** — Defaulting to inferior search |
-| **Content Preprocessing** (chunking, ingestion) | ✅ Available | ❌ Nowhere | **MEDIUM** — Could improve UX |
-| **Analytics** (access patterns, popular queries, tag stats) | ✅ Available | ❌ Nowhere | **HIGH** — User insights unavailable |
-| **Memory Status** (active/archived/draft) | ✅ Available | ❌ No UI | **MEDIUM** — Lifecycle management missing |
-
-### 1.2 @lanonasis/mem-intel-sdk — Intelligence Matrix
-
-| Intelligence Feature | API Method | Surfaced Status | Gap Impact |
-|---------------------|------------|-----------------|------------|
-| **Usage patterns & trends** | `analyzePatterns()` | ❌ Unwired | **HIGH** — Analytics unavailable |
-| **AI tag suggestions** | `suggestTags()` | ❌ Unwired | **HIGH** — Manual tagging only |
-| **Vector-similar memories** | `findRelated()` | ❌ Unwired | **HIGH** — Discovery feature missing |
-| **Duplicate detection** | `detectDuplicates()` | ❌ Unwired | **MEDIUM** — Storage inefficiency |
-| **Insight extraction** | `extractInsights()` | ❌ Unwired | **HIGH** — AI insights unavailable |
-| **Collection health score** | `healthCheck()` | ⚠️ Ping only | **MEDIUM** — Health feature underutilized |
-
-### 1.3 Root Cause Analysis
-
-```
-The Gap:
-┌─────────────────────────────────────────────────────────────┐
-│  @lanonasis/memory-client v2.2.0                              │
-│  @lanonasis/mem-intel-sdk                                    │
-│       ↓                                                      │
-│  packages/shared/src/sdk/                                   │
-│       ├── index.ts (LanonasisClient - has intelligence)    │
-│       └── react-hooks.tsx (NO intelligence hooks)           │
-│       ↓                                                      │
-│  All App Surfaces                                           │
-│       ├── VS Code extension                                │
-│       ├── Web extension                                    │
-│       ├── Mobile PWA                                       │
-│       └── Mobile native                                    │
-│                                                              │
-│  Result: Intelligence features NEVER reach any surface      │
-└─────────────────────────────────────────────────────────────┘
-```
-
-**The Single Point of Failure**: `packages/shared/src/sdk/react-hooks.tsx` only exposes `useMemories`, `useLocalAI`, `useApiKeys`, `useSyncStatus` — zero intelligence hooks.
+**Approach**: Verify first, adapt second, surface third. A prior version of this plan assumed methods existed — Phase 0 verification has now confirmed which methods exist, which SDK they live in, and whether they are browser-safe.
 
 ---
 
-## 2. Execution Strategy
+## Phase 0 — Verified Capability Matrix (DONE)
 
-### 2.1 Two-Track Approach
+### Finding 1: There are TWO separate SDKs, not one
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         EXECUTION STRATEGY                               │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  Track 1: Phase 1 Catch-Up (Ship Now)                                  │
-│  ├── Add intelligence hooks to packages/shared                        │
-│  ├── Surface per-platform immediately                                  │
-│  └── Backend already supports all features                             │
-│                                                                         │
-│  Track 2: Phase 2 Preparation (Protect Against Churn)                  │
-│  ├── Create adapter.ts for API contract isolation                      │
-│  ├── Add feature flags for gradual rollout                           │
-│  └── Scaffold analytics pages (empty, ready for Phase 2 data)        │
-│                                                                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+This is the most critical correction to the original plan.
 
-### 2.2 Track 1: Phase 1 Catch-Up — Detailed Plan
+| SDK | Installed Where | What It Covers |
+|-----|-----------------|----------------|
+| `@lanonasis/mem-intel-sdk` v2.1.0 | Root + `packages/shared/package.json` | **AI intelligence operations** — pattern analysis, tag suggestions, related memories, duplicates, insights, collection health score |
+| `@lanonasis/memory-client` v2.2.0 | Root `package.json` only | **Data operations** — Topics, Enhanced Search (vector/text/hybrid), Analytics, Access Patterns, Preprocessing |
 
-#### Week 1: Foundation — Shared Intelligence Layer
+**Consequence**: `packages/shared` currently has direct access to `mem-intel-sdk` but NOT to `memory-client`. Topics, Enhanced Search, and Analytics cannot be wired in the shared layer until `@lanonasis/memory-client` is added to `packages/shared/package.json`.
 
-**Day 1-2: Create `intelligence-client.ts`**
+### Finding 2: All 6 intelligence methods exist and are browser-safe
 
-```typescript
-// packages/shared/src/sdk/intelligence-client.ts
-// Thin singleton wrapper around MemoryIntelligenceClient
+Verified against `node_modules/@lanonasis/mem-intel-sdk/dist/core/client.d.ts` and runtime JS:
 
-export class IntelligenceClient {
-  private static instance: IntelligenceClient;
-  private memoryClient: MemoryClient;
-  
-  private constructor(config: LanonasisConfig) {
-    this.memoryClient = new MemoryClient(config);
-  }
-  
-  static getInstance(config?: LanonasisConfig): IntelligenceClient {
-    if (!IntelligenceClient.instance) {
-      if (!config) throw new Error('Config required for first initialization');
-      IntelligenceClient.instance = new IntelligenceClient(config);
-    }
-    return IntelligenceClient.instance;
-  }
-  
-  // Topics
-  async getTopics(): Promise<MemoryTopic[]> { ... }
-  async createTopic(topic: CreateTopicInput): Promise<MemoryTopic> { ... }
-  async organizeMemory(memoryId: string, topicId: string): Promise<void> { ... }
-  
-  // Enhanced Search
-  async searchAdvanced(query: string, mode: 'vector' | 'text' | 'hybrid'): Promise<Memory[]> { ... }
-  
-  // Analytics
-  async getAnalytics(): Promise<MemoryAnalytics> { ... }
-  async getPopularQueries(): Promise<string[]> { ... }
-  async getTagStats(): Promise<TagStat[]> { ... }
-  
-  // Intelligence
-  async analyzePatterns(): Promise<PatternAnalysis> { ... }
-  async suggestTags(content: string): Promise<string[]> { ... }
-  async findRelated(memoryId: string): Promise<Memory[]> { ... }
-  async detectDuplicates(): Promise<DuplicateGroup[]> { ... }
-  async extractInsights(memoryId: string): Promise<Insight[]> { ... }
-  async healthCheck(): Promise<HealthScore> { ... }
-}
-```
+| Method | Exists | Browser-Safe | Requires Network | Return Type | Safe Fallback |
+|--------|--------|--------------|-----------------|-------------|---------------|
+| `analyzePatterns()` | ✅ | ✅ `fetch()` only | ✅ | `PatternAnalysis` | `null` |
+| `suggestTags()` | ✅ | ✅ `fetch()` only | ✅ | `TagSuggestionsResult` | `[]` |
+| `findRelated()` | ✅ | ✅ `fetch()` only | ✅ | `RelatedMemoriesResult` | `[]` |
+| `detectDuplicates()` | ✅ | ✅ `fetch()` only | ✅ | `DuplicatesResult` | `[]` |
+| `extractInsights()` | ✅ | ✅ `fetch()` only | ✅ | `InsightsResult` | `null` |
+| `healthCheck()` _(collection)_ | ✅ | ✅ `fetch()` only | ✅ | `MemoryHealth` | `null` |
 
-**Day 3-4: Extend `react-hooks.tsx` with Intelligence Hooks**
+### Finding 3: `memory-client` v2.2.0 also has verified methods
 
-```typescript
-// packages/shared/src/sdk/react-hooks.tsx
-// Add to existing file
+| Method / Group | Exists | Browser-Safe | Return Type |
+|----------------|--------|--------------|-------------|
+| Topics (`createTopic`, `getTopics`, `getTopicsHierarchy`, etc.) | ✅ | ✅ | `MemoryTopic[]` |
+| `enhancedSearch()` with `search_mode: 'vector' \| 'text' \| 'hybrid'` | ✅ | ✅ | `EnhancedSearchResponse` |
+| `getSearchAnalytics()` | ✅ | ✅ | `SearchAnalytics` |
+| `getAccessPatterns()` | ✅ | ✅ | `AccessPatterns` |
+| `getExtendedStats()` | ✅ | ✅ | `ExtendedMemoryStats` |
+| `createMemoryWithPreprocessing()` | ✅ | ✅ | `MemoryEntry` |
+| `healthCheck()` _(service ping)_ | ✅ | ✅ | `{ status: string, timestamp: string }` |
 
-// ============================================
-// Intelligence Hooks (NEW)
-// ============================================
+### Finding 4: Two distinct healthChecks — MUST NOT conflate
 
-export function useIntelligence() {
-  const { client, isAuthenticated } = useLanonasis();
-  const [intelligence] = useState(() => IntelligenceClient.getInstance());
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<Error | null>(null);
-  
-  const analyzePatterns = useCallback(async () => {
-    if (!isAuthenticated) return null;
-    setIsLoading(true);
-    try {
-      return await intelligence.analyzePatterns();
-    } finally {
-      setIsLoading(false);
-    }
-  }, [intelligence, isAuthenticated]);
-  
-  const suggestTags = useCallback(async (content: string) => {
-    if (!isAuthenticated) return [];
-    return await intelligence.suggestTags(content);
-  }, [intelligence, isAuthenticated]);
-  
-  const findRelated = useCallback(async (memoryId: string) => {
-    if (!isAuthenticated) return [];
-    return await intelligence.findRelated(memoryId);
-  }, [intelligence, isAuthenticated]);
-  
-  const detectDuplicates = useCallback(async () => {
-    if (!isAuthenticated) return [];
-    return await intelligence.detectDuplicates();
-  }, [intelligence, isAuthenticated]);
-  
-  const extractInsights = useCallback(async (memoryId: string) => {
-    if (!isAuthenticated) return [];
-    return await intelligence.extractInsights(memoryId);
-  }, [intelligence, isAuthenticated]);
-  
-  return {
-    analyzePatterns,
-    suggestTags,
-    findRelated,
-    detectDuplicates,
-    extractInsights,
-    isLoading,
-    error,
-  };
-}
+| healthCheck | SDK | Returns | Purpose |
+|-------------|-----|---------|---------|
+| `MemoryIntelligenceClient.healthCheck()` | `mem-intel-sdk` | `MemoryHealth` — score, embedding coverage, tagging %, recommendations | User-facing **collection quality feature** |
+| `CoreMemoryClient.healthCheck()` | `memory-client` | `{ status: string, timestamp: string }` | **Service connectivity ping** (was already used for connection test in VS Code extension) |
 
-export function useMemoryHealth() {
-  const { isAuthenticated } = useLanonasis();
-  const [intelligence] = useState(() => IntelligenceClient.getInstance());
-  const [healthScore, setHealthScore] = useState<HealthScore | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  
-  const checkHealth = useCallback(async () => {
-    if (!isAuthenticated) return null;
-    setIsLoading(true);
-    try {
-      const score = await intelligence.healthCheck();
-      setHealthScore(score);
-      return score;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [intelligence, isAuthenticated]);
-  
-  // Auto-check on mount
-  useEffect(() => {
-    if (isAuthenticated) {
-      checkHealth();
-    }
-  }, [isAuthenticated, checkHealth]);
-  
-  return {
-    healthScore,
-    checkHealth,
-    isLoading,
-  };
-}
+These must be exposed as two separate hooks with distinct names and distinct purposes.
 
-export function useTopics() {
-  const { isAuthenticated } = useLanonasis();
-  const [intelligence] = useState(() => IntelligenceClient.getInstance());
-  const [topics, setTopics] = useState<MemoryTopic[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  
-  const fetchTopics = useCallback(async () => {
-    if (!isAuthenticated) return;
-    setIsLoading(true);
-    try {
-      const result = await intelligence.getTopics();
-      setTopics(result);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [intelligence, isAuthenticated]);
-  
-  const createTopic = useCallback(async (input: CreateTopicInput) => {
-    if (!isAuthenticated) return null;
-    const topic = await intelligence.createTopic(input);
-    setTopics(prev => [...prev, topic]);
-    return topic;
-  }, [intelligence, isAuthenticated]);
-  
-  const organizeMemory = useCallback(async (memoryId: string, topicId: string) => {
-    if (!isAuthenticated) return;
-    await intelligence.organizeMemory(memoryId, topicId);
-  }, [intelligence, isAuthenticated]);
-  
-  useEffect(() => {
-    if (isAuthenticated) fetchTopics();
-  }, [isAuthenticated, fetchTopics]);
-  
-  return {
-    topics,
-    isLoading,
-    fetchTopics,
-    createTopic,
-    organizeMemory,
-  };
-}
+### Finding 5: Local `Memory` type is missing `status` and `topicId`
 
-export function useEnhancedSearch() {
-  const { isAuthenticated } = useLanonasis();
-  const [intelligence] = useState(() => IntelligenceClient.getInstance());
-  const [results, setResults] = useState<Memory[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [searchMode, setSearchMode] = useState<'vector' | 'text' | 'hybrid'>('hybrid');
-  
-  const search = useCallback(async (query: string) => {
-    if (!isAuthenticated || !query) return [];
-    setIsLoading(true);
-    try {
-      const result = await intelligence.searchAdvanced(query, searchMode);
-      setResults(result);
-      return result;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [intelligence, isAuthenticated, searchMode]);
-  
-  return {
-    results,
-    isLoading,
-    search,
-    searchMode,
-    setSearchMode,
-  };
-}
+Current `packages/shared/src/types/index.ts` `Memory` interface does not include `status`, `topicId`, or `topic_id`. These must be added before any topic or status UI can be built.
 
-export function useAnalytics() {
-  const { isAuthenticated } = useLanonasis();
-  const [intelligence] = useState(() => IntelligenceClient.getInstance());
-  const [analytics, setAnalytics] = useState<MemoryAnalytics | null>(null);
-  const [popularQueries, setPopularQueries] = useState<string[]>([]);
-  const [tagStats, setTagStats] = useState<TagStat[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  
-  const fetchAnalytics = useCallback(async () => {
-    if (!isAuthenticated) return;
-    setIsLoading(true);
-    try {
-      const [a, p, t] = await Promise.all([
-        intelligence.getAnalytics(),
-        intelligence.getPopularQueries(),
-        intelligence.getTagStats(),
-      ]);
-      setAnalytics(a);
-      setPopularQueries(p);
-      setTagStats(t);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [intelligence, isAuthenticated]);
-  
-  useEffect(() => {
-    if (isAuthenticated) fetchAnalytics();
-  }, [isAuthenticated, fetchAnalytics]);
-  
-  return {
-    analytics,
-    popularQueries,
-    tagStats,
-    isLoading,
-    fetchAnalytics,
-  };
-}
-```
+### Finding 6: `mem-intel-sdk` has a React subpath
 
-**Day 5: Surface Health Score — VS Code Extension**
-
-**File**: `packages/vscode-extension/src/webview/components/HealthCard.tsx`
-
-```typescript
-// New component using useMemoryHealth()
-import { useMemoryHealth } from '@lanonasis/shared';
-
-export function HealthCard() {
-  const { healthScore, checkHealth, isLoading } = useMemoryHealth();
-  
-  if (isLoading) return <Spinner />;
-  if (!healthScore) return null;
-  
-  return (
-    <Card>
-      <CardHeader>Collection Health</CardHeader>
-      <CardContent>
-        <ScoreGauge score={healthScore.score} />
-        <StatsGrid>
-          <Stat label="Total Memories" value={healthScore.total} />
-          <Stat label="Archived" value={healthScore.archived} />
-          <Stat label="Orphaned" value={healthScore.orphaned} />
-          <Stat label="Duplicates" value={healthScore.duplicates} />
-        </StatsGrid>
-        {healthScore.recommendations.length > 0 && (
-          <RecommendationsList items={healthScore.recommendations} />
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-```
-
-**Integration Point**: Add HealthCard to IDEPanel sidebar as a collapsible section.
+`@lanonasis/mem-intel-sdk/react` exports a `MemoryIntelligenceProvider` backed by React Query. This is the correct browser-safe import entrypoint — import from `/react` subpath, not the root.
 
 ---
 
-#### Week 2: Cross-Platform Surfacing
+## Corrected Execution Strategy
 
-**Day 1-2: Web Extension — Related Memories & Tag Suggestions**
+Two tracks, sequenced by dependency availability.
 
-| Feature | Location | Implementation |
-|---------|----------|----------------|
-| **Related Memories** | SidePanel memory detail | `useIntelligence().findRelated(memoryId)` |
-| **Tag Suggestions** | Create/Edit memory form | `useIntelligence().suggestTags(content)` |
-| **Health Indicator** | SidePanel header | `useMemoryHealth()` mini gauge |
+```
+Track A — mem-intel-sdk  (dep already in packages/shared)
+├── Can start immediately
+├── Intelligence features: patterns, tags, related, duplicates, insights, health score
+└── No new package.json changes needed
 
-**Day 3-4: Mobile PWA — Intelligence Panel & Insights**
-
-| Feature | Location | Implementation |
-|---------|----------|----------------|
-| **AI Status Banner** (replacement) | Home screen | Real health score from `useMemoryHealth()` |
-| **Insights Card** | Memory detail | `useIntelligence().extractInsights(memoryId)` |
-| **Related Memories** | Memory detail | `useIntelligence().findRelated(memoryId)` |
-| **Tag Suggestions** | QuickCapture | `useIntelligence().suggestTags(content)` |
-
-**Day 5: Mobile Native — Memory Detail Enhancement**
-
-**File**: `apps/mobile/app/memories/[id].tsx`
-
-```typescript
-// Add Related Memories section using existing MemoryDetailScreen
-import { useIntelligence } from '@lanonasis/shared';
-
-export function MemoryDetailScreen({ memoryId }: { memoryId: string }) {
-  const { findRelated } = useIntelligence();
-  const [related, setRelated] = useState<Memory[]>([]);
-  
-  useEffect(() => {
-    findRelated(memoryId).then(setRelated);
-  }, [memoryId, findRelated]);
-  
-  return (
-    <ScrollView>
-      {/* Existing memory content */}
-      <MemoryContent memoryId={memoryId} />
-      
-      {/* New: Related Memories section */}
-      {related.length > 0 && (
-        <Section title="Related Memories">
-          {related.map(m => <MemoryCard key={m.id} memory={m} />)}
-        </Section>
-      )}
-    </ScrollView>
-  );
-}
+Track B — memory-client  (dep NOT yet in packages/shared)
+├── Blocked until: add @lanonasis/memory-client to packages/shared/package.json
+├── Features: Topics, Enhanced Search, Analytics, Preprocessing
+└── Start after Track A foundation is stable
 ```
 
 ---
 
-#### Week 3: Advanced Features & Analytics Scaffolding
+## Phase 1 — Safe Foundation (Both Tracks)
 
-**Day 1-2: Topics Management**
+### 1.1 Expand local `Memory` type
 
-Add to `useTopics()` hook and surface:
-- **VS Code**: Topic tree view in sidebar
-- **Web Extension**: Topic filter dropdown
-- **Mobile PWA**: Topic chips on memory cards
-- **Mobile Native**: Topic picker in memory create/edit
+**File**: `packages/shared/src/types/index.ts`
 
-**Day 3: Enhanced Search Mode Selector**
+Add to the `Memory` interface:
 
 ```typescript
-// Add to all search UIs
-<SearchModeSelector
-  value={searchMode}
-  onChange={setSearchMode}
-  options={[
-    { value: 'hybrid', label: 'Hybrid (Recommended)', icon: 'sparkles' },
-    { value: 'vector', label: 'Semantic', icon: 'brain' },
-    { value: 'text', label: 'Exact Match', icon: 'text' },
-  ]}
-/>
-```
-
-**Day 4-5: Analytics Scaffolding (Empty Pages)**
-
-| Surface | Route/Page | Content |
-|---------|------------|---------|
-| **Mobile PWA** | `/analytics` | Empty charts, ready for Phase 2 data |
-| **VS Code** | Intelligence panel tab | Placeholder cards for usage patterns |
-| **Web Extension** | Analytics section | Stubbed components |
-
----
-
-### 2.3 Track 2: Phase 2 Preparation — Contract Protection
-
-#### Adapter Pattern Implementation
-
-**File**: `packages/shared/src/sdk/adapter.ts`
-
-```typescript
-/**
- * API Adapter Layer
- * 
- * Purpose: Isolate apps from Phase 2 backend contract changes.
- * When Phase 2 changes API shapes, only this file changes.
- */
-
-import type { 
-  Memory as Phase1Memory,
-  CreateMemoryInput as Phase1CreateMemoryInput,
-  MemoryTopic as Phase1MemoryTopic,
-  PatternAnalysis as Phase1PatternAnalysis,
-  // ... Phase 1 types
-} from '@lanonasis/memory-client';
-
-// Internal app-facing types (stable)
-export interface AppMemory {
-  id: string;
-  title: string;
-  content: string;
-  type: string;
-  tags: string[];
-  status: 'active' | 'archived' | 'draft';
+export interface Memory {
+  // ... existing fields ...
+  status?: 'active' | 'archived' | 'draft';
   topicId?: string;
-  createdAt: string;
-  updatedAt: string;
-  // ... stable fields
+  topic_id?: string;
 }
 
-export interface AppPatternAnalysis {
-  patterns: Pattern[];
-  trends: Trend[];
-  recommendations: string[];
-  // ... stable fields
+export interface AppMemoryTopic {
+  id: string;
+  name: string;
+  parentId?: string | null;
+  color?: string;
+  icon?: string;
+  isSystem?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
-
-// Adapter functions
-export function adaptMemory(phase1Memory: Phase1Memory): AppMemory {
-  return {
-    id: phase1Memory.id,
-    title: phase1Memory.title,
-    content: phase1Memory.content,
-    type: phase1Memory.memory_type || 'context',
-    tags: phase1Memory.tags || [],
-    status: phase1Memory.status || 'active',
-    topicId: phase1Memory.topic_id,
-    createdAt: phase1Memory.created_at,
-    updatedAt: phase1Memory.updated_at,
-  };
-}
-
-export function adaptCreateMemoryInput(
-  appInput: Partial<AppMemory>
-): Phase1CreateMemoryInput {
-  return {
-    title: appInput.title!,
-    content: appInput.content!,
-    memory_type: appInput.type,
-    tags: appInput.tags,
-    // ... map fields
-  };
-}
-
-// When Phase 2 changes contracts:
-// 1. Import new Phase 2 types
-// 2. Update adapter functions
-// 3. Apps continue using AppMemory (no changes)
 ```
 
-#### Feature Flags Configuration
+### 1.2 Add feature flags to `LanonasisConfig`
 
-**File**: `packages/shared/src/sdk/index.ts` (extend LanonasisConfig)
+**File**: `packages/shared/src/sdk/index.ts`
 
 ```typescript
 export interface LanonasisConfig {
-  apiUrl: string;
-  apiKey?: string;
-  // ... existing fields
-  
-  /**
-   * Feature flags for gradual rollout of intelligence features.
-   * Use to disable features until Phase 2 backend is ready.
-   */
+  // ... existing fields ...
   features?: {
-    /** Enable memory health score display */
+    /** Collection health score card */
     healthScore?: boolean;
-    /** Enable AI tag suggestions */
+    /** AI tag suggestions on create/edit */
     tagSuggestions?: boolean;
-    /** Enable related memories discovery */
+    /** Related memories discovery */
     relatedMemories?: boolean;
-    /** Enable pattern analysis panel */
+    /** Pattern analysis panel (Track A) */
     patternAnalysis?: boolean;
-    /** Enable duplicate detection */
+    /** Duplicate detection (user-triggered, not background) */
     duplicateDetection?: boolean;
-    /** Enable topic management */
+    /** Topic management (Track B — requires memory-client dep) */
     topics?: boolean;
-    /** Enable analytics dashboard (requires Phase 2) */
+    /** Analytics dashboard (Track B — requires memory-client dep) */
     analytics?: boolean;
-    /** Enable enhanced search modes */
+    /** Enhanced search mode selector (Track B — requires memory-client dep) */
     enhancedSearch?: boolean;
   };
 }
 
-// Default: all Phase 1 features enabled, Phase 2 disabled
-export const DEFAULT_FEATURES: Required<LanonasisConfig['features']> = {
+// Phase 1 defaults: Track A on, Track B off until dep added
+export const DEFAULT_FEATURES: Required<NonNullable<LanonasisConfig['features']>> = {
   healthScore: true,
   tagSuggestions: true,
   relatedMemories: true,
-  patternAnalysis: false, // Phase 2
+  patternAnalysis: true,
   duplicateDetection: true,
-  topics: true,
-  analytics: false, // Phase 2
-  enhancedSearch: true,
+  topics: false,      // Track B
+  analytics: false,   // Track B
+  enhancedSearch: false, // Track B
 };
 ```
 
----
+### 1.3 Create `adapter.ts`
 
-## 3. Implementation Sequence
+**File**: `packages/shared/src/sdk/adapter.ts`
 
-### Priority Order
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  WEEK 1 — Foundation (Highest Leverage)                             │
-│  ├─ Day 1-2: Create intelligence-client.ts                         │
-│  ├─ Day 3-4: Add hooks to react-hooks.tsx                          │
-│  └─ Day 5: Surface health score in VS Code                         │
-│                                                                     │
-│  WEEK 2 — Cross-Platform Surfacing                                  │
-│  ├─ Day 1-2: Web extension (related, suggestions)                  │
-│  ├─ Day 3-4: Mobile PWA (insights, related, suggestions)           │
-│  └─ Day 5: Mobile native (related memories)                       │
-│                                                                     │
-│  WEEK 3 — Advanced Features & Phase 2 Prep                          │
-│  ├─ Day 1-2: Topics management across all surfaces                 │
-│  ├─ Day 3: Enhanced search mode selector                           │
-│  ├─ Day 4-5: Analytics scaffolding + adapter.ts                    │
-│  └─ Final: Feature flags wired to config                           │
-│                                                                     │
-│  PHASE 2 — Contract Absorption                                      │
-│  └─ Adapter.ts absorbs backend changes, apps unchanged             │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### First Action (Immediate)
-
-**Add `useIntelligence()` to `packages/shared/src/sdk/react-hooks.tsx`**
-
-This single action unblocks every surface simultaneously. All apps consuming `@lanonasis/shared` immediately gain access to intelligence features.
-
----
-
-## 4. Surfacing Per Platform
-
-### 4.1 VS Code Extension
-
-| Feature | UI Location | Hook Used |
-|---------|-------------|-----------|
-| **Health Score Card** | Sidebar panel (new section) | `useMemoryHealth()` |
-| **Related Memories** | Memory detail view | `useIntelligence().findRelated()` |
-| **Tag Suggestions** | Create memory form | `useIntelligence().suggestTags()` |
-| **Intelligence Panel** | New sidebar tab | `useIntelligence()`, `useAnalytics()` |
-| **Topic Tree** | Sidebar tree view | `useTopics()` |
-
-### 4.2 Web Extension (SidePanel)
-
-| Feature | UI Location | Hook Used |
-|---------|-------------|-----------|
-| **Related Section** | Below each memory card | `useIntelligence().findRelated()` |
-| **Health Indicator** | Header gauge | `useMemoryHealth()` |
-| **Tag Suggestions** | Create/edit form | `useIntelligence().suggestTags()` |
-| **Duplicate Detection** | Background badge | `useIntelligence().detectDuplicates()` |
-
-### 4.3 Mobile PWA
-
-| Feature | UI Location | Hook Used |
-|---------|-------------|-----------|
-| **AI Status Banner** (real) | Home screen header | `useMemoryHealth()` |
-| **Insights Card** | Memory detail | `useIntelligence().extractInsights()` |
-| **Related Memories** | Memory detail | `useIntelligence().findRelated()` |
-| **Tag Suggestions** | QuickCapture | `useIntelligence().suggestTags()` |
-| **Topics** | Memory chips + filter | `useTopics()` |
-| **Analytics Page** | `/analytics` route | `useAnalytics()` (stubbed) |
-
-### 4.4 Mobile Native
-
-| Feature | UI Location | Hook Used |
-|---------|-------------|-----------|
-| **Related Memories** | Memory detail screen | `useIntelligence().findRelated()` |
-| **Tag Suggestions** | Create/edit screen | `useIntelligence().suggestTags()` |
-| **Topic Picker** | Memory form | `useTopics()` |
-
----
-
-## 5. Testing Strategy
-
-### 5.1 Unit Tests
+Purpose: stable app-facing types that absorb Phase 2 contract changes. Apps import `AppMemory` etc., never raw SDK types directly.
 
 ```typescript
-// packages/shared/src/sdk/__tests__/intelligence-hooks.test.tsx
+/**
+ * API Adapter Layer
+ * Apps import these types. When Phase 2 changes SDK contracts, only this file changes.
+ */
+import type { MemoryEntry } from '@lanonasis/mem-intel-sdk';
+import type { AppMemoryTopic } from '../types';
 
-describe('useIntelligence', () => {
-  it('should suggest tags for content', async () => {
-    const { result } = renderHook(() => useIntelligence(), {
-      wrapper: LanonasisProvider,
-    });
-    
-    const tags = await result.current.suggestTags('React hooks pattern');
-    expect(tags).toContain('react');
-    expect(tags).toContain('hooks');
-  });
-  
-  it('should find related memories', async () => {
-    const { result } = renderHook(() => useIntelligence(), {
-      wrapper: LanonasisProvider,
-    });
-    
-    const related = await result.current.findRelated('memory-123');
-    expect(related).toBeInstanceOf(Array);
-  });
-});
-
-describe('useMemoryHealth', () => {
-  it('should fetch health score on mount when authenticated', async () => {
-    const { result, waitFor } = renderHook(() => useMemoryHealth(), {
-      wrapper: AuthenticatedProvider,
-    });
-    
-    await waitFor(() => result.current.healthScore !== null);
-    expect(result.current.healthScore?.score).toBeGreaterThan(0);
-  });
-});
+export function adaptMemoryEntry(raw: MemoryEntry): AppMemory {
+  return {
+    id: raw.id,
+    title: raw.title,
+    content: raw.content,
+    type: raw.type ?? 'context',
+    tags: raw.tags ?? [],
+    status: 'active',           // mem-intel-sdk MemoryEntry has no status field yet
+    createdAt: raw.created_at,
+    updatedAt: raw.updated_at,
+  };
+}
 ```
 
-### 5.2 Integration Tests Per Surface
+### 1.4 Create `intelligence-client.ts` — lazy singleton
 
-| Surface | Test Scenario |
-|---------|----------------|
-| **VS Code** | Health card renders with score, recommendations display |
-| **Web Ext** | Related memories load when viewing memory detail |
-| **Mobile PWA** | Tag suggestions appear while typing in QuickCapture |
-| **Mobile Native** | Related memories section renders in memory detail |
-
-### 5.3 E2E Tests
+**File**: `packages/shared/src/sdk/intelligence-client.ts`
 
 ```typescript
-// Test: End-to-end intelligence flow
-describe('Intelligence E2E', () => {
-  it('should suggest tags, save memory, find related', async () => {
-    // 1. User creates memory with tag suggestions
-    const suggestions = await intelligence.suggestTags('Docker containerization');
-    
-    // 2. User saves memory with suggested tags
-    const memory = await client.memory.create({
-      title: 'Docker Guide',
-      content: 'Docker containerization...',
-      tags: suggestions.slice(0, 3),
-    });
-    
-    // 3. User views related memories
-    const related = await intelligence.findRelated(memory.id);
-    expect(related.length).toBeGreaterThan(0);
-  });
-});
+/**
+ * Lazy singleton wrapper around MemoryIntelligenceClient.
+ * Import is deferred to avoid bundle-size impact on VS Code and web extensions.
+ */
+import type { MemoryIntelligenceConfig } from '@lanonasis/mem-intel-sdk';
+
+let client: import('@lanonasis/mem-intel-sdk').MemoryIntelligenceClient | null = null;
+
+export async function getIntelligenceClient(config: MemoryIntelligenceConfig) {
+  if (!client) {
+    const { MemoryIntelligenceClient } = await import('@lanonasis/mem-intel-sdk');
+    client = new MemoryIntelligenceClient(config);
+  }
+  return client;
+}
+
+export function resetIntelligenceClient() {
+  client = null;
+}
 ```
 
 ---
 
-## 6. Risks & Mitigations
+## Phase 2 — Intelligence Hooks (Track A)
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| **SDK methods don't exist** (fake API) | Medium | High | Verify SDK source first; stub if needed |
-| **Performance degradation** (AI operations slow) | Medium | Medium | Add loading states; debounce suggestions |
-| **Hook compatibility issues** | Low | High | Test in all React versions (18, 19) |
-| **Phase 2 contract changes break adapter** | High | Medium | Adapter pattern isolates changes; test suite |
-| **Bundle size increase** | Medium | Low | Tree-shaking; lazy load intelligence client |
-| **Feature flag confusion** | Medium | Low | Document defaults; add dev mode override |
+**File**: `packages/shared/src/sdk/react-hooks.tsx` — extend existing file
+
+All hooks must:
+- Check `isAuthenticated` before calling
+- Check relevant feature flag before calling
+- Return safe empty defaults on error or when unauthenticated
+- Expose `isLoading` and `error`
+- NOT call heavy SDK code on mount unless triggered by user action
+
+### `useMemoryCollectionHealth()`
+
+```typescript
+export function useMemoryCollectionHealth() {
+  const { isAuthenticated, config } = useLanonasis();
+  const [health, setHealth] = useState<MemoryHealth | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const check = useCallback(async () => {
+    if (!isAuthenticated || !config.features?.healthScore) return null;
+    setIsLoading(true);
+    setError(null);
+    try {
+      const client = await getIntelligenceClient({ apiKey: config.apiKey!, apiUrl: config.baseUrl });
+      const result = await client.healthCheck({ userId: config.organizationId! });
+      setHealth(result.data);
+      return result.data;
+    } catch (e) {
+      setError(e instanceof Error ? e : new Error('Health check failed'));
+      return null;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isAuthenticated, config]);
+
+  useEffect(() => {
+    if (isAuthenticated) check();
+  }, [isAuthenticated]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return { health, check, isLoading, error };
+}
+```
+
+### `useIntelligence()` — facade for on-demand operations
+
+```typescript
+export function useIntelligence() {
+  const { isAuthenticated, config } = useLanonasis();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+
+  const withClient = useCallback(
+    async <T>(fn: (c: MemoryIntelligenceClient) => Promise<T>, fallback: T): Promise<T> => {
+      if (!isAuthenticated) return fallback;
+      setIsLoading(true);
+      setError(null);
+      try {
+        const client = await getIntelligenceClient({ apiKey: config.apiKey!, apiUrl: config.baseUrl });
+        return await fn(client);
+      } catch (e) {
+        setError(e instanceof Error ? e : new Error('Intelligence request failed'));
+        return fallback;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [isAuthenticated, config]
+  );
+
+  const suggestTags = useCallback(
+    (memoryId: string) => {
+      if (!config.features?.tagSuggestions) return Promise.resolve([]);
+      return withClient(
+        (c) => c.suggestTags({ memoryId, userId: config.organizationId! }).then(r => r.data.suggestions),
+        []
+      );
+    },
+    [withClient, config]
+  );
+
+  const findRelated = useCallback(
+    (memoryId: string) => {
+      if (!config.features?.relatedMemories) return Promise.resolve([]);
+      return withClient(
+        (c) => c.findRelated({ memoryId, userId: config.organizationId! }).then(r => r.data.related_memories),
+        []
+      );
+    },
+    [withClient, config]
+  );
+
+  const detectDuplicates = useCallback(
+    () => {
+      if (!config.features?.duplicateDetection) return Promise.resolve([]);
+      return withClient(
+        (c) => c.detectDuplicates({ userId: config.organizationId! }).then(r => r.data.duplicate_pairs),
+        []
+      );
+    },
+    [withClient, config]
+  );
+
+  const extractInsights = useCallback(
+    (topic?: string) => {
+      return withClient(
+        (c) => c.extractInsights({ userId: config.organizationId!, topic }).then(r => r.data),
+        null
+      );
+    },
+    [withClient, config]
+  );
+
+  const analyzePatterns = useCallback(
+    () => {
+      if (!config.features?.patternAnalysis) return Promise.resolve(null);
+      return withClient(
+        (c) => c.analyzePatterns({ userId: config.organizationId! }).then(r => r.data),
+        null
+      );
+    },
+    [withClient, config]
+  );
+
+  return { suggestTags, findRelated, detectDuplicates, extractInsights, analyzePatterns, isLoading, error };
+}
+```
 
 ---
 
-## 7. Success Metrics
+## Phase 3 — Track B Unblock (when ready)
 
-### 7.1 Code Metrics
+**Prerequisite**: Add `@lanonasis/memory-client` to `packages/shared/package.json`:
 
-| Metric | Before | After | Target |
-|--------|--------|-------|--------|
-| SDK surface coverage | 20% | 80%+ | ✅ All intelligence features accessible |
-| Hooks in shared package | 6 | 11+ | ✅ useIntelligence, useMemoryHealth, useTopics, useEnhancedSearch, useAnalytics |
-| Adapter layer | 0 files | 1 file | ✅ adapter.ts exists |
-| Feature flags | 0 | 8 | ✅ All features toggleable |
+```json
+{
+  "dependencies": {
+    "@lanonasis/mem-intel-sdk": "^2.1.0",
+    "@lanonasis/memory-client": "^2.2.0"
+  }
+}
+```
 
-### 7.2 User-Facing Metrics
+**Then add**:
+- `useTopics()` — wraps `CoreMemoryClient` topic CRUD
+- `useEnhancedSearch()` — wraps `enhancedSearch()` with `search_mode` selector; fallback to basic search if disabled
+- `useAnalytics()` — wraps `getSearchAnalytics()` + `getAccessPatterns()` + `getExtendedStats()`
 
-| Feature | Surfaced In | Verification |
-|---------|-------------|--------------|
-| Health Score | VS Code, Mobile PWA | Visual indicator renders |
-| Tag Suggestions | All surfaces | Suggestions appear on create/edit |
-| Related Memories | All surfaces | Related section loads |
-| Topics | All surfaces | Topic CRUD works |
-| Enhanced Search | All surfaces | Mode selector works |
-| Analytics | All surfaces | Analytics page accessible (stubbed) |
+The feature flags for these are already stubbed in Phase 1 (`topics: false`, `analytics: false`, `enhancedSearch: false`) so apps won't call any of these until the dep is added and flags are flipped.
 
 ---
 
-## 8. Documentation Requirements
+## Phase 4 — Surface Rollout (One Platform First)
 
-### 8.1 Code Documentation
+**First platform: VS Code extension** — most recently audited, clean build.
 
-- [ ] JSDoc for all new hooks
-- [ ] README update for `packages/shared`
-- [ ] ADR-008: Intelligence Feature Surfacing (new ADR)
+### Step 1: Wire health score
 
-### 8.2 User Documentation
+Add `HealthCard` component that calls `useMemoryCollectionHealth()`. Insert into `IDEPanel.tsx` as a collapsible sidebar section. This validates the full hook → SDK → API round trip before touching other platforms.
 
-- [ ] VS Code extension: Changelog entry for new features
-- [ ] Mobile PWA: Feature guide for health score, topics
-- [ ] Web extension: README update
+### Step 2: Validate, then roll out
 
-### 8.3 Context Engineering
+| Surface | Feature | Hook |
+|---------|---------|------|
+| VS Code extension | Health score card | `useMemoryCollectionHealth()` |
+| VS Code extension | Tag suggestions on create | `useIntelligence().suggestTags()` |
+| VS Code extension | Related memories in detail | `useIntelligence().findRelated()` |
+| Web extension sidepanel | Related memories below each card | `useIntelligence().findRelated()` |
+| Web extension | Tag suggestions in create form | `useIntelligence().suggestTags()` |
+| Web extension | Health indicator in header | `useMemoryCollectionHealth()` |
+| Mobile PWA | Real health banner (replaces stub) | `useMemoryCollectionHealth()` |
+| Mobile PWA | Tag suggestions in QuickCapture | `useIntelligence().suggestTags()` |
+| Mobile PWA | Insights card in memory detail | `useIntelligence().extractInsights()` |
+| Mobile native | Related memories in memory detail | `useIntelligence().findRelated()` |
 
-- [ ] Update `shared-package-context.md` with new hooks
-- [ ] Add `adr-008-intelligence-surfacing.md`
-- [ ] Update `context-engineering-progress.md`
-
----
-
-## 9. Immediate Next Steps
-
-### Ready to Execute Now
-
-1. **Verify SDK Methods Exist**
-   ```bash
-   cd packages/shared
-   grep -r "suggestTags\|findRelated\|analyzePatterns\|detectDuplicates" node_modules/@lanonasis/
-   ```
-
-2. **Create `intelligence-client.ts`**
-   - File: `packages/shared/src/sdk/intelligence-client.ts`
-   - Wraps MemoryIntelligenceClient
-   - Exposes all intelligence methods
-
-3. **Extend `react-hooks.tsx`**
-   - Add `useIntelligence()`
-   - Add `useMemoryHealth()`
-   - Add `useTopics()`
-   - Add `useEnhancedSearch()`
-   - Add `useAnalytics()`
-
-4. **Verify in One Surface**
-   - Add health score to VS Code extension
-   - Test end-to-end
-   - Validate pattern works
-
-5. **Roll Out to All Surfaces**
-   - Web extension
-   - Mobile PWA
-   - Mobile native
+**Duplicate detection**: User-triggered only (a "Scan for duplicates" button). Do NOT implement as a background job until rate limits, cache policy, and privacy boundary are defined.
 
 ---
 
-## 10. Appendix: File Inventory
+## Key Constraints
 
-### New Files
+1. **Bundle size**: `intelligence-client.ts` must use dynamic `import()`. Do not import at module top-level. VS Code and browser extensions have strict bundle budgets.
 
-| File | Purpose | Lines (Est.) |
-|------|---------|--------------|
-| `packages/shared/src/sdk/intelligence-client.ts` | SDK wrapper | ~150 |
-| `packages/shared/src/sdk/adapter.ts` | Contract isolation | ~200 |
-| `packages/shared/src/sdk/__tests__/intelligence-hooks.test.tsx` | Unit tests | ~300 |
+2. **Two healthChecks**: `useMemoryCollectionHealth()` calls `mem-intel-sdk.healthCheck()` (collection quality). The existing connection-test `healthCheck()` in the VS Code extension calls `memory-client.healthCheck()` (service ping). Keep these separate — a low health score is not the same as platform downtime.
 
-### Modified Files
+3. **Duplicate detection**: User-triggered first. Background scheduling only after rate limits are established.
 
-| File | Changes |
-|------|---------|
-| `packages/shared/src/sdk/react-hooks.tsx` | Add 5 new hooks (~300 lines) |
-| `packages/shared/src/sdk/index.ts` | Add feature flags, export hooks |
-| `packages/vscode-extension/src/webview/components/HealthCard.tsx` | New component |
-| `packages/vscode-extension/src/webview/IDEPanel.tsx` | Add HealthCard section |
-| `packages/web-extension/src/sidepanel/SidePanel.tsx` | Add related memories |
-| `packages/mobile-pwa/src/components/AIStatusBanner.tsx` | Replace stub with real |
-| `packages/mobile-pwa/src/app/analytics/page.tsx` | New stubbed page |
+4. **Enhanced search**: Blocked on Track B dep addition. When implemented, map `text` → existing `/memory/search`, `vector` → same with explicit mode param, `hybrid` → only if backend confirms support. Hide the mode selector unless `features.enhancedSearch === true`.
+
+5. **Offline behavior**: Intelligence hooks must degrade gracefully when offline. All hooks return safe empty defaults on network error. The existing offline queue must not be disrupted.
+
+6. **Separate `useApiHealth()`**: The existing VS Code connection healthCheck should be renamed/kept as `useApiHealth()` (service ping). `useMemoryCollectionHealth()` is the collection quality feature. Never merge these.
 
 ---
 
-*Execution Plan Version*: 1.0  
-*Created*: 2026-05-08  
-*Status*: Ready for Execution  
-*Priority*: High — Unlocks 80% of SDK capabilities
+## Testing Requirements
 
-</thinking>
+Beyond unit tests for hooks:
 
-Now let me create this comprehensive execution plan document:
+| Test Type | What to Cover |
+|-----------|--------------|
+| **Adapter contract tests** | API response → `AppMemory`, `AppInsight`, etc. mapping functions |
+| **Feature flag tests** | Disabled features must not call SDK/network |
+| **Bundle regression tests** | VS Code + web extension build sizes before/after |
+| **Offline degradation tests** | Hooks return safe defaults when fetch fails |
+| **Auth header preservation** | Intelligence calls use correct `X-API-Key` or `Bearer` header |
 
-<function=write_to_file>
-<parameter=TargetFile>/Users/seyederick/DevOps/projects/archive/lzero-aether-mem/docs/context/execution-plan-sdk-intelligence-surfacing.md
+---
+
+## Revised Execution Sequence
+
+```
+Phase 0 — DONE  (verified capability matrix)
+
+Phase 1 — Foundation
+  ├── Expand Memory type: add status, topicId
+  ├── Add features to LanonasisConfig (flags default: Track A on, Track B off)
+  ├── Create adapter.ts with AppMemory mapping
+  └── Create intelligence-client.ts as lazy dynamic import
+
+Phase 2 — Track A Hooks (mem-intel-sdk, dep already available)
+  ├── Add useMemoryCollectionHealth()
+  ├── Add useIntelligence() (suggestTags, findRelated, detectDuplicates, extractInsights, analyzePatterns)
+  └── Export from packages/shared/src/sdk/index.ts
+
+Phase 3 — First Surface Validation (VS Code only)
+  ├── HealthCard component → IDEPanel sidebar
+  └── Tag suggestions on memory save
+  Verify end-to-end before any other surface
+
+Phase 4 — Track A Rollout to remaining surfaces
+  ├── Web extension: related + tag suggestions + health indicator
+  ├── Mobile PWA: health banner + tag suggestions + insights
+  └── Mobile native: related memories in detail screen
+
+Phase 5 — Track B Unblock (when ready)
+  ├── Add @lanonasis/memory-client to packages/shared/package.json
+  ├── Add useTopics(), useEnhancedSearch(), useAnalytics()
+  ├── Flip feature flags: topics/analytics/enhancedSearch to true
+  └── Roll out Topics UI + Analytics pages across surfaces
+```
+
+---
+
+## ADR to Create
+
+- **ADR-006**: SDK Intelligence Surfacing — Two-SDK Architecture, Adapter Pattern, Feature Flags
+  - Records the decision to wrap `mem-intel-sdk` (Track A) and `memory-client` (Track B) behind a shared adapter layer
+  - Documents the lazy-load requirement for extension bundle safety
+  - Documents the two-healthCheck distinction
+
+---
+
+## Documentation to Update After Implementation
+
+- `docs/context/components/shared-package-context.md` — add new hooks
+- `docs/context/context-engineering-progress.md` — mark Phase 1-4 complete as they land
+- `docs/context/architecture/decisions/adr-006-intelligence-surfacing.md` — create new
+
+---
+
+_Version: 2.0 — Updated 2026-05-08 post Phase 0 verification_
+_Previous version assumed methods existed without runtime verification. This version is grounded in confirmed SDK surface._

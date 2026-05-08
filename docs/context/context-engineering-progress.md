@@ -182,15 +182,23 @@ Cross-referenced with actual repository state. Corrections applied to context do
 ### Next Session Priorities
 
 #### 🔴 High Priority — SDK Intelligence Surfacing
-See `docs/context/execution-plan-sdk-intelligence-surfacing.md` for full plan.
+See `docs/context/execution-plan-sdk-intelligence-surfacing.md` for full plan (v2.0 — post Phase 0 verification).
 
-1. **Verify SDK methods exist** — `suggestTags()`, `findRelated()`, `analyzePatterns()`, `detectDuplicates()`
-2. **Create `intelligence-client.ts`** — Thin wrapper around MemoryIntelligenceClient
-3. **Add hooks to `react-hooks.tsx`** — `useIntelligence()`, `useMemoryHealth()`, `useTopics()`, `useEnhancedSearch()`, `useAnalytics()`
-4. **Surface in one platform** — Start with VS Code extension (health score card)
-5. **Roll out to all platforms** — Web extension, Mobile PWA, Mobile native
+**Phase 0 — Verified (2026-05-08) ✅**
 
-This unlocks 80% of SDK capabilities currently unused (topics, analytics, enhanced search, pattern analysis, duplicate detection, tag suggestions, related memories).
+Key findings from runtime verification:
+- All 6 `mem-intel-sdk` intelligence methods confirmed real, browser-safe (`fetch()` only)
+- **Two SDKs**: `mem-intel-sdk` (in shared deps) = AI intelligence; `memory-client` (root only) = Topics/Analytics/Enhanced Search
+- **Two `healthCheck()`s**: `mem-intel-sdk` returns `MemoryHealth` (collection quality feature); `memory-client` returns `{status, timestamp}` (service ping) — must remain separate
+- `packages/shared` needs `@lanonasis/memory-client` added to its deps for Topics/Analytics/Enhanced Search (Track B)
+- `mem-intel-sdk/react` subpath exists with `MemoryIntelligenceProvider` — use this browser-safe entrypoint
+
+**Remaining Sequence:**
+1. **Phase 1** — Foundation: expand `Memory` type (add `status`, `topicId`), add `features` flags to `LanonasisConfig`, create `adapter.ts`, create lazy `intelligence-client.ts`
+2. **Phase 2** — Track A hooks: `useMemoryCollectionHealth()`, `useIntelligence()` (suggestTags, findRelated, detectDuplicates, extractInsights, analyzePatterns)
+3. **Phase 3** — Validate on VS Code only (health score card + tag suggestions)
+4. **Phase 4** — Track A rollout to web extension, mobile PWA, mobile native
+5. **Phase 5** — Track B: add `memory-client` dep to shared, add `useTopics()` / `useEnhancedSearch()` / `useAnalytics()`
 
 #### 🟡 Medium Priority
 - **Manual test checklist** (requires live VS Code): OAuth flow, API key auth, memory CRUD, sync spinner, keybindings, chat participant
