@@ -60,17 +60,36 @@ export default defineConfig({
     assetsDir: '.',
     cssCodeSplit: false,
     rollupOptions: {
-      // Externalize problematic modules that don't work in webview
       external: [],
+      output: {
+        // Runtime polyfill injected before all bundle code.
+        // Handles any process.* references that survive Rollup's define replacement
+        // (e.g. CJS module conditionals that Rollup doesn't statically fold).
+        // VS Code webviews do NOT provide process — Windsurf does, which masked this bug.
+        banner: [
+          'var process = typeof process !== "undefined" ? process : {',
+          '  env: { NODE_ENV: "production", VSCODE_WEBVIEW: "true" },',
+          '  platform: "browser",',
+          '  version: "",',
+          '  versions: {},',
+          '  browser: true,',
+          '  nextTick: function(cb) { return setTimeout(cb, 0); }',
+          '};',
+        ].join('\n'),
+      },
     },
   },
   define: {
-    // Define process.env for browser compatibility
+    // Most-specific match first — replaces React CJS dev/prod splits at compile time.
+    // Order matters: longer keys must precede shorter prefix keys.
+    'process.env.NODE_ENV': JSON.stringify('production'),
     'process.env': JSON.stringify({
       NODE_ENV: 'production',
       VSCODE_WEBVIEW: 'true',
     }),
     'process.platform': JSON.stringify('browser'),
     'process.version': JSON.stringify(''),
+    'process.versions': JSON.stringify({}),
+    'process.browser': 'true',
   },
 });
