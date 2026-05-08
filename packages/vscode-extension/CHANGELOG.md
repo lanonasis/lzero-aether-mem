@@ -5,6 +5,12 @@ All notable changes to the L0 Memory VS Code Extension will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.7] - 2026-05-08
+
+### Fixed
+
+- **Webview Boot Crash** - Resolved `ReferenceError: process is not defined` that prevented the sidebar from mounting in standard VS Code. The webview bundle now eliminates all `process.*` references at compile time via explicit Vite defines, with a runtime polyfill as a safety net. The issue was masked on Windsurf because Windsurf polyfills `process` in its webview host; VS Code does not.
+
 ## [0.4.6] - 2026-03-03
 
 ### Fixed
