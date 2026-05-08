@@ -4,7 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Search, RefreshCw, Settings, LogOut, ExternalLink, Zap, Loader2 } from 'lucide-react';
+import { Search, RefreshCw, Settings, LogOut, ExternalLink, Zap, Loader2, X } from 'lucide-react';
+import { format } from 'date-fns';
 import { useSemanticSearch } from '../hooks/useSemanticSearch';
 
 interface Memory {
@@ -32,6 +33,7 @@ export const Popup: React.FC = () => {
     isSyncing: false,
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [isSearching, setIsSearching] = useState(false);
 
   // On-device AI status
   const { isAIReady, isAILoading, loadProgress } = useSemanticSearch();
@@ -60,15 +62,28 @@ export const Popup: React.FC = () => {
 
   const handleSearch = () => {
     if (!searchQuery.trim()) return;
-    
+
+    setIsSearching(true);
     chrome.runtime.sendMessage(
       { type: 'SEARCH_MEMORIES', payload: { query: searchQuery } },
       (response) => {
         if (Array.isArray(response)) {
           setMemories(response.slice(0, 5));
         }
+        setIsSearching(false);
       }
     );
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setIsLoading(true);
+    chrome.runtime.sendMessage({ type: 'GET_MEMORIES' }, (response) => {
+      if (Array.isArray(response)) {
+        setMemories(response.slice(0, 5));
+      }
+      setIsLoading(false);
+    });
   };
 
   const handleSync = () => {
@@ -100,6 +115,16 @@ export const Popup: React.FC = () => {
       setIsAuthenticated(false);
       setMemories([]);
     });
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      return format(date, 'MMM d');
+    } catch {
+      return '';
+    }
   };
 
   if (!isAuthenticated) {
@@ -175,8 +200,28 @@ export const Popup: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-            className="w-full bg-[#252526] border border-[#3C3C3C] rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-[#007ACC]"
+            className="w-full bg-[#252526] border border-[#3C3C3C] rounded-lg pl-9 pr-16 py-2 text-sm text-white placeholder:text-[#666666] focus:outline-none focus:border-[#007ACC] transition-colors"
           />
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            {searchQuery && (
+              <button
+                onClick={handleClearSearch}
+                className="text-[#666666] hover:text-[#CCCCCC] transition-colors"
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <button
+              onClick={handleSearch}
+              disabled={!searchQuery.trim() || isSearching}
+              className="text-[10px] px-2 py-0.5 bg-[#007ACC]/20 hover:bg-[#007ACC]/40 text-[#007ACC] rounded disabled:opacity-40 transition-colors flex items-center gap-1"
+              title="Search"
+            >
+              {isSearching ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Go'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -187,7 +232,7 @@ export const Popup: React.FC = () => {
           <button
             onClick={handleSync}
             disabled={syncStatus.isSyncing}
-            className="text-yellow-400 hover:text-yellow-300"
+            className="text-yellow-400 hover:text-yellow-300 disabled:opacity-50"
           >
             {syncStatus.isSyncing ? 'Syncing...' : 'Sync now'}
           </button>
@@ -197,7 +242,10 @@ export const Popup: React.FC = () => {
       {/* Memories */}
       <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2">
         {isLoading ? (
-          <div className="text-center py-8 text-gray-500 text-sm">Loading...</div>
+          <div className="flex flex-col items-center justify-center py-8 gap-2">
+            <Loader2 className="h-5 w-5 text-[#007ACC] animate-spin" />
+            <p className="text-xs text-gray-500">Loading memories...</p>
+          </div>
         ) : memories.length === 0 ? (
           <div className="text-center py-8 text-gray-500 text-sm">
             {searchQuery ? 'No memories found' : 'No memories yet'}
@@ -208,16 +256,31 @@ export const Popup: React.FC = () => {
               key={memory.id}
               className="p-3 bg-[#252526] border border-[#3C3C3C] rounded-lg hover:border-[#007ACC]/50 transition-colors cursor-pointer"
             >
-              <h3 className="text-sm font-medium text-white line-clamp-1">
-                {memory.title}
-              </h3>
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="text-sm font-medium text-white line-clamp-1 flex-1">
+                  {memory.title}
+                </h3>
+                {memory.created_at && (
+                  <span className="text-[10px] text-[#666666] shrink-0">
+                    {formatDate(memory.created_at)}
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-gray-400 line-clamp-2 mt-1">
                 {memory.content}
               </p>
-              <div className="flex items-center gap-2 mt-2">
+              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                 <span className="text-[10px] px-1.5 py-0.5 bg-[#007ACC]/20 text-[#007ACC] rounded">
                   {memory.memory_type}
                 </span>
+                {memory.tags.slice(0, 2).map((tag) => (
+                  <span
+                    key={tag}
+                    className="text-[10px] px-1.5 py-0.5 bg-[#3C3C3C] text-[#AAAAAA] rounded"
+                  >
+                    #{tag}
+                  </span>
+                ))}
               </div>
             </div>
           ))

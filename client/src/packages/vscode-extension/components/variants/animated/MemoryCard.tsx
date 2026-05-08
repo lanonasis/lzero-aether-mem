@@ -31,7 +31,6 @@ export const MemoryCard = ({
   memory: Memory;
   onOpen?: (memory: Memory) => void;
 }) => {
-  const [isHovered, setIsHovered] = useState(false);
   const [copied, setCopied] = useState(false);
   const Icon = memory.icon || FileText;
   const formattedDate = formatMemoryDate(memory);
@@ -63,56 +62,46 @@ export const MemoryCard = ({
       initial={{ opacity: 0, x: -5 }}
       animate={{ opacity: 1, x: 0 }}
       className={cn(
-        "group relative flex flex-col gap-1.5 rounded-sm p-2 hover:bg-[var(--vscode-list-hoverBackground)] transition-colors duration-100 cursor-pointer border border-transparent hover:border-[var(--vscode-focusBorder)]"
+        "group relative flex cursor-pointer flex-col gap-2 rounded-sm border border-transparent p-2.5 transition-colors duration-100 hover:border-[var(--vscode-focusBorder)] hover:bg-[var(--vscode-list-hoverBackground)]"
       )}
       onClick={() => onOpen?.(memory)}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       data-testid={`memory-card-${memory.id}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <Icon className="h-3.5 w-3.5 text-[var(--vscode-editor-foreground)] opacity-70 shrink-0" />
-          <h3 className="text-[13px] text-[var(--vscode-editor-foreground)] leading-tight line-clamp-1">
+          <h3 className="line-clamp-1 text-[13px] font-medium leading-tight text-[var(--vscode-editor-foreground)]">
             {memory.title}
           </h3>
         </div>
-        {isHovered && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-          >
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-5 w-5 text-[var(--vscode-editor-foreground)] hover:bg-[var(--vscode-button-secondaryHoverBackground)] -mt-0.5 -mr-1 shrink-0 rounded-sm"
-              onClick={handleCopy}
-              data-testid="btn-copy-memory"
-            >
-              {copied ? (
-                <Check className="h-3 w-3 text-green-400" />
-              ) : (
-                <Copy className="h-3 w-3" />
-              )}
-            </Button>
-          </motion.div>
-        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="mt-[-1px] mr-[-2px] h-5 w-5 shrink-0 rounded-sm text-[var(--vscode-editor-foreground)] opacity-60 transition-opacity hover:bg-[var(--vscode-button-secondaryHoverBackground)] group-hover:opacity-100"
+          onClick={handleCopy}
+          data-testid="btn-copy-memory"
+        >
+          {copied ? (
+            <Check className="h-3 w-3 text-green-400" />
+          ) : (
+            <Copy className="h-3 w-3" />
+          )}
+        </Button>
       </div>
 
-      <div className="flex items-center gap-3 text-[11px] text-[var(--vscode-descriptionForeground)] pl-5.5">
-        <div className="flex items-center gap-1 opacity-60">
+      <div className="flex flex-wrap items-center gap-1.5 pl-5 text-[11px] text-[var(--vscode-descriptionForeground)]">
+        <div className="inline-flex items-center gap-1 rounded-full border border-[var(--vscode-panel-border)] px-1.5 py-0.5 opacity-70">
           <span data-testid="text-memory-date">{formattedDate}</span>
         </div>
         {memory.tags?.map((tag: string) => (
-          <div
+          <span
             key={tag}
-            className="flex items-center gap-0.5 px-1 rounded bg-[var(--vscode-badge-background)]/10 text-[var(--vscode-editor-foreground)] opacity-60"
+            className="inline-flex max-w-[140px] items-center gap-1 rounded-full border border-[var(--vscode-panel-border)] bg-[var(--vscode-badge-background)]/10 px-1.5 py-0.5 text-[var(--vscode-editor-foreground)] opacity-80"
             data-testid={`tag-${tag}`}
           >
             <Hash className="h-2.5 w-2.5" />
-            <span>{tag}</span>
-          </div>
+            <span className="truncate">{tag}</span>
+          </span>
         ))}
       </div>
     </motion.div>

@@ -49,9 +49,10 @@ import {
   useLanonasis, 
   useMemories, 
   useLocalAI, 
-  useSyncStatus 
-} from '@lanonasis/shared/sdk/react-hooks';
-import { Memory, MemoryType } from '@lanonasis/shared/types';
+  useSyncStatus,
+  type Memory,
+  type MemoryType,
+} from '@lanonasis/shared';
 import { LanoLogo } from './components/LanoLogo';
 
 // ============================================
@@ -339,7 +340,7 @@ const MobileMemoryCard = ({
         >
           {memory.type}
         </Badge>
-        {(memory.tags || []).slice(0, 2).map(tag => (
+        {(memory.tags || []).slice(0, 2).map((tag: string) => (
           <Badge
             key={tag}
             variant="outline"

@@ -16,3 +16,4 @@ packages/mobile-pwa/.env.local
 client/.env.local
 .turbo/cookies/
 .vercel
+.blackboxcli/
