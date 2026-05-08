@@ -169,6 +169,7 @@ Cross-referenced with actual repository state. Corrections applied to context do
 | **Memory Concierge Plan** | `docs/context/execution-plan-memory-concierge.md` | ✅ New v1.0 — 2026-05-08 |
 | **Agent Relay Plan** | `docs/context/execution-plan-agent-relay.md` | ✅ New v1.0 — 2026-05-08 |
 | **Integration Hub Plan** | `docs/context/execution-plan-integration-hub.md` | ✅ New v1.0 — 2026-05-08 |
+| **Web Extension Publishing Plan** | `docs/context/execution-plan-web-extension-publishing.md` | ✅ New v1.0 — 2026-05-08 |
 
 ---
 
