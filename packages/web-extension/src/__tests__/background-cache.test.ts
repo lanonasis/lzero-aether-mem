@@ -35,8 +35,8 @@ describe('background cache helpers', () => {
     });
   });
 
-  it('uses the SDK-aligned memory route family', () => {
-    expect(buildListMemoriesEndpoint()).toBe('/memory?limit=100');
+  it('uses the gateway-aligned memory route family', () => {
+    expect(buildListMemoriesEndpoint()).toBe('/memory/list?limit=100&sortBy=updated_at&sortOrder=desc');
     expect(buildSearchMemoriesEndpoint()).toBe('/memory/search');
     expect(buildCreateMemoryEndpoint()).toBe('/memory');
   });

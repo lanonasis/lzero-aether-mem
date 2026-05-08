@@ -95,8 +95,10 @@ export function buildAuthHeaders(auth: { token: string; authType: AuthType }): R
 export function buildListMemoriesEndpoint(limit: number = DEFAULT_LIST_LIMIT): string {
   const params = new URLSearchParams({
     limit: String(limit),
+    sortBy: 'updated_at',
+    sortOrder: 'desc',
   });
-  return `/memory?${params.toString()}`;
+  return `/memory/list?${params.toString()}`;
 }
 
 export function buildSearchMemoriesEndpoint(): string {

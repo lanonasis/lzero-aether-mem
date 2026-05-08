@@ -46,7 +46,7 @@ export const useMemories = (_isAuthenticated?: boolean) => {
         const created = await create({
           title: data.title || 'Untitled',
           content: data.content || '',
-          type: (data.memory_type as MemoryType) || 'note',
+          type: (data.memory_type as MemoryType) || 'context',
           tags: data.tags || [],
         });
         return created;

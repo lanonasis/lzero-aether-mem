@@ -77,6 +77,7 @@ export const MemoryCard = ({
         <Button
           variant="ghost"
           size="icon"
+          aria-label="Copy memory content"
           className="mt-[-1px] mr-[-2px] h-5 w-5 shrink-0 rounded-sm text-[var(--vscode-editor-foreground)] opacity-60 transition-opacity hover:bg-[var(--vscode-button-secondaryHoverBackground)] group-hover:opacity-100"
           onClick={handleCopy}
           data-testid="btn-copy-memory"

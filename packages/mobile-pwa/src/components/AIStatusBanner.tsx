@@ -3,8 +3,8 @@
  * Shows on-device AI loading and status
  */
 
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { AlertCircle, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useLocalAI } from '@lanonasis/shared';
@@ -12,15 +12,7 @@ import { LanoLogo } from './LanoLogo';
 
 export const AIStatusBanner: React.FC = () => {
   const { isReady, isLoading, loadProgress, error } = useLocalAI();
-  const [benchmarkResult, setBenchmarkResult] = useState<any>(null);
-  const [showDetails, setShowDetails] = useState(false);
   const [dismissed, setDismissed] = useState(false);
-
-  useEffect(() => {
-    if (isReady && !benchmarkResult) {
-      // Would run benchmark here if available
-    }
-  }, [isReady, benchmarkResult]);
 
   if (isLoading) {
     return (
@@ -74,6 +66,7 @@ export const AIStatusBanner: React.FC = () => {
           </div>
           <button
             onClick={() => setDismissed(true)}
+            aria-label="Dismiss AI status notification"
             className="text-yellow-400 hover:text-yellow-300"
           >
             <X className="h-4 w-4" />
@@ -91,9 +84,8 @@ export const AIStatusBanner: React.FC = () => {
       animate={{ opacity: 1, y: 0 }}
       className="mx-4 mt-4"
     >
-      <button
-        onClick={() => setShowDetails(!showDetails)}
-        className="w-full rounded-xl border border-green-500/30 bg-gradient-to-r from-green-500/10 to-emerald-500/10 p-3 text-left"
+      <div
+        className="w-full rounded-xl border border-green-500/30 bg-gradient-to-r from-green-500/10 to-emerald-500/10 p-3"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -110,38 +102,7 @@ export const AIStatusBanner: React.FC = () => {
           </Badge>
         </div>
 
-        <AnimatePresence>
-          {showDetails && benchmarkResult && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="mt-3 grid grid-cols-2 gap-2 border-t border-green-500/20 pt-3"
-            >
-              <div className="text-xs">
-                <span className="text-gray-500">Device:</span>
-                <p className="text-green-300">{benchmarkResult.device}</p>
-              </div>
-              <div className="text-xs">
-                <span className="text-gray-500">Compute:</span>
-                <p className="text-green-300">
-                  {benchmarkResult.compute.toUpperCase()}
-                </p>
-              </div>
-              <div className="text-xs">
-                <span className="text-gray-500">Embedding Time:</span>
-                <p className="text-green-300">
-                  {benchmarkResult.embeddingTimeMs.toFixed(0)}ms
-                </p>
-              </div>
-              <div className="text-xs">
-                <span className="text-gray-500">Dimensions:</span>
-                <p className="text-green-300">{benchmarkResult.dimensions}</p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </button>
+      </div>
     </motion.div>
   );
 };
