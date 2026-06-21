@@ -721,8 +721,15 @@ export class SecureApiKeyService {
     private looksLikeJwt(value: string): boolean {
         const parts = value.split('.');
         if (parts.length !== 3) return false;
-        const jwtSegment = /^[A-Za-z0-9-_]+$/;
-        return parts.every(segment => jwtSegment.test(segment));
+        // Decode and validate payload structure for real JWT
+        try {
+            const payload = Buffer.from(parts[1], 'base64url').toString('utf8');
+            const parsed = JSON.parse(payload);
+            // Valid JWTs should have an 'exp' (expiration) claim
+            return parsed.exp !== undefined && typeof parsed.exp === 'number';
+        } catch {
+            return false;
+        }
     }
 
     private generateCodeVerifier(): string {

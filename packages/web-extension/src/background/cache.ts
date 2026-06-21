@@ -88,7 +88,16 @@ export function looksLikeApiKey(token: string): boolean {
 export function looksLikeJwt(token: string): boolean {
   const parts = token.trim().split('.');
   if (parts.length !== 3) return false;
-  return parts.every(part => /^[A-Za-z0-9_-]+$/.test(part));
+  // Basic format check + payload validation
+  try {
+    // Decode the middle (payload) part to verify it's valid base64url and has JWT structure
+    const payload = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+    const parsed = JSON.parse(payload);
+    // Valid JWTs should have an expiration field
+    return parsed.exp !== undefined && typeof parsed.exp === 'number';
+  } catch {
+    return false;
+  }
 }
 
 export function inferAuthType(token: string): AuthType {
