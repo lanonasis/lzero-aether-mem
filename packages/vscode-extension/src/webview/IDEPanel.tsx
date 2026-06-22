@@ -1269,7 +1269,7 @@ export const IDEPanel: React.FC<IDEPanelProps> = ({
       } else if (canUseApi) {
         const result = await memoryClient.deleteMemory(selectedMemory.id);
         if (result?.error) {
-          throw new Error(result.error);
+          throw new Error(result.error.message || 'Delete failed');
         }
         await refresh();
       } else if (window.vscode) {
