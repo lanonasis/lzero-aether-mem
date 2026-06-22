@@ -41,12 +41,16 @@ export default defineConfig({
       '@lanonasis/shared': path.resolve(__dirname, '../shared/src'),
       // Stub out heavy AI module that doesn't work in webview context
       '@xenova/transformers': path.resolve(__dirname, 'src/webview/stubs/transformers.ts'),
-      // Fix memory-client internal imports
+      // Fix memory-client internal imports - use the same React bundle
       '@lanonasis/memory-client/react': path.join(memoryClientDist, 'react/index.js'),
       '@lanonasis/memory-client': path.join(memoryClientDist, 'index.esm.js'),
       // Resolve core imports from within the SDK
       '../core/client': path.join(memoryClientDist, 'core/index.js'),
       '../core/types': path.join(memoryClientDist, 'core/index.js'),
+      // Deduplicate: both main.tsx and @lanonasis/memory-client/react import 'react',
+      // causing Vite to bundle React twice with colliding variable names during minification.
+      // This alias forces both to the same module, preventing the double-bundle.
+      'react': path.resolve(__dirname, '../../node_modules/react'),
     },
   },
   build: {
