@@ -76,6 +76,15 @@ export function normalizeApiUrl(raw: string): string {
   }
 }
 
+// Matches the backend's accepted API-key prefixes (lan-onasis-monorepo
+// apps/onasis-core/supabase/functions/_shared/auth.ts isApiKeyFormat regex).
+// lano_ is canonical; the rest remain valid during the deprecation window.
+export const API_KEY_PREFIXES = ['lano_', 'lms_', 'lns_', 'vibe_', 'sk_', 'pk_', 'master_'] as const;
+
+export function looksLikeApiKey(token: string): boolean {
+  return API_KEY_PREFIXES.some((prefix) => token.startsWith(prefix));
+}
+
 export function looksLikeJwt(token: string): boolean {
   const parts = token.trim().split('.');
   if (parts.length !== 3) return false;
@@ -367,12 +376,6 @@ export class MemoryCache {
       _localId: undefined,
       _cachedAt: Date.now(),
     });
-  }
-
-  searchLocal(_query: string): CachedMemory[] {
-    // This is synchronous for omnibox, so we use a simple approach
-    // Real implementation would be async
-    return [];
   }
 
   async searchLocalAsync(query: string): Promise<CachedMemory[]> {

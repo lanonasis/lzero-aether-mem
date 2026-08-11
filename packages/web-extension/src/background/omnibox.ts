@@ -19,7 +19,7 @@ export function setupOmnibox(cache: MemoryCache): void {
     }
 
     try {
-      const results = await cache.searchLocal(text);
+      const results = await cache.searchLocalAsync(text);
       const suggestions = results.slice(0, 5).map((memory) => ({
         content: memory.title,
         description: `<match>${memory.title}</match> - <dim>${memory.content.slice(0, 50)}...</dim>`,

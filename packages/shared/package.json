@@ -1,6 +1,7 @@
 {
   "name": "@lanonasis/shared",
   "version": "2.0.0-hackathon",
+  "private": true,
   "description": "Shared SDK, types, theme, and utilities for LanOnasis cross-platform Memory-as-a-Service",
   "type": "module",
   "main": "./dist/index.js",

@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Save, Key, LogOut, Check, AlertCircle, Loader2, Globe, Cpu } from 'lucide-react';
+import { looksLikeApiKey } from '../background/cache';
 
 function normalizeApiUrl(raw: string): { ok: true; value: string; changed: boolean } | { ok: false; error: string } {
   const trimmed = raw.trim();
@@ -75,13 +76,13 @@ export const Options: React.FC = () => {
     try {
       // Validate API key format
       const hasNewCredential = apiKey && !apiKey.startsWith('••');
-      const isApiKey = apiKey.startsWith('lano_') || apiKey.startsWith('lns_');
+      const isApiKey = looksLikeApiKey(apiKey);
       const isBearerToken = looksLikeJwt(apiKey);
 
       if (hasNewCredential && !isApiKey && !isBearerToken) {
         setMessage({
           type: 'error',
-          text: 'Invalid credential format. Use an API key starting with lano_/lns_ or a bearer token.',
+          text: 'Invalid credential format. Use an API key starting with lano_ (or another backend-issued prefix) or a bearer token.',
         });
         setIsSaving(false);
         return;
@@ -285,7 +286,7 @@ export const Options: React.FC = () => {
 
         {/* Footer */}
         <div className="mt-8 text-center text-xs text-gray-500">
-          <p>L0 Memory Extension v0.1.0</p>
+          <p>L0 Memory Extension v0.2.0</p>
           <p className="mt-1">
             <a href="https://lanonasis.com" target="_blank" rel="noopener noreferrer" className="text-[#007ACC] hover:underline">
               lanonasis.com
