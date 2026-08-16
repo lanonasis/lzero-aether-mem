@@ -12,20 +12,29 @@ export function setupOmnibox(cache: MemoryCache): void {
   });
 
   // Handle input changes
+  // Overlapping keystrokes can fire searchLocalAsync calls that resolve out of
+  // order; track a request id so a slower, older request can't clobber a
+  // faster, newer one's suggestions.
+  let latestRequestId = 0;
+
   chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
+    const requestId = ++latestRequestId;
+
     if (!text.trim()) {
       suggest([]);
       return;
     }
 
     try {
-      const results = await cache.searchLocal(text);
+      const results = await cache.searchLocalAsync(text);
+      if (requestId !== latestRequestId) return; // superseded by a newer keystroke
       const suggestions = results.slice(0, 5).map((memory) => ({
         content: memory.title,
         description: `<match>${memory.title}</match> - <dim>${memory.content.slice(0, 50)}...</dim>`,
       }));
       suggest(suggestions);
     } catch (err) {
+      if (requestId !== latestRequestId) return; // superseded by a newer keystroke
       console.error('[L0 Memory] Omnibox search error:', err);
       suggest([]);
     }
