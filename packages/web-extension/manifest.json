@@ -59,7 +59,8 @@
 
   "host_permissions": [
     "https://api.lanonasis.com/*",
-    "https://auth.lanonasis.com/*"
+    "https://auth.lanonasis.com/*",
+    "https://ai.vortexcore.app/*"
   ],
 
   "optional_host_permissions": [

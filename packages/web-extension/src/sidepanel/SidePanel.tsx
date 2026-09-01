@@ -612,17 +612,40 @@ export const SidePanel: React.FC = () => {
       });
     } else {
       chrome.runtime.sendMessage(
-        { type: 'SEARCH_MEMORIES', payload: { query: content } },
-        (response) => {
-          const results: Memory[] = Array.isArray(response) ? response : [];
-          setLastAssistantResponse({
-            id: `assistant_${Date.now()}`,
-            role: 'assistant',
-            content: synthesizeResponse(content, results),
-            memories: results.slice(0, 3),
-            timestamp: Date.now(),
-          });
-          setIsSending(false);
+        { type: 'ASK_AI', payload: { query: content } },
+        (aiResponse) => {
+          if (aiResponse?.success && typeof aiResponse.response === 'string') {
+            setLastAssistantResponse({
+              id: `assistant_${Date.now()}`,
+              role: 'assistant',
+              content: aiResponse.response,
+              timestamp: Date.now(),
+            });
+            setIsSending(false);
+            return;
+          }
+
+          // AI router unavailable (no credential, network, timeout, rate
+          // limit, etc.) -- degrade to local memory search rather than
+          // leaving the concierge silent.
+          chrome.runtime.sendMessage(
+            { type: 'SEARCH_MEMORIES', payload: { query: content } },
+            (response) => {
+              const results: Memory[] = Array.isArray(response) ? response : [];
+              const rateLimited = typeof aiResponse?.retryAfterSeconds === 'number';
+              const prefix = rateLimited
+                ? `⏳ The assistant is busy right now (try again in ~${aiResponse.retryAfterSeconds}s). Meanwhile, here's what I found in your memories:\n\n`
+                : '';
+              setLastAssistantResponse({
+                id: `assistant_${Date.now()}`,
+                role: 'assistant',
+                content: prefix + synthesizeResponse(content, results),
+                memories: results.slice(0, 3),
+                timestamp: Date.now(),
+              });
+              setIsSending(false);
+            }
+          );
         }
       );
     }
