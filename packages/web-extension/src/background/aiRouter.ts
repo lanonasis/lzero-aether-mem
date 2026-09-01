@@ -22,17 +22,22 @@ export class AiRouterRateLimitError extends Error {
   }
 }
 
-async function resolveRouterConfig(): Promise<{ token: string; baseUrl: string } | null> {
-  const { l0_auth_token, aiRouterUrl } = await chrome.storage.local.get(['l0_auth_token', 'aiRouterUrl']);
+async function resolveRouterConfig(): Promise<{ token: string } | null> {
+  const { l0_auth_token } = await chrome.storage.local.get(['l0_auth_token']);
   if (!l0_auth_token) return null;
-
-  const baseUrl = (aiRouterUrl || DEFAULT_AI_ROUTER_URL).trim().replace(/\/+$/, '') || DEFAULT_AI_ROUTER_URL;
-  return { token: l0_auth_token, baseUrl };
+  return { token: l0_auth_token };
 }
 
 /**
  * Ask the Onasis AI Router for a synthesized memory-concierge answer.
  * Throws on any failure (no credential, network, timeout, non-2xx, 429).
+ *
+ * Note: the router host is fixed to DEFAULT_AI_ROUTER_URL, not
+ * user-configurable -- unlike apiUrl, there is no settings UI or
+ * permission-request flow for it, and manifest.json only grants
+ * host_permissions for that one origin. Making it configurable would
+ * need the same chrome.permissions.request flow Options.tsx uses for
+ * apiUrl before the background fetch could reach an arbitrary host.
  */
 export async function queryAIRouter(query: string): Promise<string> {
   const cfg = await resolveRouterConfig();
@@ -43,51 +48,59 @@ export async function queryAIRouter(query: string): Promise<string> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), AI_ROUTER_TIMEOUT_MS);
 
-  let response: Response;
   try {
-    response = await fetch(`${cfg.baseUrl}/api/v1/ai-chat`, {
-      method: 'POST',
-      credentials: 'omit',
-      cache: 'no-store',
-      headers: {
-        'Content-Type': 'application/json',
-        ...buildAuthHeaders({ token: cfg.token, authType: inferAuthType(cfg.token) }),
-      },
-      body: JSON.stringify({
-        use_case: 'memory-analysis',
-        messages: [{ role: 'user', content: query }],
-      }),
-      signal: controller.signal,
-    });
-  } catch (error) {
-    throw new Error(`AI router unreachable: ${error instanceof Error ? error.message : String(error)}`);
+    let response: Response;
+    try {
+      response = await fetch(`${DEFAULT_AI_ROUTER_URL}/api/v1/ai-chat`, {
+        method: 'POST',
+        credentials: 'omit',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+          ...buildAuthHeaders({ token: cfg.token, authType: inferAuthType(cfg.token) }),
+        },
+        body: JSON.stringify({
+          use_case: 'memory-analysis',
+          messages: [{ role: 'user', content: query }],
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      throw new Error(`AI router unreachable: ${error instanceof Error ? error.message : String(error)}`);
+    }
+
+    if (response.status === 429) {
+      const headerValue = response.headers.get('Retry-After');
+      const seconds = headerValue ? parseInt(headerValue, 10) : undefined;
+      throw new AiRouterRateLimitError(Number.isFinite(seconds) ? seconds : undefined);
+    }
+
+    if (!response.ok) {
+      throw new Error(`AI router request failed: ${response.status} ${response.statusText}`);
+    }
+
+    // The timeout must stay armed through body consumption too -- if it's
+    // cleared as soon as headers arrive, a stalled body leaves this pending
+    // forever and the chat box never falls back to memory search.
+    let data: { response?: unknown };
+    try {
+      data = await response.json();
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('AI router response timed out');
+      }
+      throw new Error('AI router returned an unreadable response');
+    }
+
+    // The answer is `data.response` -- not data.message.content or any
+    // OpenAI-style shape. See the router's integration guide.
+    const answer = typeof data.response === 'string' ? data.response.trim() : '';
+    if (!answer) {
+      throw new Error('AI router returned an empty response');
+    }
+
+    return answer;
   } finally {
     clearTimeout(timeout);
   }
-
-  if (response.status === 429) {
-    const headerValue = response.headers.get('Retry-After');
-    const seconds = headerValue ? parseInt(headerValue, 10) : undefined;
-    throw new AiRouterRateLimitError(Number.isFinite(seconds) ? seconds : undefined);
-  }
-
-  if (!response.ok) {
-    throw new Error(`AI router request failed: ${response.status} ${response.statusText}`);
-  }
-
-  let data: { response?: unknown };
-  try {
-    data = await response.json();
-  } catch {
-    throw new Error('AI router returned an unreadable response');
-  }
-
-  // The answer is `data.response` -- not data.message.content or any
-  // OpenAI-style shape. See the router's integration guide.
-  const answer = typeof data.response === 'string' ? data.response.trim() : '';
-  if (!answer) {
-    throw new Error('AI router returned an empty response');
-  }
-
-  return answer;
 }
