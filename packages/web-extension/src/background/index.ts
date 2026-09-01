@@ -93,7 +93,13 @@ async function handleMessage(
     
     case 'CREATE_MEMORY':
       return cache.addLocal(message.payload?.memory);
-    
+
+    case 'UPDATE_MEMORY':
+      return cache.updateMemory(message.payload?.id, message.payload?.updates || {});
+
+    case 'DELETE_MEMORY':
+      return cache.deleteMemory(message.payload?.id);
+
     case 'SYNC_MEMORIES':
       return cache.sync();
     
