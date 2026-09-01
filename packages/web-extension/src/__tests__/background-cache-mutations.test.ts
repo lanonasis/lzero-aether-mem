@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const dbStore = new Map<string, unknown>();
+const deleteCalls: Array<[string, string]> = [];
 
 vi.mock('idb', () => ({
   openDB: vi.fn(async () => ({
     get: async (_store: string, key: string) => dbStore.get(key),
     getAll: async () => Array.from(dbStore.values()),
     put: async (_store: string, value: any) => { dbStore.set(value.id, value); },
-    delete: async (_store: string, key: string) => { dbStore.delete(key); },
+    delete: async (store: string, key: string) => { deleteCalls.push([store, key]); dbStore.delete(key); },
     clear: async () => { dbStore.clear(); },
     transaction: () => ({
       store: {
@@ -54,6 +55,7 @@ describe('MemoryCache.updateMemory / deleteMemory', () => {
 
   beforeEach(() => {
     dbStore.clear();
+    deleteCalls.length = 0;
     installChromeStorageMock({ l0_auth_token: 'lano_test_123', apiUrl: 'https://api.lanonasis.com' });
     (globalThis as any).fetch = fetchMock;
     fetchMock.mockReset();
@@ -128,6 +130,41 @@ describe('MemoryCache.updateMemory / deleteMemory', () => {
     expect(url).toBe('https://api.lanonasis.com/api/v1/memory/mem_1');
     expect(init.method).toBe('DELETE');
     expect(dbStore.has('mem_1')).toBe(false);
+  });
+
+  it('discards a pending-create memory locally instead of calling the API', async () => {
+    dbStore.set('local_1', {
+      id: 'local_1',
+      title: 'Draft',
+      content: 'Draft',
+      memory_type: 'note',
+      tags: [],
+      created_at: '',
+      updated_at: '',
+      _pending: 'create',
+    });
+
+    const cache = new MemoryCache();
+    const result = await cache.deleteMemory('local_1');
+
+    expect(result.success).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(dbStore.has('local_1')).toBe(false);
+  });
+
+  it('removes the associated embedding when a synced memory is deleted', async () => {
+    dbStore.set('mem_1', { id: 'mem_1', title: 'Old', content: 'Old', memory_type: 'note', tags: [], created_at: '', updated_at: '' });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      headers: { get: () => 'application/json' },
+      json: async () => ({ success: true, message: 'Memory mem_1 deleted successfully', deleted_id: 'mem_1' }),
+    });
+
+    const cache = new MemoryCache();
+    const result = await cache.deleteMemory('mem_1');
+
+    expect(result.success).toBe(true);
+    expect(deleteCalls).toContainEqual(['embeddings', 'mem_1']);
   });
 
   it('refuses to call the API when not authenticated', async () => {

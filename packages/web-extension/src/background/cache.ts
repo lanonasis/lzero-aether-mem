@@ -627,14 +627,27 @@ export class MemoryCache {
     const cfg = await this.getAuthConfig();
     if (!cfg) return { success: false, error: 'Not connected. Sign in to delete memories.' };
 
+    if (!this.db) await this.init();
+
+    // A memory still queued as a pending create only exists locally --
+    // deleting it remotely would 404 (or worse, race with sync() creating
+    // it after this DELETE lands). Just drop it from the local cache.
+    const existing = await this.db!.get('memories', id);
+    if (existing?._pending === 'create') {
+      await this.db!.delete('memories', id);
+      await this.deleteEmbedding(id);
+      console.log('[MemoryCache] Discarded pending-create memory:', id);
+      return { success: true };
+    }
+
     const response = await this.apiRequest<unknown>(buildDeleteMemoryEndpoint(id), {
       method: 'DELETE',
     });
 
     if (response.error) return { success: false, error: response.error };
 
-    if (!this.db) await this.init();
     await this.db!.delete('memories', id);
+    await this.deleteEmbedding(id);
 
     console.log('[MemoryCache] Deleted memory:', id);
     return { success: true };
