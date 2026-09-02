@@ -28,6 +28,9 @@ import {
   RefreshCw,
   User,
   Bot,
+  Pencil,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useSemanticSearch } from '../hooks/useSemanticSearch';
@@ -174,8 +177,21 @@ const MemoryCard: React.FC<{ memory: Memory; onSelect?: (m: Memory) => void }> =
 // Memory Detail Modal
 // ============================================
 
-const MemoryDetailModal: React.FC<{ memory: Memory; onClose: () => void }> = ({ memory, onClose }) => {
+const MemoryDetailModal: React.FC<{
+  memory: Memory;
+  onClose: () => void;
+  onUpdated: (memory: Memory) => void;
+  onDeleted: (id: string) => void;
+}> = ({ memory, onClose, onUpdated, onDeleted }) => {
   const [copied, setCopied] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(memory.title);
+  const [editContent, setEditContent] = useState(memory.content);
+  const [editTagsInput, setEditTagsInput] = useState(memory.tags.join(', '));
+  const [isSaving, setIsSaving] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleCopy = async () => {
     try {
@@ -185,6 +201,61 @@ const MemoryDetailModal: React.FC<{ memory: Memory; onClose: () => void }> = ({ 
     } catch {
       // ignore
     }
+  };
+
+  const startEditing = () => {
+    setEditTitle(memory.title);
+    setEditContent(memory.content);
+    setEditTagsInput(memory.tags.join(', '));
+    setError(null);
+    setIsEditing(true);
+  };
+
+  const handleSave = () => {
+    if (!editTitle.trim() || !editContent.trim()) return;
+    setIsSaving(true);
+    setError(null);
+
+    const updates = {
+      title: editTitle.trim(),
+      content: editContent.trim(),
+      tags: editTagsInput.split(/[\s,]+/).map(t => t.replace(/^#/, '').trim()).filter(Boolean),
+    };
+
+    chrome.runtime.sendMessage(
+      { type: 'UPDATE_MEMORY', payload: { id: memory.id, updates } },
+      (response) => {
+        setIsSaving(false);
+        if (response?.success && response.memory) {
+          onUpdated(response.memory);
+          setIsEditing(false);
+        } else {
+          setError(response?.error || 'Failed to update memory');
+        }
+      }
+    );
+  };
+
+  const handleDelete = () => {
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      return;
+    }
+    setIsDeleting(true);
+    setError(null);
+    chrome.runtime.sendMessage(
+      { type: 'DELETE_MEMORY', payload: { id: memory.id } },
+      (response) => {
+        setIsDeleting(false);
+        if (response?.success) {
+          onDeleted(memory.id);
+          onClose();
+        } else {
+          setConfirmingDelete(false);
+          setError(response?.error || 'Failed to delete memory');
+        }
+      }
+    );
   };
 
   return (
@@ -205,21 +276,48 @@ const MemoryDetailModal: React.FC<{ memory: Memory; onClose: () => void }> = ({ 
                 <span className="text-[10px] text-yellow-400">Pending sync</span>
               )}
             </div>
-            <h2 className="mt-2 text-sm font-semibold text-white leading-tight break-words">
-              {memory.title}
-            </h2>
-            <div className="mt-1 text-[10px] text-[#888888]">
-              {format(new Date(memory.created_at), 'PPpp')}
-            </div>
+            {!isEditing && (
+              <>
+                <h2 className="mt-2 text-sm font-semibold text-white leading-tight break-words">
+                  {memory.title}
+                </h2>
+                <div className="mt-1 text-[10px] text-[#888888]">
+                  {format(new Date(memory.created_at), 'PPpp')}
+                </div>
+              </>
+            )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <button
-              onClick={handleCopy}
-              className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md border border-[#3C3C3C] bg-[#252526] hover:bg-[#2A2D2E] text-[#CCCCCC]"
-            >
-              {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
-              {copied ? 'Copied' : 'Copy'}
-            </button>
+            {!isEditing && (
+              <>
+                <button
+                  onClick={handleCopy}
+                  title="Copy to clipboard"
+                  className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md border border-[#3C3C3C] bg-[#252526] hover:bg-[#2A2D2E] text-[#CCCCCC]"
+                >
+                  {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}
+                </button>
+                <button
+                  onClick={startEditing}
+                  title="Edit memory"
+                  className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md border border-[#3C3C3C] bg-[#252526] hover:bg-[#2A2D2E] text-[#CCCCCC]"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  title={confirmingDelete ? 'Click again to confirm delete' : 'Delete memory'}
+                  className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-md border transition-colors disabled:opacity-50 ${
+                    confirmingDelete
+                      ? 'border-red-500/50 bg-red-500/20 text-red-300'
+                      : 'border-[#3C3C3C] bg-[#252526] hover:bg-red-500/10 hover:border-red-500/40 hover:text-red-400 text-[#CCCCCC]'
+                  }`}
+                >
+                  {isDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                </button>
+              </>
+            )}
             <button
               onClick={onClose}
               className="p-1.5 rounded-md border border-[#3C3C3C] bg-[#1E1E1E] hover:bg-[#252526] text-[#CCCCCC]"
@@ -229,22 +327,83 @@ const MemoryDetailModal: React.FC<{ memory: Memory; onClose: () => void }> = ({ 
           </div>
         </div>
 
-        <div className="p-4 overflow-y-auto flex-1">
-          {memory.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {memory.tags.map((tag) => (
-                <span key={tag} className="text-[10px] bg-[#007ACC]/10 border border-[#007ACC]/20 text-[#007ACC] px-2 py-0.5 rounded">
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          )}
-          <div className="rounded-lg border border-[#2D2D2D] bg-[#0D0D0D]/40 p-3">
-            <div className="text-[10px] uppercase tracking-wide text-[#888888] mb-2">Content</div>
-            <div className="text-sm text-[#CCCCCC] whitespace-pre-wrap break-words leading-relaxed">
-              {memory.content}
-            </div>
+        {confirmingDelete && !isEditing && (
+          <div className="mx-4 mt-3 flex items-center gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] text-red-300 shrink-0">
+            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+            <span className="flex-1">This can't be undone. Click the trash icon again to permanently delete this memory.</span>
+            <button onClick={() => setConfirmingDelete(false)} className="text-red-300/70 hover:text-red-200">
+              Cancel
+            </button>
           </div>
+        )}
+
+        {error && (
+          <div className="mx-4 mt-3 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-[11px] text-red-300 shrink-0">
+            {error}
+          </div>
+        )}
+
+        <div className="p-4 overflow-y-auto flex-1">
+          {isEditing ? (
+            <div className="space-y-2">
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="Title"
+                className="w-full bg-[#252526] border border-[#3C3C3C] rounded-md px-3 py-2 text-sm text-white placeholder:text-[#666666] focus:outline-none focus:border-[#007ACC] transition-colors"
+              />
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                rows={6}
+                placeholder="Content…"
+                className="w-full bg-[#252526] border border-[#3C3C3C] rounded-md px-3 py-2 text-sm text-white placeholder:text-[#666666] focus:outline-none focus:border-[#007ACC] resize-none transition-colors"
+              />
+              <input
+                type="text"
+                value={editTagsInput}
+                onChange={(e) => setEditTagsInput(e.target.value)}
+                placeholder="Tags (space or comma separated)"
+                className="w-full bg-[#252526] border border-[#3C3C3C] rounded-md px-3 py-2 text-sm text-white placeholder:text-[#666666] focus:outline-none focus:border-[#007ACC] transition-colors"
+              />
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={handleSave}
+                  disabled={isSaving || !editTitle.trim() || !editContent.trim()}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-[#007ACC] hover:bg-[#0E639C] text-white text-xs font-medium py-1.5 rounded-md disabled:opacity-50 transition-colors"
+                >
+                  {isSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                  {isSaving ? 'Saving…' : 'Save changes'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setIsEditing(false); setError(null); }}
+                  className="px-3 text-xs text-[#888888] hover:text-[#CCCCCC] border border-[#3C3C3C] rounded-md transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {memory.tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {memory.tags.map((tag) => (
+                    <span key={tag} className="text-[10px] bg-[#007ACC]/10 border border-[#007ACC]/20 text-[#007ACC] px-2 py-0.5 rounded">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="rounded-lg border border-[#2D2D2D] bg-[#0D0D0D]/40 p-3">
+                <div className="text-[10px] uppercase tracking-wide text-[#888888] mb-2">Content</div>
+                <div className="text-sm text-[#CCCCCC] whitespace-pre-wrap break-words leading-relaxed">
+                  {memory.content}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -869,7 +1028,20 @@ export const SidePanel: React.FC = () => {
       </div>
 
       {selectedMemory && (
-        <MemoryDetailModal memory={selectedMemory} onClose={() => setSelectedMemory(null)} />
+        <MemoryDetailModal
+          memory={selectedMemory}
+          onClose={() => setSelectedMemory(null)}
+          onUpdated={(updated) => {
+            setSelectedMemory(updated);
+            setMemories((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+          }}
+          onDeleted={(id) => {
+            setMemories((prev) => prev.filter((m) => m.id !== id));
+            setLastAssistantResponse((prev) =>
+              prev?.memories ? { ...prev, memories: prev.memories.filter((m) => m.id !== id) } : prev
+            );
+          }}
+        />
       )}
 
       {/* ── Assistant response (inline, dismissible) ── */}

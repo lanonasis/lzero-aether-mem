@@ -127,6 +127,14 @@ export function buildCreateMemoryEndpoint(): string {
   return '/memory';
 }
 
+export function buildUpdateMemoryEndpoint(id: string): string {
+  return `/memory/${encodeURIComponent(id)}`;
+}
+
+export function buildDeleteMemoryEndpoint(id: string): string {
+  return `/memory/${encodeURIComponent(id)}`;
+}
+
 type ApiResult<T> = { data?: T; error?: string };
 
 function unwrapListResponse(payload: unknown): unknown[] {
@@ -566,6 +574,83 @@ export class MemoryCache {
 
     // Fallback to local search
     return this.searchLocalAsync(query);
+  }
+
+  /**
+   * Update a memory via the REST API (PUT /memory/:id) and reflect the
+   * result in the local cache. Requires an existing, already-synced
+   * memory id — this does not queue offline like addLocal/create does.
+   */
+  async updateMemory(
+    id: string,
+    updates: Partial<Pick<CachedMemory, 'title' | 'content' | 'memory_type' | 'tags'>>
+  ): Promise<{ success: boolean; error?: string; memory?: CachedMemory }> {
+    const cfg = await this.getAuthConfig();
+    if (!cfg) return { success: false, error: 'Not connected. Sign in to edit memories.' };
+
+    const response = await this.apiRequest<unknown>(buildUpdateMemoryEndpoint(id), {
+      method: 'PUT',
+      body: JSON.stringify({
+        title: updates.title,
+        content: updates.content,
+        type: updates.memory_type,
+        memory_type: updates.memory_type,
+        tags: updates.tags,
+      }),
+    });
+
+    if (response.error) return { success: false, error: response.error };
+
+    const updated = (response.data as any)?.data ?? response.data;
+    const merged: CachedMemory = {
+      id: updated?.id ?? id,
+      title: updated?.title ?? updates.title ?? '',
+      content: updated?.content ?? updates.content ?? '',
+      memory_type: updated?.memory_type ?? updated?.type ?? updates.memory_type ?? 'workflow',
+      tags: updated?.tags ?? updates.tags ?? [],
+      created_at: updated?.created_at ?? new Date().toISOString(),
+      updated_at: updated?.updated_at ?? new Date().toISOString(),
+    };
+
+    if (!this.db) await this.init();
+    await this.db!.put('memories', { ...merged, _cachedAt: Date.now() });
+
+    console.log('[MemoryCache] Updated memory:', merged.title);
+    return { success: true, memory: merged };
+  }
+
+  /**
+   * Delete a memory via the REST API (DELETE /memory/:id) and remove it
+   * from the local cache.
+   */
+  async deleteMemory(id: string): Promise<{ success: boolean; error?: string }> {
+    const cfg = await this.getAuthConfig();
+    if (!cfg) return { success: false, error: 'Not connected. Sign in to delete memories.' };
+
+    if (!this.db) await this.init();
+
+    // A memory still queued as a pending create only exists locally --
+    // deleting it remotely would 404 (or worse, race with sync() creating
+    // it after this DELETE lands). Just drop it from the local cache.
+    const existing = await this.db!.get('memories', id);
+    if (existing?._pending === 'create') {
+      await this.db!.delete('memories', id);
+      await this.deleteEmbedding(id);
+      console.log('[MemoryCache] Discarded pending-create memory:', id);
+      return { success: true };
+    }
+
+    const response = await this.apiRequest<unknown>(buildDeleteMemoryEndpoint(id), {
+      method: 'DELETE',
+    });
+
+    if (response.error) return { success: false, error: response.error };
+
+    await this.db!.delete('memories', id);
+    await this.deleteEmbedding(id);
+
+    console.log('[MemoryCache] Deleted memory:', id);
+    return { success: true };
   }
 
   // ============================================
