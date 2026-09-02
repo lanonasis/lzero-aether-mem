@@ -20,6 +20,7 @@ import {
   generateEmbedding,
   getOffscreenAIStatus,
 } from './offscreenManager';
+import { queryAIRouter, AiRouterRateLimitError } from './aiRouter';
 
 // Initialize cache
 const cache = new MemoryCache();
@@ -90,6 +91,21 @@ async function handleMessage(
     case 'SEARCH_MEMORIES':
       // Use SDK-powered search with fallback to local
       return cache.searchWithApi(message.payload?.query || '');
+
+    case 'ASK_AI':
+      // Memory-concierge chat: route through the Onasis AI Router
+      // (use_case: memory-analysis, which drives its own memory search
+      // server-side). Callers must fall back to SEARCH_MEMORIES on
+      // { success: false } -- the concierge must never go silent.
+      try {
+        const response = await queryAIRouter(message.payload?.query || '');
+        return { success: true, response };
+      } catch (error) {
+        if (error instanceof AiRouterRateLimitError) {
+          return { success: false, error: error.message, retryAfterSeconds: error.retryAfterSeconds };
+        }
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+      }
     
     case 'CREATE_MEMORY':
       return cache.addLocal(message.payload?.memory);
