@@ -76,6 +76,17 @@ describe('background sync', () => {
     expect(await syncIfDue(cache, 'startup', 5_000_000 + 5_000)).toBe(false);
   });
 
+  it('syncs when the stored attempt time is in the future (clock moved backwards)', async () => {
+    const { store } = installChromeMock({
+      l0_auth_token: 'token',
+      l0_last_sync_attempt_at: 9_000_000,
+    });
+    const cache = { sync: vi.fn().mockResolvedValue(undefined) };
+
+    expect(await syncIfDue(cache, 'alarm', 1_000_000)).toBe(true);
+    expect(store.l0_last_sync_attempt_at).toBe(1_000_000);
+  });
+
   it('does not sync or record an attempt when not authenticated', async () => {
     const { store } = installChromeMock();
     const cache = { sync: vi.fn() };
@@ -86,6 +97,9 @@ describe('background sync', () => {
   });
 
   it('creates the alarm only when it does not already exist', async () => {
+    // setupSync schedules a 5s startup timer on every call; fake timers keep both of them
+    // from firing into a later test's chrome mock.
+    vi.useFakeTimers();
     const { chromeMock, alarms } = installChromeMock();
     alarms.set('l0-memory-sync', { name: 'l0-memory-sync', periodInMinutes: 5 });
     setupSync({ sync: vi.fn() } as any);
@@ -94,6 +108,7 @@ describe('background sync', () => {
 
     const fresh = installChromeMock();
     setupSync({ sync: vi.fn() } as any);
-    await vi.waitFor(() => expect(fresh.chromeMock.alarms.create).toHaveBeenCalledWith('l0-memory-sync', { periodInMinutes: 5 }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(fresh.chromeMock.alarms.create).toHaveBeenCalledWith('l0-memory-sync', { periodInMinutes: 5 });
   });
 });

@@ -37,8 +37,10 @@ export async function syncIfDue(
     return false;
   }
 
+  // A stored time in the future (the system clock moved backwards between wakes) must not
+  // wedge automatic sync until the clock catches up, so only throttle on a past attempt.
   const lastAttempt = Number(stored[LAST_SYNC_ATTEMPT_KEY]) || 0;
-  if (now - lastAttempt < MIN_AUTO_SYNC_GAP_MS) {
+  if (lastAttempt <= now && now - lastAttempt < MIN_AUTO_SYNC_GAP_MS) {
     return false;
   }
 
