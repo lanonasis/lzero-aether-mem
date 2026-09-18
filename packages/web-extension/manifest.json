@@ -4,8 +4,6 @@
   "default_locale": "en",
   "short_name": "L0 Memory",
   "version": "0.2.0",
-  // TODO: Set stable extension ID before publishing
-  // Use chrome://extensions → Pack extension to get your key and ID
   "id": "l0-memory-dev-id-placeholder",
   "description": "Your AI-powered developer memory. Store, search, and recall context across all your tools.",
   "author": "LanOnasis",
