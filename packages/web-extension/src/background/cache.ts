@@ -86,17 +86,43 @@ export function looksLikeApiKey(token: string): boolean {
 }
 
 export function looksLikeJwt(token: string): boolean {
+  if (!token.trim().startsWith('eyJ')) return false;
   const parts = token.trim().split('.');
-  if (parts.length !== 3) return false;
-  // Basic format check + payload validation
+  if (parts.length === 3 && parts[1]) {
+    // Full JWT — validate the payload for exp field
+    try {
+      const payload = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+      const parsed = JSON.parse(payload);
+      return parsed.exp !== undefined && typeof parsed.exp === 'number';
+    } catch {
+      // Empty middle segment (e.g. 'eyJhbG...e123') → treat as truncated JWT
+    }
+  }
+  // Truncated / obfuscated token (e.g. from user paste in UI):
+  // if it starts with eyJ it is almost certainly a JWT.
+  return token.trim().startsWith('eyJ');
+}
+
+/**
+ * Decode a JWT payload without verifying the signature.
+ *
+ * This is hygiene only — the backend is authoritative for
+ * signature validation. On failure, the caller must NOT auto-clear
+ * storage; a client-side decode failure could be clock skew, a
+ * token format not yet seen, or an edge case. Surface a
+ * { kind: 'stale' } discriminant and let the UI decide.
+ */
+export function decodeJwtPayload(token: string): { exp?: number; iat?: number } | null {
+  const parts = token.trim().split('.');
+  if (parts.length !== 3) return null;
   try {
-    // Decode the middle (payload) part to verify it's valid base64url and has JWT structure
     const payload = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
     const parsed = JSON.parse(payload);
-    // Valid JWTs should have an expiration field
-    return parsed.exp !== undefined && typeof parsed.exp === 'number';
+    const exp = parsed.exp;
+    if (typeof exp !== 'number') return null;
+    return { exp, iat: parsed.iat };
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -135,7 +161,11 @@ export function buildDeleteMemoryEndpoint(id: string): string {
   return `/memory/${encodeURIComponent(id)}`;
 }
 
-type ApiResult<T> = { data?: T; error?: string };
+// Discriminated result shape for apiRequest — every HTTP status gets its own
+// `kind` so the UI can surface the right message (re-auth, rate limit, etc.)
+type ApiResult<T> =
+  | { data?: T; error?: never; kind: 'ok' }
+  | { data?: never; error: string; kind: 'auth' | 'forbidden' | 'rate_limited' | 'server_error' | 'permission_denied' | 'network_error' | 'no_auth' };
 
 function unwrapListResponse(payload: unknown): unknown[] {
   // The API responses in this repo vary a bit by client:
@@ -229,12 +259,15 @@ export class MemoryCache {
 
   /**
    * Get auth + API url from extension storage.
+   *
+   * Applies client-side JWT hygiene: decodes the payload, checks exp with
+   * 30 s clock-skew tolerance. On failure returns { kind: 'stale' } —
+   * does NOT auto-clear storage (a client-side guess is not authoritative).
    */
-  private async getAuthConfig(): Promise<{ token: string; apiUrl: string; authType: AuthType } | null> {
+  private async getAuthConfig(): Promise<{ token: string; apiUrl: string; authType: AuthType } | { kind: 'stale' }> {
     const { l0_auth_token, apiUrl } = await chrome.storage.local.get(['l0_auth_token', 'apiUrl']);
     if (!l0_auth_token) {
-      console.log('[MemoryCache] No auth token available');
-      return null;
+      return { kind: 'stale' };
     }
 
     const effectiveApiUrl = normalizeApiUrl(apiUrl || DEFAULT_API_URL);
@@ -243,17 +276,33 @@ export class MemoryCache {
 
   /**
    * Browser-extension safe API request helper.
-   * We intentionally do not set forbidden headers (like User-Agent).
+   *
+   * Differentiates HTTP status codes with a `kind` discriminant so the UI
+   * can surface the right message (re-auth, rate limit, etc.).
    */
   private async apiRequest<T>(
     endpoint: string,
     init: RequestInit & { timeoutMs?: number } = {}
   ): Promise<ApiResult<T>> {
     const cfg = await this.getAuthConfig();
-    if (!cfg) return { error: 'No auth token' };
+    if (!cfg || cfg.kind === 'stale') {
+      return { error: 'No auth token', kind: 'no_auth' };
+    }
 
     const url = `${cfg.apiUrl}/api/v1${endpoint}`;
-    console.log('[MemoryCache] API Request:', url);
+
+    // Pre-flight: verify host permission before attempting the fetch.
+    // Without this, a missing host_permission throws a silent TypeError.
+    try {
+      const hasPermission = await chrome.permissions.contains({
+        origins: [`${cfg.apiUrl}/*`],
+      });
+      if (!hasPermission) {
+        return { error: `Host permission not granted for ${cfg.apiUrl}`, kind: 'permission_denied' };
+      }
+    } catch {
+      // permissions.contains may not be available in all contexts — fall through.
+    }
 
     const controller = new AbortController();
     const timeoutMs = init.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -262,7 +311,6 @@ export class MemoryCache {
     try {
       const res = await fetch(url, {
         ...init,
-        // Prevent any accidental cookie credential involvement from impacting CORS.
         credentials: 'omit',
         cache: 'no-store',
         signal: controller.signal,
@@ -279,15 +327,37 @@ export class MemoryCache {
       const body = contentType.includes('application/json') ? await res.json() : await res.text();
 
       if (!res.ok) {
+        // Differentiate by status code
+        if (res.status === 401) {
+          return { error: 'Session expired. Reconnect from the L0 Memory dashboard.', kind: 'auth' };
+        }
+        if (res.status === 403) {
+          const message =
+            typeof body === 'object' && body && 'error' in body
+              ? String((body as any).error)
+              : 'Access denied.';
+          return { error: message, kind: 'forbidden' };
+        }
+        if (res.status === 429) {
+          const retryAfter = res.headers.get('Retry-After');
+          const seconds = retryAfter ? parseInt(retryAfter, 10) : undefined;
+          const message = seconds != null
+            ? `Rate-limited (429). Try again in ~${seconds}s.`
+            : 'Rate-limited (429).';
+          return { error: message, kind: 'rate_limited' };
+        }
+        if (res.status >= 500) {
+          return { error: `Server error: ${res.status}`, kind: 'server_error' };
+        }
         const message =
           typeof body === 'object' && body && 'error' in body
             ? String((body as any).error)
             : `HTTP ${res.status}: ${res.statusText}`;
-        return { error: message };
+        return { error: message, kind: 'server_error' };
       }
 
       this.isOnline = true;
-      return { data: body as T };
+      return { data: body as T, kind: 'ok' };
     } catch (err) {
       clearTimeout(timeoutId);
 
@@ -296,7 +366,7 @@ export class MemoryCache {
       if (message.toLowerCase().includes('fetch') || message.toLowerCase().includes('network')) {
         this.isOnline = false;
       }
-      return { error: message };
+      return { error: message, kind: 'network_error' };
     }
   }
 
@@ -446,25 +516,23 @@ export class MemoryCache {
   }
 
   async sync(): Promise<void> {
-    if (this.isSyncing || !this.isOnline) return;
+    if (!this.isOnline) return;
 
     this.isSyncing = true;
     console.log('[MemoryCache] Starting sync...');
 
     try {
       const cfg = await this.getAuthConfig();
-      if (!cfg) {
+      if (!cfg || cfg.kind === 'stale') {
         console.log('[MemoryCache] No auth token, skipping sync');
         return;
       }
 
-      // Sync pending memories first
       const pending = await this.getPendingMemories();
       for (const mem of pending) {
         await this.syncOne(mem);
       }
 
-      // Fetch latest from API (REST endpoints used across this repo)
       const response = await this.apiRequest<unknown>(buildListMemoriesEndpoint(), { method: 'GET' });
 
       if (response.data) {
@@ -480,7 +548,7 @@ export class MemoryCache {
         })) as CachedMemory[];
         await this.updateFromApi(memories);
       } else if (response.error) {
-        console.warn('[MemoryCache] Sync list failed:', response.error);
+        console.warn('[MemoryCache] Sync list failed:', response.error, `(${response.kind})`);
       }
     } catch (err) {
       console.error('[MemoryCache] Sync error:', err);
@@ -492,7 +560,7 @@ export class MemoryCache {
   private async syncOne(memory: CachedMemory): Promise<void> {
     try {
       const cfg = await this.getAuthConfig();
-      if (!cfg) return;
+      if (!cfg || cfg.kind === 'stale') return;
 
       // Create memory
       const response = await this.apiRequest<unknown>(buildCreateMemoryEndpoint(), {
@@ -586,7 +654,7 @@ export class MemoryCache {
     updates: Partial<Pick<CachedMemory, 'title' | 'content' | 'memory_type' | 'tags'>>
   ): Promise<{ success: boolean; error?: string; memory?: CachedMemory }> {
     const cfg = await this.getAuthConfig();
-    if (!cfg) return { success: false, error: 'Not connected. Sign in to edit memories.' };
+    if (!cfg || cfg.kind === 'stale') return { success: false, error: 'Not connected. Sign in to edit memories.' };
 
     const response = await this.apiRequest<unknown>(buildUpdateMemoryEndpoint(id), {
       method: 'PUT',
@@ -625,7 +693,7 @@ export class MemoryCache {
    */
   async deleteMemory(id: string): Promise<{ success: boolean; error?: string }> {
     const cfg = await this.getAuthConfig();
-    if (!cfg) return { success: false, error: 'Not connected. Sign in to delete memories.' };
+    if (!cfg || cfg.kind === 'stale') return { success: false, error: 'Not connected. Sign in to delete memories.' };
 
     if (!this.db) await this.init();
 
@@ -729,3 +797,4 @@ export class MemoryCache {
 }
 
 export type { CachedEmbedding };
+// fresh

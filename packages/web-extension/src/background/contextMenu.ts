@@ -75,15 +75,16 @@ export async function setupContextMenus(): Promise<void> {
 
       case 'l0-memory-search':
         if (selectedText && tab?.id) {
-          // Open side panel with search query
+          // Open side panel with search query — use pending queue instead of
+          // setTimeout (cold panel load may exceed 500ms).
           await chrome.sidePanel.open({ tabId: tab.id });
-          // Send search query to side panel
-          setTimeout(() => {
-            chrome.runtime.sendMessage({
-              type: 'SEARCH_QUERY',
-              payload: { query: selectedText },
-            });
-          }, 500);
+
+          const pendingEvents = await chrome.storage.session.get('pendingPanelEvents');
+          const events = Array.isArray(pendingEvents?.pendingPanelEvents)
+            ? pendingEvents.pendingPanelEvents
+            : [];
+          events.push({ type: 'SEARCH_QUERY', payload: { query: selectedText }, tabId: tab.id });
+          await chrome.storage.session.set({ pendingPanelEvents: events });
         }
         break;
 

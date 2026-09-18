@@ -21,9 +21,15 @@ import {
   getOffscreenAIStatus,
 } from './offscreenManager';
 import { queryAIRouter, AiRouterRateLimitError } from './aiRouter';
+import { broadcastToExtensionPages } from './broadcast';
 
 // Initialize cache
 const cache = new MemoryCache();
+
+// ASK_AI cancellation: Map<requestId, AbortController>.
+// The SidePanel generates the requestId once and puts it in the ASK_AI payload;
+// the SW never calls crypto.randomUUID() — it only reads message.payload.id.
+const inflightAskAi = new Map<string, AbortController>();
 
 // Setup on install
 chrome.runtime.onInstalled.addListener(async (details) => {
@@ -92,32 +98,70 @@ async function handleMessage(
       // Use SDK-powered search with fallback to local
       return cache.searchWithApi(message.payload?.query || '');
 
-    case 'ASK_AI':
+    case 'ASK_AI': {
       // Memory-concierge chat: route through the Onasis AI Router
       // (use_case: memory-analysis, which drives its own memory search
       // server-side). Callers must fall back to SEARCH_MEMORIES on
       // { success: false } -- the concierge must never go silent.
-      try {
-        const response = await queryAIRouter(message.payload?.query || '');
-        return { success: true, response };
-      } catch (error) {
-        if (error instanceof AiRouterRateLimitError) {
-          return { success: false, error: error.message, retryAfterSeconds: error.retryAfterSeconds };
-        }
-        return { success: false, error: error instanceof Error ? error.message : String(error) };
+      //
+      // The SidePanel generates the requestId once and puts it in the ASK_AI
+      // payload; the SW never calls crypto.randomUUID() for this — it only
+      // reads message.payload.id. This is the one-sentence rule that prevents
+      // the cancellation ID-mismatch bug.
+      const { id, query } = message.payload ?? {};
+      if (!id) return { success: false, error: 'Missing request id' };
+
+      // In-flight guard: only one request per id.
+      if (inflightAskAi.has(id)) {
+        return { success: false, error: 'Request already in-flight' };
       }
+
+      const controller = new AbortController();
+      inflightAskAi.set(id, controller);
+
+      try {
+        const response = await queryAIRouter(query || '', controller.signal);
+        inflightAskAi.delete(id);
+        return { id, success: true, response };
+      } catch (error) {
+        inflightAskAi.delete(id);
+        if (error instanceof AiRouterRateLimitError) {
+          return { id, success: false, error: error.message, retryAfterSeconds: error.retryAfterSeconds };
+        }
+        return { id, success: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+
+    case 'CANCEL_ASK_AI': {
+      const { id } = message.payload ?? {};
+      if (!id) return { success: false };
+      inflightAskAi.get(id)?.abort();
+      inflightAskAi.delete(id);
+      return { ok: true };
+    }
     
-    case 'CREATE_MEMORY':
-      return cache.addLocal(message.payload?.memory);
+    case 'CREATE_MEMORY': {
+      const result = await cache.addLocal(message.payload?.memory);
+      broadcastToExtensionPages({ type: 'MEMORY_ADDED', payload: { memory: result } });
+      return result;
+    }
 
     case 'UPDATE_MEMORY':
       return cache.updateMemory(message.payload?.id, message.payload?.updates || {});
 
-    case 'DELETE_MEMORY':
-      return cache.deleteMemory(message.payload?.id);
+    case 'DELETE_MEMORY': {
+      const deleteResult = await cache.deleteMemory(message.payload?.id);
+      if (deleteResult.success) {
+        broadcastToExtensionPages({ type: 'MEMORY_DELETED', payload: { id: message.payload?.id } });
+      }
+      return deleteResult;
+    }
 
-    case 'SYNC_MEMORIES':
-      return cache.sync();
+    case 'SYNC_MEMORIES': {
+      await cache.sync();
+      broadcastToExtensionPages({ type: 'SYNC_COMPLETED', payload: { count: 0 } });
+      return { success: true };
+    }
     
     case 'GET_SYNC_STATUS':
       return cache.getStatus();

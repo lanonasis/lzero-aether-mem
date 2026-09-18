@@ -32,20 +32,23 @@ async function resolveRouterConfig(): Promise<{ token: string } | null> {
  * Ask the Onasis AI Router for a synthesized memory-concierge answer.
  * Throws on any failure (no credential, network, timeout, non-2xx, 429).
  *
- * Note: the router host is fixed to DEFAULT_AI_ROUTER_URL, not
- * user-configurable -- unlike apiUrl, there is no settings UI or
- * permission-request flow for it, and manifest.json only grants
- * host_permissions for that one origin. Making it configurable would
- * need the same chrome.permissions.request flow Options.tsx uses for
- * apiUrl before the background fetch could reach an arbitrary host.
+ * @param query — user chat query
+ * @param externalSignal — if provided, abort the in-flight fetch when this
+ *   signal fires (driven by CANCEL_ASK_AI from the SW).
  */
-export async function queryAIRouter(query: string): Promise<string> {
+export async function queryAIRouter(query: string, externalSignal?: AbortSignal): Promise<string> {
   const cfg = await resolveRouterConfig();
   if (!cfg) {
     throw new Error('No stored credentials for AI router');
   }
 
   const controller = new AbortController();
+
+  // Propagate external abort (from CANCEL_ASK_AI) into the fetch.
+  const onExternalAbort = () => controller.abort();
+  externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
+
+  // Internal timeout.
   const timeout = setTimeout(() => controller.abort(), AI_ROUTER_TIMEOUT_MS);
 
   try {
@@ -79,9 +82,6 @@ export async function queryAIRouter(query: string): Promise<string> {
       throw new Error(`AI router request failed: ${response.status} ${response.statusText}`);
     }
 
-    // The timeout must stay armed through body consumption too -- if it's
-    // cleared as soon as headers arrive, a stalled body leaves this pending
-    // forever and the chat box never falls back to memory search.
     let data: { response?: unknown };
     try {
       data = await response.json();
@@ -92,8 +92,6 @@ export async function queryAIRouter(query: string): Promise<string> {
       throw new Error('AI router returned an unreadable response');
     }
 
-    // The answer is `data.response` -- not data.message.content or any
-    // OpenAI-style shape. See the router's integration guide.
     const answer = typeof data.response === 'string' ? data.response.trim() : '';
     if (!answer) {
       throw new Error('AI router returned an empty response');
@@ -102,5 +100,6 @@ export async function queryAIRouter(query: string): Promise<string> {
     return answer;
   } finally {
     clearTimeout(timeout);
+    externalSignal?.removeEventListener('abort', onExternalAbort);
   }
 }

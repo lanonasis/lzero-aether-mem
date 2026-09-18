@@ -52,7 +52,7 @@ describe('background sync', () => {
     setupSync(cache as any);
     await listeners.alarm!({ name: 'l0-memory-sync' });
     // The startup timer fires 5s later on the same wake.
-    await vi.advanceTimersByTimeAsync(5000);
+    await vi.runAllTimersAsync();
 
     expect(cache.sync).toHaveBeenCalledTimes(1);
   });
@@ -108,7 +108,8 @@ describe('background sync', () => {
 
     const fresh = installChromeMock();
     setupSync({ sync: vi.fn() } as any);
-    await vi.advanceTimersByTimeAsync(0);
+    // Advance timers to flush the startup timer scheduled by the second setupSync call
+    await vi.runAllTimersAsync();
     expect(fresh.chromeMock.alarms.create).toHaveBeenCalledWith('l0-memory-sync', { periodInMinutes: 5 });
   });
 });

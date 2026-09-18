@@ -42,10 +42,10 @@ Catches the class of bugs the perf-only checklists never surface. None of these 
 
 ### Service Worker Hygiene
 
-- [ ] **No module-level state that depends on a long-lived process** (20 min)
+- [ ] **No state stored in module-level variables that needs to survive SW termination** (10 min)
   - Files: `src/background/index.ts:25, 44, 47`, `src/background/cache.ts`
   - Current: `const cache = new MemoryCache(); setupOmnibox(cache); setupSync(cache);` run at module top level. The SW terminates after ~30s of inactivity; on cold start the module re-runs and re-instantiates everything.
-  - Action: re-`init()` inside `chrome.runtime.onStartup` and on first message of each session. Keep `cache` as a module variable but tolerate re-init; do not assume listeners survive.
+  - Action: keep module-level *registrations* (cache instance, listener `addListener` calls, `setupSync()` call) — these re-run on every cold wake and that is the canonical MV3 pattern. **But**: any state that must persist across wakes must be read from `chrome.storage` at the top of every handler (the `cache.ts` `syncIfDue()` pattern already does this). Do NOT move listeners inside `chrome.runtime.onStartup` — that races with the very first alarm event.
 
 - [ ] **No `setTimeout` / `setInterval` for deferred work in the SW** (10 min)
   - Files: `src/background/offscreenManager.ts`, `src/background/contextMenu.ts:81`
@@ -69,10 +69,14 @@ Catches the class of bugs the perf-only checklists never surface. None of these 
 
 ### Side Panel & Action
 
-- [ ] **Side panel open trigger is wired** (2 min)
-  - Files: `manifest.json:28-30`, `src/background/index.ts:155-158`, `src/background/omnibox.ts:40`, `src/background/contextMenu.ts:79, 92`
-  - Current: `setPanelBehavior({ openPanelOnActionClick: false })` because `default_popup` is also set. Side panel is opened via the `open_side_panel` command and context menu. ✅
-  - Pitfall: if you later drop the popup, you MUST change this to `true` (NOT `openPanelOnActionIconClick` — that variant throws synchronously).
+- [ ] **Resolve `default_popup` vs `side_panel` conflict — pick one primary UI** (15 min) — **see also Phase 0.5**
+  - Files: `manifest.json:18-30`, `src/background/index.ts:178`
+  - Current: `action.default_popup: "src/popup/index.html"` AND `side_panel.default_path: "src/sidepanel/index.html"` AND `setPanelBehavior({ openPanelOnActionClick: false })`. Because `default_popup` is set, the toolbar icon **always opens the popup**, not the Memory Concierge. The side panel is only reachable via the `Alt+Shift+M` command.
+  - Action: pick the primary UI.
+    - **If side panel is primary**: remove `default_popup`, set `openPanelOnActionClick: true` in `onInstalled`, keep the keyboard shortcut. Bump `minimum_chrome_version` to `116` if `chrome.sidePanel.open()` is called outside an action click.
+    - **If popup is primary**: remove `side_panel` entirely (delete the manifest key and the `sidePanel` permission).
+    - **If both are wanted**: drop the popup and put a "Quick add" affordance inside the panel that calls `chrome.sidePanel.open()` (the `cookbook.sidepanel-open` pattern).
+  - Pitfall: if you drop the popup later, you MUST change `openPanelOnActionClick` to `true` (NOT `openPanelOnActionIconClick` — that variant throws synchronously and silently aborts the SW).
 
 - [ ] **No `chrome.windows.query()` calls** (5 min)
   - Skill rule: `chrome.windows` has no `.query()`. Use `getAll`, `getLastFocused`, or `getCurrent`.
@@ -108,6 +112,54 @@ Catches the class of bugs the perf-only checklists never surface. None of these 
 - [ ] `npm run lint` passes
 - [ ] Extension loads unpacked in Chrome with zero console errors
 - [ ] Tested: install → first run → options page opens
+
+---
+
+## 🔐 Phase 0.5: Auth & State Correctness (correctness, not perf — do before Phase 1)
+
+These items come from the deep-research brief against `GoogleChrome/chrome-extensions-samples`. They are correctness gaps in MV3 patterns that Phase 0 missed; do them before the performance work in Phase 1.
+
+### Auth (JWT)
+
+- [ ] **Re-validate JWT in SW on every read** (15 min)
+  - File: `src/background/cache.ts:88-101`, `:233-242`
+  - Current: `looksLikeJwt()` runs in `Options.tsx:504` only, at save time. The SW trusts whatever is in `chrome.storage.local`. Commit `b696563` is partial.
+  - Action: move the validation into `cache.ts`'s `getAuthConfig()`. Also validate `iat` is a number and `exp * 1000 > Date.now() - 30_000` (30 s clock-skew tolerance). On failure, clear `l0_auth_token` + `userEmail` and return null.
+
+- [ ] **Add 401 handling + re-login flow** (30 min)
+  - File: `src/background/cache.ts:248-301`, `src/sidepanel/SidePanel.tsx:830-865`
+  - Current: `apiRequest` returns `{ error: 'HTTP 401 …' }` to the UI raw.
+  - Action: detect `res.status === 401`, return `{ error: 'Session expired. Reconnect from the L0 Memory dashboard.', kind: 'auth' }`. Do **not** auto-clear the token (could be a transient backend issue). The side panel already routes `isAuthenticated = false` to `WelcomeView` — pipe `kind: 'auth'` through `chrome.storage.local.lastError` or the response handler so the user lands back on the Options auth form.
+
+- [ ] **Stable dev extension ID via `"key"` field** (20 min)
+  - File: `manifest.json` (no `key` field today)
+  - Action: follow `developer.chrome.com/docs/extensions/mv3/manifest/key` — `bun run build` → zip dist → upload as **draft** to Chrome Developer Dashboard → Package tab → View public key → paste base64 body (no markers) as `"key"` in `manifest.json`. **Remove the dev key before publishing** (or replace with the new pre-publish key).
+
+### State persistence across SW termination
+
+- [ ] **Persist omnibox `latestRequestId` in `chrome.storage.session`** (20 min)
+  - File: `src/background/omnibox.ts:14-41`
+  - Current: commit `7e85b3f` works within a single SW wake. The SW can be torn down between omnibox keystrokes; on next wake, `latestRequestId` resets to 0 and a late response from the previous wake could clobber the current suggestion.
+  - Action: mirror `sample.tabcapture-recorder`'s state-machine discipline — store the counter in `chrome.storage.session` keyed by `OMNIBOX_LATEST_KEY`, check `isLatest(id)` after the async `searchLocalAsync` returns.
+
+- [ ] **Replace `cache.isSyncing: boolean` with `Promise`-cache singleton** (15 min)
+  - File: `src/background/sync.ts`, `src/background/cache.ts`
+  - Current: boolean has a TOCTOU race — two handlers on the same wake can both pass `if (isSyncing) return;` before either sets the flag.
+  - Action: mirror `offscreenManager.ts:creating` — module-scope `let inflight: Promise<void> | null = null;` in the alarm listener; second caller awaits the same in-flight promise instead of starting a second sync.
+
+- [ ] **Add SW broadcast helper for sync / mutation events** (20 min)
+  - File: `src/background/index.ts` (extend) — new `src/background/broadcast.ts`
+  - Action: implement `broadcastToExtensionPages(type, payload)` from `sample.tabcapture-recorder/service-worker.js:36`. Wrap in try/catch — `chrome.runtime.sendMessage` rejects with `Receiving end does not exist` if the side panel is closed. Call sites: after `cache.sync()`, `CREATE_MEMORY`, `UPDATE_MEMORY`, `DELETE_MEMORY`. Side panel listens via `chrome.runtime.onMessage.addListener` and invalidates React Query or re-fetches.
+
+### Networking safety
+
+- [ ] **Pre-flight `chrome.permissions.contains({ origins })` before fetch** (10 min)
+  - File: `src/background/cache.ts:248-294`
+  - Action: before each `apiRequest`, validate the origin permission. Mirrors `cookbook.permissions-addhostaccessrequest`. Turns the silent-TypeError pitfall into a clear UX message.
+
+- [ ] **User-driven cancel path for `ASK_AI`** (45 min)
+  - Files: `src/background/index.ts` (new `inflightAskAi: Map<string, AbortController>`), `src/background/aiRouter.ts:48-104`, `src/sidepanel/SidePanel.tsx` (Stop button)
+  - Action: SW keeps a Map of in-flight AI requests by id; side panel sends `CANCEL_ASK_AI` with the id. `queryAIRouter` accepts an external `AbortSignal`, aborts on its abort event, removes the listener in `finally`. Without this, the user cannot stop a long generation.
 
 ---
 
@@ -351,6 +403,49 @@ This phase is what unblocks a real CWS submission. The skill treats this as non-
 
 ---
 
+## 🆕 Phase 5: Modern Platform Adoption (Chrome 130+ — adopt incrementally)
+
+These come from the Chrome whats-new changelog (Chrome 120 → 153). Each item is independent; pick by Chrome version you want to target and user value. None of these break what we already have.
+
+### Minimum Chrome version bumps (pick one when ready)
+
+- [ ] **`minimum_chrome_version: 116`** (immediate) — needed for `chrome.sidePanel.open()` outside action click.
+- [ ] **`minimum_chrome_version: 127`** — enables `chrome.action.openPopup()` from anywhere.
+- [ ] **`minimum_chrome_version: 130`** — `action.onUserSettingsChanged`, `StorageArea.getKeys()`.
+- [ ] **`minimum_chrome_version: 133`** — `chrome.permissions.addHostAccessRequest()`.
+- [ ] **`minimum_chrome_version: 138`** — Built-in AI (`LanguageModel`, `Summarizer`, `LanguageDetector`) stable for extensions.
+- [ ] **`minimum_chrome_version: 140`** — `chrome.sidePanel.getLayout()`, `onOpened`, `close()`.
+- [ ] **`minimum_chrome_version: 142`** — `chrome.sidePanel.onClosed`.
+- [ ] **`minimum_chrome_version: 150`** — `chrome.offscreen.hasDocument()`, `chrome.alarms.persistAcrossSessions`, `chrome.contextMenus` `"tab"` context.
+
+### Platform adoptions (independent of min-version bump)
+
+- [ ] **`chrome.sidePanel.onOpened` + `onClosed` lifecycle handlers** (Chrome 141/142) — flush pending writes and cancel in-flight AI work when the panel closes.
+- [ ] **`chrome.permissions.addHostAccessRequest({ tabId, documentId })`** (Chrome 133) — replace global `<all_urls>` request with per-tab prompt. Friendlier UX when user clicks "Save page as memory" on an ungranted site.
+- [ ] **`chrome.offscreen.hasDocument()`** (Chrome 150) — simplify `src/background/offscreenManager.ts:18-42`. Keep `runtime.getContexts` branch as a fallback only.
+- [ ] **`chrome.alarms.create({ persistAcrossSessions: true })`** (Chrome 150) — sync alarm survives browser restarts without a `runtime.onStartup` listener.
+- [ ] **`chrome.sidePanel.getLayout()`** (Chrome 140) — call once on side panel mount, mirror `dir` / `data-side` for RTL languages.
+- [ ] **`chrome.action.onUserSettingsChanged`** (Chrome 130) — show a one-time "Pin L0 Memory" hint when the user unpins our action.
+- [ ] **`StorageArea.getKeys()`** (Chrome 130) — cleaner cache enumeration in `cache.ts`.
+
+### Built-in AI (Chrome 138+, feature-detect with `'LanguageModel' in self`)
+
+- [ ] **On-device fallback for `ASK_AI`** when AI Router is rate-limited (`AiRouterRateLimitError`) or unreachable
+  - File: `src/sidepanel/SidePanel.tsx` (new `src/sidepanel/aiMode.ts`)
+  - Pattern: `LanguageModel.availability({ expectedInputs, expectedOutputs })` → if `available`, `create({ temperature: 1, topK: 3, initialPrompts: [{ role: 'system', content: '...' + topMemories }] })` → `for await (const chunk of session.promptStreaming(query))` → render chunks (each is the **full response so far**, replace not append). Wrap with `AbortSignal` for the Stop button.
+  - Rules: in extensions, `topK` AND `temperature` must both be set or both omitted. First `create()` for a downloadable model must be inside a user gesture.
+- [ ] **`Summarizer.summarize(text, { type: 'key-points' })`** for offline memory previews when AI Router is down.
+- [ ] **`LanguageDetector.detect(query)`** before forwarding to AI Router — feed the locale hint to reduce rejected requests.
+
+### Future-only (origin trial / Dev / EPP — flag in code comments, no action yet)
+
+- Prompt API for the web (origin trial through Chrome 148).
+- Writer / Rewriter / Proofreader APIs (developer trial / origin trial).
+- Structured Clone for messaging (opt-in Chrome 148, default-on timing not announced).
+- Default-pinned action icon (Chrome 153 experiment).
+
+---
+
 ## 🧪 Testing Checklist
 
 ### Before Each Fix
@@ -499,13 +594,23 @@ Track any issues discovered during optimization:
 
 | Issue | Severity | Discovered In | Workaround | Status |
 |-------|----------|---------------|------------|--------|
-| Icons: all 4 PNGs are 128×128 (one file copied 4x) | High | Phase 0 | Generate per-size PNGs or drop keys | Open |
+| Icons: all 4 PNGs are 128×128 (one file copied 4x) | **Blocker** | Phase 0 | Generate per-size PNGs or drop keys | Open |
+| `default_popup` + `side_panel` both set → toolbar icon opens popup, not Memory Concierge | **Blocker** | Phase 0 / brief | Pick primary UI; see updated Phase 0 side-panel item | Open |
+| `looksLikeJwt` runs in UI only — SW trusts whatever is in storage | **Blocker** | Phase 0.5 / brief | Move into `cache.ts:getAuthConfig()` | Open |
 | MemoryCard not actually memoized despite Fix 2 | High | Phase 1 | Wrap with React.memo, extract to components/ | Open |
-| SW module-level cache re-instantiates on every cold start | Medium | Phase 0 | Re-init in onStartup / first-message | Open |
-| contextScripts `<all_urls>` is broader than needed | Medium | Phase 0 | Narrow or document in CHROMEWEBSTORE.md | Open |
+| No 401 → re-login flow; UI gets raw `{ error: 'HTTP 401 …' }` | High | Phase 0.5 / brief | Add `{ kind: 'auth' }` discriminant + re-route to Options | Open |
+| Omnibox stale-response guard is single-wake only (resets on SW restart) | High | Phase 0.5 / brief | Persist counter in `chrome.storage.session` | Open |
+| SW `cache.isSyncing` boolean has TOCTOU race | Medium | Phase 0.5 / brief | Replace with `Promise`-cache singleton | Open |
+| No `broadcastToExtensionPages` helper — side panel doesn't react to sync/mutations | Medium | Phase 0.5 / brief | Add helper + side-panel listener | Open |
+| `ASK_AI` has no user-driven cancel path | Medium | Phase 0.5 / brief | `inflightAskAi` map + `CANCEL_ASK_AI` message | Open |
+| Manifest has no `"key"` field — dev extension ID changes on every reload | Medium | Phase 0.5 / brief | Pack + upload-as-draft + paste public key | Open |
+| `apiRequest` silently throws when host permission missing | Low | Phase 0.5 / brief | Pre-flight `chrome.permissions.contains({ origins })` | Open |
+| SW module-level cache re-instantiates on every cold start (but module-level *registrations* are canonical — storage carries the data) | **Resolved** (not a bug) | Phase 0 | None needed | Closed |
+| contentScripts `<all_urls>` is broader than needed | Medium | Phase 0 | Narrow or document in CHROMEWEBSTORE.md | Open |
 | optional_host_permissions `<all_urls>` likely unused | Low | Phase 0 | Remove or justify | Open |
 | setTimeout after sidePanel.open is racy | Medium | Phase 0 | Use chrome.storage.session pending queue | Open |
-| Popup uses .sendMessage callbacks instead of await | Low | Phase 1 | Promisify, use Promise.all | Open |
+| Popup uses .sendMessage callbacks instead of await | **Medium** (was Low) | Phase 1 | Promisify, use Promise.all | Open |
+| No built-in AI fallback when AI Router is rate-limited or down | Low | Phase 5 / brief | `LanguageModel.availability()` + offline fallback | Open |
 | | | | | |
 
 ---
@@ -587,6 +692,14 @@ Before deploying optimized extension:
 - **Skill**: `chrome-extensions` — Manifest V3 best practices, common pitfalls, store submission
 - **Demo UI reference**: `client/src/packages/web-extension/RichPanel.tsx` — visual target for parity
 - **CWS docs**: https://developer.chrome.com/docs/webstore/
+- **Deep-research brief (2026-09-17)** — 7 parallel research agents against `GoogleChrome/chrome-extensions-samples` and `developer.chrome.com`. Phase 0.5 and Phase 5 are derived from this brief. Saved at: `packages/web-extension/.research/CHROME_EXT_BRIEF_2026-09-17.md` (regenerate with `/research-chrome-extension` workflow)
+- **Source samples referenced in the brief**:
+  - `cookbook.sidepanel-global` / `cookbook.sidepanel-open` / `cookbook.sidepanel-multiple` / `cookbook.sidepanel-site-specific`
+  - `sample.sidepanel-dictionary` — `chrome.storage.session` SW ↔ side-panel bus
+  - `sample.tabcapture-recorder` — SW broadcast + offscreen lifecycle
+  - `api-samples/alarms`, `api-samples/storage/stylizr`, `api-samples/identity`
+  - `api-samples/omnibox/simple-example`, `api-samples/contextMenus/basic`
+  - `ai.gemini-on-device`, `ai.gemini-on-device-calendar-mate`, `ai.gemini-on-device-summarization`, `ai.gemini-in-the-cloud`
 
 ---
 

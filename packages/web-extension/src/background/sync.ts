@@ -17,6 +17,13 @@ export const MIN_AUTO_SYNC_GAP_MS = 60_000;
 
 export type AutoSyncReason = 'alarm' | 'startup';
 
+// Promise-cache singleton: prevents two overlapping syncs from both starting.
+// On SW wake, the alarm listener may fire while a previous sync is still in-flight.
+// Instead of a boolean flag (TOCTOU race), we track the in-flight promise so the
+// second caller awaits the same work. This survives SW termination because the
+// promise is module-scoped — on cold wake a fresh null is created.
+let inflight: Promise<void> | null = null;
+
 /**
  * Run an automatic sync unless one was attempted within MIN_AUTO_SYNC_GAP_MS.
  *
@@ -46,8 +53,21 @@ export async function syncIfDue(
 
   await chrome.storage.local.set({ [LAST_SYNC_ATTEMPT_KEY]: now });
   console.log(`[L0 Memory] Background sync triggered (${reason})`);
-  await cache.sync();
-  return true;
+
+  // Promise-cache: if a sync is already in-flight, wait for it instead of starting a new one.
+  if (inflight) {
+    console.log('[L0 Memory] Sync already in-flight, awaiting...');
+    await inflight;
+    return false;
+  }
+
+  inflight = cache.sync();
+  try {
+    await inflight;
+    return true;
+  } finally {
+    inflight = null;
+  }
 }
 
 export function setupSync(cache: MemoryCache): void {
