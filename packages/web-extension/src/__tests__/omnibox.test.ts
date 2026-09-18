@@ -19,6 +19,7 @@ function installChromeOmniboxMock() {
   const listeners: {
     inputChanged?: (text: string, suggest: (results: unknown[]) => void) => void;
   } = {};
+  const sessionStore: Record<string, unknown> = {};
 
   (globalThis as any).chrome = {
     omnibox: {
@@ -35,6 +36,18 @@ function installChromeOmniboxMock() {
     tabs: { query: vi.fn().mockResolvedValue([]) },
     sidePanel: { open: vi.fn() },
     runtime: { sendMessage: vi.fn() },
+    storage: {
+      session: {
+        get: vi.fn().mockImplementation((keys: string | string[]) => {
+          const key = Array.isArray(keys) ? keys[0] : keys;
+          return Promise.resolve({ [key]: sessionStore[key] });
+        }),
+        set: vi.fn().mockImplementation((values: Record<string, unknown>) => {
+          Object.assign(sessionStore, values);
+          return Promise.resolve(undefined);
+        }),
+      },
+    },
   };
 
   return listeners;

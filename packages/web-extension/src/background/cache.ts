@@ -93,8 +93,10 @@ export function looksLikeJwt(token: string): boolean {
     // Decode the middle (payload) part to verify it's valid base64url and has JWT structure
     const payload = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
     const parsed = JSON.parse(payload);
-    // Valid JWTs should have an expiration field
-    return parsed.exp !== undefined && typeof parsed.exp === 'number';
+    // Valid JWT structure: 3 parts, parseable payload
+    // Note: exp validation is done in getAuthConfig via decodeJwtPayload
+    // This function only checks JWT structural validity
+    return typeof parsed === 'object' && parsed !== null;
   } catch {
     return false;
   }

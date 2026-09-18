@@ -36,6 +36,9 @@ function installChromeStorageMock(values: Record<string, unknown>) {
         get: async (_keys: string[]) => values,
       },
     },
+    permissions: {
+      contains: vi.fn().mockResolvedValue(true),
+    },
   };
 }
 
