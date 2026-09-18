@@ -158,17 +158,30 @@ async function handleMessage(
       await broadcastToExtensionPages({ type: 'STATE_UPDATE', payload: message.payload });
       return { success: true };
     
-    case 'CREATE_MEMORY':
-      return cache.addLocal(message.payload?.memory);
+    case 'CREATE_MEMORY': {
+      const memory = await cache.addLocal(message.payload?.memory);
+      await broadcastToExtensionPages({ type: 'MEMORY_ADDED', payload: { memory } });
+      return memory;
+    }
 
-    case 'UPDATE_MEMORY':
-      return cache.updateMemory(message.payload?.id, message.payload?.updates || {});
+    case 'UPDATE_MEMORY': {
+      const memory = await cache.updateMemory(message.payload?.id, message.payload?.updates || {});
+      await broadcastToExtensionPages({ type: 'MEMORY_UPDATED', payload: { memory } });
+      return memory;
+    }
 
-    case 'DELETE_MEMORY':
-      return cache.deleteMemory(message.payload?.id);
+    case 'DELETE_MEMORY': {
+      const id = message.payload?.id as string;
+      await cache.deleteMemory(id);
+      await broadcastToExtensionPages({ type: 'MEMORY_DELETED', payload: { id } });
+      return { success: true };
+    }
 
-    case 'SYNC_MEMORIES':
-      return cache.sync();
+    case 'SYNC_MEMORIES': {
+      await cache.sync();
+      await broadcastToExtensionPages({ type: 'SYNC_COMPLETED' });
+      return { success: true };
+    }
     
     case 'GET_SYNC_STATUS':
       return cache.getStatus();

@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useSemanticSearch } from '../hooks/useSemanticSearch';
+import { sendMessage } from '../background/messaging';
 
 interface Memory {
   id: string;
@@ -211,7 +212,7 @@ const MemoryDetailModal: React.FC<{
     setIsEditing(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editTitle.trim() || !editContent.trim()) return;
     setIsSaving(true);
     setError(null);
@@ -222,40 +223,47 @@ const MemoryDetailModal: React.FC<{
       tags: editTagsInput.split(/[\s,]+/).map(t => t.replace(/^#/, '').trim()).filter(Boolean),
     };
 
-    chrome.runtime.sendMessage(
-      { type: 'UPDATE_MEMORY', payload: { id: memory.id, updates } },
-      (response) => {
-        setIsSaving(false);
-        if (response?.success && response.memory) {
-          onUpdated(response.memory);
-          setIsEditing(false);
-        } else {
-          setError(response?.error || 'Failed to update memory');
-        }
+    try {
+      const response = await sendMessage<{ success: boolean; memory?: Memory; error?: string }>(
+        { type: 'UPDATE_MEMORY', payload: { id: memory.id, updates } }
+      );
+      setIsSaving(false);
+      if (response?.success && response.memory) {
+        onUpdated(response.memory);
+        setIsEditing(false);
+      } else {
+        setError(response?.error || 'Failed to update memory');
       }
-    );
+    } catch (err) {
+      setIsSaving(false);
+      setError(err instanceof Error ? err.message : 'Failed to update memory');
+    }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!confirmingDelete) {
       setConfirmingDelete(true);
       return;
     }
     setIsDeleting(true);
     setError(null);
-    chrome.runtime.sendMessage(
-      { type: 'DELETE_MEMORY', payload: { id: memory.id } },
-      (response) => {
-        setIsDeleting(false);
-        if (response?.success) {
-          onDeleted(memory.id);
-          onClose();
-        } else {
-          setConfirmingDelete(false);
-          setError(response?.error || 'Failed to delete memory');
-        }
+    try {
+      const response = await sendMessage<{ success: boolean; error?: string }>(
+        { type: 'DELETE_MEMORY', payload: { id: memory.id } }
+      );
+      setIsDeleting(false);
+      if (response?.success) {
+        onDeleted(memory.id);
+        onClose();
+      } else {
+        setConfirmingDelete(false);
+        setError(response?.error || 'Failed to delete memory');
       }
-    );
+    } catch (err) {
+      setIsDeleting(false);
+      setConfirmingDelete(false);
+      setError(err instanceof Error ? err.message : 'Failed to delete memory');
+    }
   };
 
   return (
@@ -564,6 +572,7 @@ export const SidePanel: React.FC = () => {
   const [showInlineSettings, setShowInlineSettings] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastAssistantResponse, setLastAssistantResponse] = useState<ChatMessage | null>(null);
+  const [aiRequestId, setAiRequestId] = useState<string | null>(null);
 
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -582,24 +591,39 @@ export const SidePanel: React.FC = () => {
   // ── Initial load ──────────────────────────────────────────────────────
 
   useEffect(() => {
-    chrome.runtime.sendMessage({ type: 'GET_AUTH_STATUS' }, (response) => {
-      setIsAuthenticated(response?.isAuthenticated || false);
-    });
+    (async () => {
+      try {
+        const authStatus = await sendMessage<{ isAuthenticated: boolean }>({ type: 'GET_AUTH_STATUS' });
+        setIsAuthenticated(authStatus?.isAuthenticated || false);
+      } catch { /* ignore */ }
 
-    chrome.runtime.sendMessage({ type: 'GET_MEMORIES' }, (response) => {
-      if (Array.isArray(response)) setMemories(response);
+      try {
+        const mems = await sendMessage<Memory[]>({ type: 'GET_MEMORIES' });
+        if (Array.isArray(mems)) setMemories(mems);
+      } catch { /* ignore */ }
       setIsLoadingMemories(false);
-    });
 
-    chrome.runtime.sendMessage({ type: 'GET_SYNC_STATUS' }, (response) => {
-      if (response) setSyncStatus(response);
-    });
+      try {
+        const sync = await sendMessage<SyncStatus>({ type: 'GET_SYNC_STATUS' });
+        if (sync) setSyncStatus(sync);
+      } catch { /* ignore */ }
+    })();
 
     chrome.storage.local.get(['aiMode', 'userEmail'], (result) => {
       if (result.aiMode === 'off' || result.aiMode === 'auto' || result.aiMode === 'on') {
         setAiMode(result.aiMode);
       }
       if (result.userEmail) setUserEmail(result.userEmail);
+    });
+
+    // Drain pending panel query from session storage
+    chrome.storage.session.get(['_pendingPanelQuery'], (result) => {
+      if (result._pendingPanelQuery) {
+        const query = result._pendingPanelQuery;
+        chrome.storage.session.remove('_pendingPanelQuery');
+        setSearchQuery(query);
+        triggerSearch(query);
+      }
     });
 
     const handleStorageChange: Parameters<typeof chrome.storage.onChanged.addListener>[0] = (changes, area) => {
@@ -629,9 +653,10 @@ export const SidePanel: React.FC = () => {
 
   const triggerSearch = useCallback(async (query: string) => {
     if (!query.trim()) {
-      chrome.runtime.sendMessage({ type: 'GET_MEMORIES' }, (response) => {
-        if (Array.isArray(response)) setMemories(response);
-      });
+      try {
+        const mems = await sendMessage<Memory[]>({ type: 'GET_MEMORIES' });
+        if (Array.isArray(mems)) setMemories(mems);
+      } catch { /* ignore */ }
       return;
     }
 
@@ -640,30 +665,31 @@ export const SidePanel: React.FC = () => {
         if (!isAIReady && !isAILoading) void initializeAI();
         if (!isAIReady) throw new Error('Local AI not ready');
 
-        chrome.runtime.sendMessage({ type: 'GET_MEMORIES' }, async (response) => {
-          if (Array.isArray(response)) {
-            const results = await semanticSearch(query, response);
-            setMemories(results.map(r => ({
-              id: r.id,
-              title: r.title,
-              content: r.content,
-              memory_type: r.memory_type,
-              tags: r.tags,
-              created_at: r.created_at,
-              _pending: r._pending,
-            })));
-          }
-        });
+        const mems = await sendMessage<Memory[]>({ type: 'GET_MEMORIES' });
+        if (Array.isArray(mems)) {
+          const results = await semanticSearch(query, mems);
+          setMemories(results.map(r => ({
+            id: r.id,
+            title: r.title,
+            content: r.content,
+            memory_type: r.memory_type,
+            tags: r.tags,
+            created_at: r.created_at,
+            _pending: r._pending,
+          })));
+        }
         return;
       } catch {
         // fall through to API search
       }
     }
 
-    chrome.runtime.sendMessage(
-      { type: 'SEARCH_MEMORIES', payload: { query } },
-      (response) => { if (Array.isArray(response)) setMemories(response); }
-    );
+    try {
+      const results = await sendMessage<Memory[]>(
+        { type: 'SEARCH_MEMORIES', payload: { query } }
+      );
+      if (Array.isArray(results)) setMemories(results);
+    } catch { /* ignore */ }
   }, [shouldUseLocalAI, isAIReady, isAILoading, initializeAI, semanticSearch]);
 
   const handleSearchChange = useCallback((value: string) => {
@@ -679,35 +705,40 @@ export const SidePanel: React.FC = () => {
     chrome.runtime.openOptionsPage();
   };
 
-  const handleLogout = () => {
-    chrome.runtime.sendMessage({ type: 'LOGOUT' }, () => {
-      setIsAuthenticated(false);
-      setUserEmail(null);
-      setMemories([]);
-      setLastAssistantResponse(null);
-    });
+  const handleLogout = async () => {
+    try {
+      await sendMessage({ type: 'LOGOUT' });
+    } catch { /* ignore */ }
+    setIsAuthenticated(false);
+    setUserEmail(null);
+    setMemories([]);
+    setLastAssistantResponse(null);
   };
 
   // ── Sync & Refresh ────────────────────────────────────────────────────
 
-  const handleSync = () => {
+  const handleSync = async () => {
     setSyncStatus(prev => ({ ...prev, isSyncing: true }));
-    chrome.runtime.sendMessage({ type: 'SYNC_MEMORIES' }, () => {
-      chrome.runtime.sendMessage({ type: 'GET_MEMORIES' }, (response) => {
-        if (Array.isArray(response)) setMemories(response);
-        chrome.runtime.sendMessage({ type: 'GET_SYNC_STATUS' }, (status) => {
-          if (status) setSyncStatus(status);
-        });
-      });
-    });
+    try {
+      await sendMessage({ type: 'SYNC_MEMORIES' });
+    } catch { /* ignore */ }
+    try {
+      const mems = await sendMessage<Memory[]>({ type: 'GET_MEMORIES' });
+      if (Array.isArray(mems)) setMemories(mems);
+    } catch { /* ignore */ }
+    try {
+      const status = await sendMessage<SyncStatus>({ type: 'GET_SYNC_STATUS' });
+      if (status) setSyncStatus(status);
+    } catch { /* ignore */ }
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setIsRefreshing(true);
-    chrome.runtime.sendMessage({ type: 'GET_MEMORIES' }, (response) => {
-      if (Array.isArray(response)) setMemories(response);
-      setIsRefreshing(false);
-    });
+    try {
+      const mems = await sendMessage<Memory[]>({ type: 'GET_MEMORIES' });
+      if (Array.isArray(mems)) setMemories(mems);
+    } catch { /* ignore */ }
+    setIsRefreshing(false);
   };
 
   // ── AI Mode ───────────────────────────────────────────────────────────
@@ -719,21 +750,35 @@ export const SidePanel: React.FC = () => {
 
   // ── Quick-add ─────────────────────────────────────────────────────────
 
-  const handleQuickAdd = (title: string, content: string, tags: string[]) => {
+  const handleQuickAdd = async (title: string, content: string, tags: string[]) => {
     setIsSavingQuickAdd(true);
-    chrome.runtime.sendMessage({
-      type: 'CREATE_MEMORY',
-      payload: { memory: { title, content, memory_type: 'note', tags } },
-    }, () => {
-      setIsSavingQuickAdd(false);
-      setShowQuickAdd(false);
-      chrome.runtime.sendMessage({ type: 'GET_MEMORIES' }, (response) => {
-        if (Array.isArray(response)) setMemories(response);
+    try {
+      await sendMessage({
+        type: 'CREATE_MEMORY',
+        payload: { memory: { title, content, memory_type: 'note', tags } },
       });
-    });
+    } catch { /* ignore */ }
+    setIsSavingQuickAdd(false);
+    setShowQuickAdd(false);
+    try {
+      const mems = await sendMessage<Memory[]>({ type: 'GET_MEMORIES' });
+      if (Array.isArray(mems)) setMemories(mems);
+    } catch { /* ignore */ }
   };
 
   // ── Chat / unified input ──────────────────────────────────────────────
+
+  const handleCancelAi = useCallback(() => {
+    if (aiRequestId) {
+      chrome.runtime.sendMessage(
+        { type: 'CANCEL_ASK_AI', payload: { requestToken: aiRequestId } },
+        () => {
+          setIsSending(false);
+          setAiRequestId(null);
+        }
+      );
+    }
+  }, [aiRequestId]);
 
   const handleSendChat = async () => {
     const content = chatInput.trim();
@@ -747,66 +792,83 @@ export const SidePanel: React.FC = () => {
 
     if (isCreate) {
       const memoryContent = content.replace(/^(save|create|remember|store)\s+/i, '');
-      chrome.runtime.sendMessage({
-        type: 'CREATE_MEMORY',
-        payload: {
-          memory: {
-            title: memoryContent.slice(0, 50) + (memoryContent.length > 50 ? '…' : ''),
-            content: memoryContent,
-            memory_type: 'note',
-            tags: [],
+      try {
+        await sendMessage({
+          type: 'CREATE_MEMORY',
+          payload: {
+            memory: {
+              title: memoryContent.slice(0, 50) + (memoryContent.length > 50 ? '…' : ''),
+              content: memoryContent,
+              memory_type: 'note',
+              tags: [],
+            },
           },
-        },
-      }, () => {
+        });
+      } catch { /* ignore */ }
+      setLastAssistantResponse({
+        id: `assistant_${Date.now()}`,
+        role: 'assistant',
+        content: 'Saved to your memory bank.',
+        timestamp: Date.now(),
+      });
+      setIsSending(false);
+      try {
+        const mems = await sendMessage<Memory[]>({ type: 'GET_MEMORIES' });
+        if (Array.isArray(mems)) setMemories(mems);
+      } catch { /* ignore */ }
+    } else {
+      const requestId = crypto.randomUUID();
+      setAiRequestId(requestId);
+
+      try {
+        const aiResponse = await sendMessage<{ success: boolean; response?: string; retryAfterSeconds?: number }>(
+          { type: 'ASK_AI', payload: { query: content, requestToken: requestId } }
+        );
+        if (aiResponse?.success && typeof aiResponse.response === 'string') {
+          setLastAssistantResponse({
+            id: `assistant_${Date.now()}`,
+            role: 'assistant',
+            content: aiResponse.response,
+            timestamp: Date.now(),
+          });
+          setIsSending(false);
+          setAiRequestId(null);
+          return;
+        }
+
+        // AI router unavailable (no credential, network, timeout, rate
+        // limit, etc.) -- degrade to local memory search rather than
+        // leaving the concierge silent.
+        const rateLimited = typeof aiResponse?.retryAfterSeconds === 'number';
+        const results: Memory[] = [];
+        try {
+          const searchResults = await sendMessage<Memory[]>(
+            { type: 'SEARCH_MEMORIES', payload: { query: content } }
+          );
+          if (Array.isArray(searchResults)) results.push(...searchResults);
+        } catch { /* ignore */ }
+        const prefix = rateLimited
+          ? `⏳ The assistant is busy right now (try again in ~${aiResponse.retryAfterSeconds}s). Meanwhile, here's what I found in your memories:\n\n`
+          : '';
         setLastAssistantResponse({
           id: `assistant_${Date.now()}`,
           role: 'assistant',
-          content: 'Saved to your memory bank.',
+          content: prefix + synthesizeResponse(content, results),
+          memories: results.slice(0, 3),
           timestamp: Date.now(),
         });
         setIsSending(false);
-        chrome.runtime.sendMessage({ type: 'GET_MEMORIES' }, (response) => {
-          if (Array.isArray(response)) setMemories(response);
+        setAiRequestId(null);
+      } catch {
+        setLastAssistantResponse({
+          id: `assistant_${Date.now()}`,
+          role: 'assistant',
+          content: 'Something went wrong. Please try again.',
+          timestamp: Date.now(),
         });
-      });
-    } else {
-      chrome.runtime.sendMessage(
-        { type: 'ASK_AI', payload: { query: content } },
-        (aiResponse) => {
-          if (aiResponse?.success && typeof aiResponse.response === 'string') {
-            setLastAssistantResponse({
-              id: `assistant_${Date.now()}`,
-              role: 'assistant',
-              content: aiResponse.response,
-              timestamp: Date.now(),
-            });
-            setIsSending(false);
-            return;
-          }
-
-          // AI router unavailable (no credential, network, timeout, rate
-          // limit, etc.) -- degrade to local memory search rather than
-          // leaving the concierge silent.
-          chrome.runtime.sendMessage(
-            { type: 'SEARCH_MEMORIES', payload: { query: content } },
-            (response) => {
-              const results: Memory[] = Array.isArray(response) ? response : [];
-              const rateLimited = typeof aiResponse?.retryAfterSeconds === 'number';
-              const prefix = rateLimited
-                ? `⏳ The assistant is busy right now (try again in ~${aiResponse.retryAfterSeconds}s). Meanwhile, here's what I found in your memories:\n\n`
-                : '';
-              setLastAssistantResponse({
-                id: `assistant_${Date.now()}`,
-                role: 'assistant',
-                content: prefix + synthesizeResponse(content, results),
-                memories: results.slice(0, 3),
-                timestamp: Date.now(),
-              });
-              setIsSending(false);
-            }
-          );
-        }
-      );
+        setIsSending(false);
+        setAiRequestId(null);
+      }
     }
   };
 
@@ -1090,17 +1152,24 @@ export const SidePanel: React.FC = () => {
             rows={2}
             className="w-full bg-[#252526] border border-[#3C3C3C] rounded-lg pl-9 pr-12 py-2.5 text-sm text-[#CCCCCC] placeholder:text-[#555555] resize-none focus:outline-none focus:border-[#007ACC] focus:ring-1 focus:ring-[#007ACC]/20 disabled:opacity-50 transition-all"
           />
-          <button
-            onClick={handleSendChat}
-            className="absolute right-2 bottom-2 h-7 w-7 flex items-center justify-center bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-md hover:shadow-[#007ACC]/30 text-white rounded-md disabled:opacity-50 transition-all"
-            disabled={!isAuthenticated || !chatInput.trim() || isSending}
-            title="Send (Enter)"
-          >
-            {isSending
-              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              : <SendHorizontal className="h-3.5 w-3.5" />
-            }
-          </button>
+          {isSending ? (
+            <button
+              onClick={handleCancelAi}
+              className="absolute right-2 bottom-2 h-7 w-7 flex items-center justify-center bg-red-600 hover:bg-red-500 text-white rounded-md transition-all"
+              title="Stop (Cancel AI request)"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <button
+              onClick={handleSendChat}
+              className="absolute right-2 bottom-2 h-7 w-7 flex items-center justify-center bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-md hover:shadow-[#007ACC]/30 text-white rounded-md disabled:opacity-50 transition-all"
+              disabled={!isAuthenticated || !chatInput.trim() || isSending}
+              title="Send (Enter)"
+            >
+              <SendHorizontal className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
         {isAuthenticated && (
           <div className="flex justify-between items-center px-1 mt-1">
