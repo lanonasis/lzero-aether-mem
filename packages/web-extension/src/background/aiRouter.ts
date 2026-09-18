@@ -39,7 +39,7 @@ async function resolveRouterConfig(): Promise<{ token: string } | null> {
  * need the same chrome.permissions.request flow Options.tsx uses for
  * apiUrl before the background fetch could reach an arbitrary host.
  */
-export async function queryAIRouter(query: string): Promise<string> {
+export async function queryAIRouter(query: string, externalSignal?: AbortSignal): Promise<string> {
   const cfg = await resolveRouterConfig();
   if (!cfg) {
     throw new Error('No stored credentials for AI router');
@@ -47,6 +47,15 @@ export async function queryAIRouter(query: string): Promise<string> {
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), AI_ROUTER_TIMEOUT_MS);
+
+  // Wire external signal so callers (e.g. ASK_AI cancellation) can abort mid-flight.
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      clearTimeout(timeout);
+      throw new DOMException('External signal already aborted', 'AbortError');
+    }
+    externalSignal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
 
   try {
     let response: Response;

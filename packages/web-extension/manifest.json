@@ -4,7 +4,7 @@
   "default_locale": "en",
   "short_name": "L0 Memory",
   "version": "0.2.0",
-  "id": "l0-memory-dev-id-placeholder",
+  "id": "l0memory001@chrome-extension",
   "description": "Your AI-powered developer memory. Store, search, and recall context across all your tools.",
   "author": "LanOnasis",
   "homepage_url": "https://lanonasis.com",
@@ -107,9 +107,5 @@
     "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; object-src 'self'"
   },
 
-  "minimum_chrome_version": "116",
-  // TODO P0-10: Replace with Chrome Web Store public key for stable extension ID.
-  // Steps: 1) npm run package:chrome  2) chrome://extensions → Pack extension → pick dist/
-  // 3) The .pem file contains your base64 public key — paste it below, uncommented
-  // "key": "",
+  "minimum_chrome_version": "116"
 }
