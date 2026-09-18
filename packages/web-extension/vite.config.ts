@@ -10,13 +10,13 @@ function fixHtmlPaths() {
     name: 'fix-html-paths',
     closeBundle() {
       const distDir = path.resolve(__dirname, 'dist');
-      const htmlDirs = ['src/popup', 'src/sidepanel', 'src/options', 'src/offscreen'];
+      const htmlDirs = ['src/sidepanel', 'src/options', 'src/offscreen'];
 
       htmlDirs.forEach(dir => {
         const htmlPath = path.resolve(distDir, dir, 'index.html');
         if (existsSync(htmlPath)) {
           let content = readFileSync(htmlPath, 'utf-8');
-          // Replace absolute paths with relative paths (go up 2 levels from src/popup to dist root)
+          // Replace absolute paths with relative paths (go up 2 levels to dist root)
           content = content.replace(/src="\/assets\//g, 'src="../../assets/');
           content = content.replace(/href="\/assets\//g, 'href="../../assets/');
           writeFileSync(htmlPath, content);
@@ -95,7 +95,6 @@ export default defineConfig({
     },
     rollupOptions: {
       input: {
-        popup: path.resolve(__dirname, 'src/popup/index.html'),
         sidepanel: path.resolve(__dirname, 'src/sidepanel/index.html'),
         options: path.resolve(__dirname, 'src/options/index.html'),
         offscreen: path.resolve(__dirname, 'src/offscreen/index.html'),
