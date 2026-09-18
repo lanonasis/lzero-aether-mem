@@ -35,6 +35,7 @@ import {
 import { format } from 'date-fns';
 import { useSemanticSearch } from '../hooks/useSemanticSearch';
 import { sendMessage } from '../background/messaging';
+import { isOnDeviceAvailable, isOnDeviceEnabled, startOnDeviceChat } from './aiMode';
 
 interface Memory {
   id: string;
@@ -837,9 +838,29 @@ export const SidePanel: React.FC = () => {
         }
 
         // AI router unavailable (no credential, network, timeout, rate
-        // limit, etc.) -- degrade to local memory search rather than
-        // leaving the concierge silent.
+        // limit, etc.) -- degrade to on-device AI or local memory search
+        // rather than leaving the concierge silent.
         const rateLimited = typeof aiResponse?.retryAfterSeconds === 'number';
+
+        // P4: attempt on-device AI as a smarter fallback before memory search
+        if (isOnDeviceAvailable() && await isOnDeviceEnabled()) {
+          try {
+            const topMemories = memories.slice(0, 10);
+            const aiText = await startOnDeviceChat(content, topMemories);
+            setLastAssistantResponse({
+              id: `assistant_${Date.now()}`,
+              role: 'assistant',
+              content: aiText,
+              timestamp: Date.now(),
+            });
+            setIsSending(false);
+            setAiRequestId(null);
+            return;
+          } catch {
+            // on-device failed; fall through to memory search
+          }
+        }
+
         const results: Memory[] = [];
         try {
           const searchResults = await sendMessage<Memory[]>(
