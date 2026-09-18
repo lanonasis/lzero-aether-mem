@@ -9,6 +9,8 @@ import {
   type MemoryEntry,
 } from '@lanonasis/memory-client';
 
+import { refreshUnsyncedBadge } from './badge';
+
 export interface CachedMemory {
   id: string;
   title: string;
@@ -380,6 +382,9 @@ export class MemoryCache {
     await this.db!.put('memories', newMemory);
     console.log('[MemoryCache] Added local memory:', newMemory.title);
 
+    // Update badge
+    void refreshUnsyncedBadge(this);
+
     // Try to sync immediately if online
     if (this.isOnline) {
       void this.syncOne(newMemory);
@@ -431,6 +436,9 @@ export class MemoryCache {
       _localId: undefined,
       _cachedAt: Date.now(),
     });
+
+    // Update badge (memory is no longer pending)
+    void refreshUnsyncedBadge(this);
   }
 
   async searchLocalAsync(query: string): Promise<CachedMemory[]> {
@@ -493,7 +501,10 @@ export class MemoryCache {
     console.log('[MemoryCache] Starting sync...');
     this.currentSync = this.doSync()
       .catch((err) => console.error('[MemoryCache] Sync error:', err))
-      .finally(() => { this.currentSync = null; });
+      .finally(() => {
+        this.currentSync = null;
+        void refreshUnsyncedBadge(this);
+      });
 
     return this.currentSync;
   }
@@ -679,6 +690,7 @@ export class MemoryCache {
       await this.db!.delete('memories', id);
       await this.deleteEmbedding(id);
       console.log('[MemoryCache] Discarded pending-create memory:', id);
+      void refreshUnsyncedBadge(this);
       return { success: true };
     }
 

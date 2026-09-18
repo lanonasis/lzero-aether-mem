@@ -109,6 +109,6 @@ describe('background sync', () => {
     const fresh = installChromeMock();
     setupSync({ sync: vi.fn() } as any);
     await vi.advanceTimersByTimeAsync(0);
-    expect(fresh.chromeMock.alarms.create).toHaveBeenCalledWith('l0-memory-sync', { periodInMinutes: 5 });
+    expect(fresh.chromeMock.alarms.create).toHaveBeenCalledWith('l0-memory-sync', { periodInMinutes: 5, persist: true });
   });
 });

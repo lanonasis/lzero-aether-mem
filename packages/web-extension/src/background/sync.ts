@@ -57,6 +57,8 @@ export function setupSync(cache: MemoryCache): void {
     if (!existing) {
       chrome.alarms.create(SYNC_ALARM_NAME, {
         periodInMinutes: SYNC_INTERVAL_MINUTES,
+        // persist is Chrome 146+; absent from @types/chrome — cast to avoid TS error
+        ...({ persist: true } as Partial<chrome.alarms.AlarmCreateInfo>),
       });
     }
   });

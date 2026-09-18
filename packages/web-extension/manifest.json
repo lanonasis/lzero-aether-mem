@@ -63,9 +63,7 @@
     "https://ai.vortexcore.app/*"
   ],
 
-  "optional_host_permissions": [
-    "<all_urls>"
-  ],
+  "optional_host_permissions": [],
 
   "omnibox": {
     "keyword": "mem"

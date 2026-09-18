@@ -39,6 +39,10 @@ function installChromeStorageMock(values: Record<string, unknown>) {
     permissions: {
       contains: vi.fn().mockResolvedValue(true),
     },
+    action: {
+      setBadgeText: vi.fn(),
+      setBadgeBackgroundColor: vi.fn(),
+    },
   };
 }
 

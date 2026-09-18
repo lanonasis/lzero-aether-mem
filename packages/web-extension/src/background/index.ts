@@ -32,6 +32,16 @@ chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: false })
   .catch((error) => console.error('[L0 Memory] Side panel error:', error));
 
+// Panel lifecycle — flush pending UI state only; do NOT cancel background work.
+// chrome.sidePanel.onOpened/onClosed require Chrome 127+; @types/chrome may not have them yet.
+(chrome.sidePanel as any).onOpened.addListener(() => {
+  console.log('[L0 Memory] Side panel opened');
+});
+
+(chrome.sidePanel as any).onClosed.addListener(() => {
+  console.log('[L0 Memory] Side panel closed');
+});
+
 // Initialize cache
 const cache = new MemoryCache();
 
