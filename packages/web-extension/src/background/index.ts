@@ -174,9 +174,9 @@ async function handleMessage(
   }
 }
 
-// Handle side panel behavior
+// Handle side panel behavior — lifted to module top level so it survives SW restart
 chrome.sidePanel
-  .setPanelBehavior({ openPanelOnActionClick: false })
+  .setPanelBehavior({ openPanelOnActionClick: true })
   .catch((error) => console.error('[L0 Memory] Side panel error:', error));
 
 console.log('[L0 Memory] Background service worker initialized');
