@@ -82,6 +82,31 @@ function getMemoryIcon(type: string): React.FC<{ className?: string }> {
   return MEMORY_ICONS[type] ?? Hash;
 }
 
+// Gradient class maps per memory type — aligned with mobile-pwa design
+const TYPE_GRADIENTS: Record<string, string> = {
+  code: 'from-purple-500/20 to-pink-500/20 border-purple-500/30',
+  docs: 'from-yellow-500/20 to-orange-500/20 border-yellow-500/30',
+  todo: 'from-indigo-500/20 to-violet-500/20 border-indigo-500/30',
+  workflow: 'from-indigo-500/20 to-violet-500/20 border-indigo-500/30',
+  status: 'from-blue-500/20 to-cyan-500/20 border-blue-500/30',
+  note: 'from-blue-500/20 to-cyan-500/20 border-blue-500/30',
+  snippet: 'from-gray-500/20 to-slate-500/20 border-gray-500/30',
+  idea: 'from-green-500/20 to-emerald-500/20 border-green-500/30',
+  context: 'from-blue-500/20 to-cyan-500/20 border-blue-500/30',
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  code: 'Code',
+  docs: 'Docs',
+  todo: 'Todo',
+  workflow: 'Workflow',
+  status: 'Status',
+  note: 'Note',
+  snippet: 'Snippet',
+  idea: 'Idea',
+  context: 'Context',
+};
+
 function formatMemoryDate(dateString: string): string {
   try {
     const date = new Date(dateString);
@@ -122,6 +147,8 @@ function synthesizeResponse(query: string, memories: Memory[]): string {
 const MemoryCard: React.FC<{ memory: Memory; onSelect?: (m: Memory) => void }> = ({ memory, onSelect }) => {
   const [copied, setCopied] = useState(false);
   const Icon = getMemoryIcon(memory.memory_type);
+  const gradient = TYPE_GRADIENTS[memory.memory_type] ?? 'from-blue-500/20 to-cyan-500/20 border-blue-500/30';
+  const typeLabel = TYPE_LABELS[memory.memory_type] ?? memory.memory_type;
 
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -137,39 +164,43 @@ const MemoryCard: React.FC<{ memory: Memory; onSelect?: (m: Memory) => void }> =
   return (
     <div
       onClick={() => onSelect?.(memory)}
-      className={`group relative flex flex-col gap-2 rounded-lg border border-[#2D2D2D] bg-gradient-to-br from-[#252526] to-[#1E1E1E] p-3 hover:from-[#2A2D2E] hover:to-[#252526] hover:border-[#007ACC]/50 transition-all duration-200 ${onSelect ? 'cursor-pointer' : ''}`}
+      className={`group relative flex flex-col gap-2 rounded-xl border bg-gradient-to-br p-3.5 transition-all duration-200 hover:scale-[1.01] ${gradient} ${onSelect ? 'cursor-pointer' : ''}`}
     >
-      <button
-        onClick={handleCopy}
-        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 rounded bg-[#3C3C3C] hover:bg-[#4C4C4C] transition-all"
-        title="Copy to clipboard"
-      >
-        {copied
-          ? <Check className="h-3 w-3 text-green-400" />
-          : <Copy className="h-3 w-3 text-[#888888]" />
-        }
-      </button>
-
-      <div className="flex items-start justify-between gap-2 pr-6">
-        <h3 className="text-sm font-semibold text-[#CCCCCC] leading-tight line-clamp-2">
-          {memory.title}
-        </h3>
-        <span className="shrink-0 text-[8px] bg-[#007ACC]/10 border border-[#007ACC]/30 text-[#007ACC] px-1.5 py-0.5 rounded whitespace-nowrap">
-          {memory.memory_type}
-        </span>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <Icon className="h-4 w-4 shrink-0 text-white/60" />
+          <h3 className="text-sm font-semibold text-white leading-tight line-clamp-2">
+            {memory.title}
+          </h3>
+        </div>
+        <button
+          onClick={handleCopy}
+          className="shrink-0 p-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-colors opacity-0 group-hover:opacity-100"
+          title="Copy to clipboard"
+        >
+          {copied
+            ? <Check className="h-3 w-3 text-green-400" />
+            : <Copy className="h-3 w-3 text-white/50" />
+          }
+        </button>
       </div>
 
-      <div className="flex items-center gap-2 text-[10px] text-[#888888] flex-wrap">
-        <div className="flex items-center gap-1">
-          <Icon className="h-3 w-3" />
-          <span>{formatMemoryDate(memory.created_at)}</span>
-        </div>
-        {memory._pending && <span className="text-yellow-400">· pending</span>}
-        {memory.tags.slice(0, 3).map((tag) => (
-          <span key={tag} className="bg-[#007ACC]/10 px-1.5 py-0.5 rounded text-[#007ACC] text-[9px]">
-            #{tag}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[10px] font-medium text-white/70 border border-white/20 bg-white/10 px-2 py-0.5 rounded-full">
+          {typeLabel}
+        </span>
+        {memory.tags.slice(0, 2).map((tag) => (
+          <span key={tag} className="inline-flex items-center gap-0.5 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-white/50">
+            <Hash className="h-2.5 w-2.5" />
+            {tag}
           </span>
         ))}
+        <span className="ml-auto text-[10px] text-white/30">
+          {formatMemoryDate(memory.created_at)}
+        </span>
+        {memory._pending && (
+          <div className="h-1.5 w-1.5 rounded-full bg-orange-500 shrink-0" title="Pending sync" />
+        )}
       </div>
     </div>
   );
@@ -517,7 +548,7 @@ const WelcomeView: React.FC<{ onLogin: () => void; isConnecting: boolean }> = ({
     <button
       onClick={onLogin}
       disabled={isConnecting}
-      className="bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-lg hover:shadow-[#007ACC]/50 text-white font-medium w-full max-w-[220px] py-2 px-4 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
+      className="bg-gradient-to-br from-blue-500 to-cyan-500 hover:shadow-lg hover:shadow-blue-500/50 text-white font-medium w-full max-w-[220px] py-2 px-4 rounded-xl flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-blue-500/30 transition-all"
     >
       {isConnecting ? (
         <><Loader2 className="h-4 w-4 animate-spin" />Initializing...</>
@@ -901,8 +932,8 @@ export const SidePanel: React.FC = () => {
       {/* ── Header ── */}
       <header className="flex items-center justify-between px-4 py-2.5 bg-[#1E1E1E]/80 backdrop-blur-sm border-b border-[#3C3C3C] shrink-0">
         <div className="flex items-center gap-2">
-          <div className="h-7 w-7 bg-gradient-to-br from-[#007ACC] to-[#0E639C] rounded-lg flex items-center justify-center shadow-md">
-            <span className="text-xs font-bold text-white">L0</span>
+          <div className="h-8 w-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
+            <span className="text-sm font-bold text-white">L0</span>
           </div>
           <div className="flex flex-col">
             <h1 className="text-sm font-bold tracking-tight text-white leading-none">LanOnasis</h1>
@@ -1184,7 +1215,7 @@ export const SidePanel: React.FC = () => {
           ) : (
             <button
               onClick={handleSendChat}
-              className="absolute right-2 bottom-2 h-7 w-7 flex items-center justify-center bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-md hover:shadow-[#007ACC]/30 text-white rounded-md disabled:opacity-50 transition-all"
+              className="absolute right-2 bottom-2 h-7 w-7 flex items-center justify-center bg-gradient-to-br from-blue-500 to-cyan-500 hover:shadow-lg hover:shadow-blue-500/40 text-white rounded-lg disabled:opacity-50 transition-all active:scale-95"
               disabled={!isAuthenticated || !chatInput.trim() || isSending}
               title="Send (Enter)"
             >
