@@ -4,7 +4,6 @@
   "default_locale": "en",
   "short_name": "L0 Memory",
   "version": "0.2.0",
-  "id": "l0memory001@chrome-extension",
   "description": "Your AI-powered developer memory. Store, search, and recall context across all your tools.",
   "author": "LanOnasis",
   "homepage_url": "https://lanonasis.com",

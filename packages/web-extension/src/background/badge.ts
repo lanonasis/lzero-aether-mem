@@ -11,7 +11,7 @@ export async function refreshUnsyncedBadge(cache: Pick<MemoryCache, 'getPendingM
 
   if (count === 0) {
     chrome.action.setBadgeText({ text: '' });
-    chrome.action.setBadgeBackgroundColor({ color: 'transparent' });
+    chrome.action.setBadgeBackgroundColor({ color: 'rgba(0,0,0,0)' });
   } else {
     chrome.action.setBadgeText({ text: String(count) });
     chrome.action.setBadgeBackgroundColor({ color: '#FF6B00' }); // Orange
