@@ -2,14 +2,17 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
-import { copyFileSync, mkdirSync, existsSync, readFileSync, writeFileSync, readdirSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
+
+// Use the project root directory
+const _dir = import.meta.dirname;
 
 // Fix relative paths in HTML files for browser extension
 function fixHtmlPaths() {
   return {
     name: 'fix-html-paths',
     closeBundle() {
-      const distDir = path.resolve(__dirname, 'dist');
+      const distDir = path.resolve(_dir, 'dist');
       const htmlDirs = ['src/popup', 'src/sidepanel', 'src/options', 'src/offscreen'];
 
       htmlDirs.forEach(dir => {
@@ -27,60 +30,17 @@ function fixHtmlPaths() {
   };
 }
 
-// Copy manifest and icons after build
-function copyExtensionFiles() {
-  return {
-    name: 'copy-extension-files',
-    closeBundle() {
-      const distDir = path.resolve(__dirname, 'dist');
-
-      // Copy manifest
-      copyFileSync(
-        path.resolve(__dirname, 'manifest.json'),
-        path.resolve(distDir, 'manifest.json')
-      );
-
-      // Copy icons
-      const iconsDir = path.resolve(distDir, 'icons');
-      if (!existsSync(iconsDir)) {
-        mkdirSync(iconsDir, { recursive: true });
-      }
-      const srcIcons = path.resolve(__dirname, 'public/icons');
-      if (existsSync(srcIcons)) {
-        const icons = ['icon-16.png', 'icon-32.png', 'icon-48.png', 'icon-128.png'];
-        icons.forEach(icon => {
-          const src = path.resolve(srcIcons, icon);
-          if (existsSync(src)) {
-            copyFileSync(src, path.resolve(iconsDir, icon));
-          }
-        });
-      }
-
-      // Copy locales
-      const localesDir = path.resolve(distDir, '_locales/en');
-      if (!existsSync(localesDir)) {
-        mkdirSync(localesDir, { recursive: true });
-      }
-      const srcLocales = path.resolve(__dirname, 'public/_locales/en/messages.json');
-      if (existsSync(srcLocales)) {
-        copyFileSync(srcLocales, path.resolve(localesDir, 'messages.json'));
-      }
-    }
-  };
-}
-
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    copyExtensionFiles(),
     fixHtmlPaths(),
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, 'src'),
-      '@lanonasis/shared': path.resolve(__dirname, '../shared/src'),
+      '@': path.resolve(_dir, 'src'),
+      '@lanonasis/shared': path.resolve(_dir, '../shared/src'),
     },
   },
   base: './',
@@ -95,12 +55,12 @@ export default defineConfig({
     },
     rollupOptions: {
       input: {
-        popup: path.resolve(__dirname, 'src/popup/index.html'),
-        sidepanel: path.resolve(__dirname, 'src/sidepanel/index.html'),
-        options: path.resolve(__dirname, 'src/options/index.html'),
-        offscreen: path.resolve(__dirname, 'src/offscreen/index.html'),
-        background: path.resolve(__dirname, 'src/background/index.ts'),
-        content: path.resolve(__dirname, 'src/content/index.ts'),
+        popup: path.resolve(_dir, 'src/popup/index.html'),
+        sidepanel: path.resolve(_dir, 'src/sidepanel/index.html'),
+        options: path.resolve(_dir, 'src/options/index.html'),
+        offscreen: path.resolve(_dir, 'src/offscreen/index.html'),
+        background: path.resolve(_dir, 'src/background/index.ts'),
+        content: path.resolve(_dir, 'src/content/index.ts'),
       },
       output: {
         banner: 'var process=typeof process!=="undefined"?process:{env:{NODE_ENV:"production"},platform:"browser",version:"",versions:{},browser:true,nextTick:function(cb){return setTimeout(cb,0)}};',
@@ -112,6 +72,20 @@ export default defineConfig({
         },
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',
+        manualChunks: (id) => {
+          // Merge all React-containing code into the globals chunk to prevent
+          // "Cannot read properties of null (reading 'useState')" caused by
+          // multiple React instances (dispatcher lives on the first one).
+          // Rolldown creates a separate "shared" chunk for @lanonasis/shared
+          // components and UI primitives. Force them into globals instead.
+          if (
+            id.includes('node_modules/react') ||
+            id.includes('packages/web-extension/src/components') ||
+            id.includes('packages/shared/src/sdk')
+          ) {
+            return 'globals';
+          }
+        },
       },
     },
   },
