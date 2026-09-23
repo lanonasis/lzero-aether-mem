@@ -31,12 +31,6 @@ body {
   min-width: 320px;
 }
 
-/* Ensure flex containers work properly */
-.flex-col {
-  display: flex;
-  flex-direction: column;
-}
-
 /* Input styling */
 input, textarea {
   font-family: inherit;
