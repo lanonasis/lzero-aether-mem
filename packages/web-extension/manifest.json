@@ -64,9 +64,7 @@
   ],
 
   "optional_host_permissions": [
-    "<all_urls>",
-    "http://localhost:*",
-    "ws://localhost:*"
+    "<all_urls>"
   ],
 
   "omnibox": {
