@@ -19,3 +19,4 @@ logs/
 attached_assets/clipboard-*
 packages/vscode-extension/out/
 packages/web-extension/dist/
+.env*

@@ -14,7 +14,6 @@ import {
   PatternAnalysis,
   TagSuggestion,
   RelatedMemory,
-  DuplicatePair,
   Insight,
   MemoryHealth,
 } from "@lanonasis/mem-intel-sdk";
@@ -24,7 +23,6 @@ export type {
   PatternAnalysis,
   TagSuggestion,
   RelatedMemory,
-  DuplicatePair,
   Insight,
   MemoryHealth,
 };

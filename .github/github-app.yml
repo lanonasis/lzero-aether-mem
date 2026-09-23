@@ -1,0 +1,21 @@
+instructions: |
+  Use the GitHub CLI credential helper for GitHub remotes.
+  Before pushing, verify the selected account with `gh auth status --hostname github.com`.
+  If the remote belongs to another account, switch explicitly with
+  `gh auth switch --hostname github.com --user <owner>`, then verify again.
+  Never place GitHub tokens in remote URLs, files, commits, or logs.
+
+scripts:
+  - name: Configure local GitHub authentication
+    command: |
+      set -eu
+      gh auth status --hostname "${GH_HOST:-github.com}"
+      git config --local --unset-all credential.helper 2>/dev/null || true
+      git config --local credential.helper ""
+      git config --local --add credential.helper "!gh auth git-credential"
+    triggers:
+      - session.create
+
+automation:
+  auto_issue_session: true
+  remote_control: false
