@@ -1,6 +1,6 @@
 # ADR-002: Monorepo with Turbo + Bun Workspaces
 
-Status: Accepted | Date: 2025-12-19
+Status: Accepted | Date: 2025-12-19 | Updated: 2026-09-23
 
 ## Context
 
