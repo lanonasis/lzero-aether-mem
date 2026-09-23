@@ -4,7 +4,7 @@ Status: Accepted | Date: 2025-12-19
 
 ## Context
 
-The core value proposition of Aether Memory is semantic search over developer memories without requiring cloud API calls. This requires generating text embeddings locally on the user's device. ARM optimization is a key competitive differentiator (hackathon submission focus).
+The core value proposition of LanOnasis is semantic search over developer memories without requiring cloud API calls. This requires generating text embeddings locally on the user's device. On-device AI is a key differentiator — it works offline, respects privacy, and has zero per-request cost.
 
 ## Decision
 

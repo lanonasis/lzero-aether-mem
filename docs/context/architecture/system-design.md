@@ -110,19 +110,18 @@ Cross-platform Memory-as-a-Service with on-device AI. Four client surfaces share
 
 | Surface | State Tool | Notes |
 |---------|-----------|-------|
-| Web App | TanStack Query + Zustand | Server state in Query, UI state in Zustand |
-| Mobile PWA | Zustand + localStorage | Offline-first persistence |
+| Web App | TanStack Query + React context | Server state in Query, local state via hooks |
+| Mobile PWA | React Query + AsyncStorage | Offline-first persistence |
 | VSCode Ext | VSCode globalState + React useState | Extension storage API |
 | Web Ext | chrome.storage + React useState | Browser extension storage |
 
 ## Authentication Flow
 
 ```
-1. User authenticates via Clerk/Auth.js (OAuth or username/password)
-2. Server sets session or returns JWT
+1. User authenticates via OAuth 2.0 PKCE or API key
+2. Server validates and returns session/token
 3. Subsequent requests include auth token
-4. req.user?.id extracted in Express middleware
-5. All memory/key operations scoped to userId
+4. All memory/key operations scoped to user
 ```
 
 ## Build Pipeline (Turbo)
@@ -134,6 +133,7 @@ Root
   -> packages/mobile-pwa      [depends on shared]
   -> packages/vscode-extension [depends on shared]
   -> packages/web-extension    [depends on shared]
+  -> apps/mobile (expo)        [independent, uses shared types]
 ```
 
 Turbo caching means unchanged packages skip rebuilds.
@@ -142,11 +142,12 @@ Turbo caching means unchanged packages skip rebuilds.
 
 | Surface | Platform | Build Output |
 |---------|----------|-------------|
-| Web App | Vercel | `dist/public/` |
+| Web App | Vercel | `dist/public/` (from `vite build`) |
 | Mobile PWA | Static host / PWA | `packages/mobile-pwa/dist/` |
 | VSCode Ext | VSCode Marketplace | `.vsix` file |
-| Web Ext | Chrome Web Store / AMO | Extension bundle |
+| Web Ext | Chrome Web Store | Extension bundle |
 | Backend | Vercel / Node server | `server/index.ts` |
+| Mobile (Native) | Expo / App Store | `apps/mobile/` (Expo) |
 
 ## Security Considerations
 

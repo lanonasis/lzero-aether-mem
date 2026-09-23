@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useLocation } from "wouter";
 import { Monitor, Code2, PanelRight, Smartphone, ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -10,7 +11,7 @@ interface Platform {
   description: string;
   action?: {
     label: string;
-    href: string;
+    route: string;
   };
   badge?: string;
 }
@@ -21,21 +22,21 @@ const platforms: Platform[] = [
     label: "PWA",
     icon: Monitor,
     description: "Progressive Web App with offline-first architecture. Full memory access from any browser.",
-    action: { label: "Try PWA", href: "http://localhost:5173" },
+    action: { label: "Try Dashboard", route: "/dashboard" },
   },
   {
     id: "vscode",
     label: "VS Code",
     icon: Code2,
     description: "Native sidebar extension. Access memories without leaving your editor.",
-    action: { label: "Try Extension", href: "/vscode" },
+    action: { label: "Install on VS Code", route: "https://marketplace.visualstudio.com/items?itemName=lanonasis.lzero-memory" },
   },
   {
     id: "web",
     label: "Web Panel",
     icon: PanelRight,
     description: "Lightweight side panel for quick context capture and semantic search.",
-    action: { label: "Try Panel", href: "/dashboard" },
+    action: { label: "Try Panel", route: "/dashboard" },
   },
   {
     id: "mobile",
@@ -48,6 +49,7 @@ const platforms: Platform[] = [
 
 export function PlatformTabs() {
   const [active, setActive] = useState("pwa");
+  const [, navigate] = useLocation();
   const current = platforms.find((p) => p.id === active)!;
 
   return (
@@ -114,10 +116,10 @@ export function PlatformTabs() {
               <Button
                 className="bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-lg hover:shadow-[#007ACC]/30 text-white shrink-0 group"
                 onClick={() => {
-                  if (current.action!.href.startsWith("http")) {
-                    window.location.href = current.action!.href;
+                  if (current.action!.route.startsWith("http")) {
+                    window.open(current.action!.route, "_blank");
                   } else {
-                    window.location.href = current.action!.href;
+                    navigate(current.action!.route);
                   }
                 }}
               >
