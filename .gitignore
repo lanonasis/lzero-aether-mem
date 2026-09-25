@@ -11,6 +11,7 @@ packages/mobile-pwa/.env
 packages/shared/tsconfig.tsbuildinfo
 .turbo/
 .env
+.env.local
 packages/mobile-pwa/.env.local
 client/.env.local
 .vercel
