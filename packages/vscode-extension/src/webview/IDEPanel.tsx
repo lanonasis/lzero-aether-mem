@@ -281,6 +281,7 @@ const MEMORY_TYPES = [
   "reference",
   "personal",
   "workflow",
+  "conversation",
 ] as const;
 
 const formatDateShort = (dateStr?: string) => {

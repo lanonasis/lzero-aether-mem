@@ -46,7 +46,7 @@ describe('MemoryService', () => {
         expect(memories).toHaveLength(1);
         expect(fetchMock).toHaveBeenCalledTimes(1);
         const [url, init] = fetchMock.mock.calls[0];
-        expect(url).toContain('/memory/list?limit=100');
+        expect(url).toContain('/memories?limit=100');
         expect(url).not.toContain('/memories/list');
         expect(init?.headers).toMatchObject({ Authorization: 'Bearer oauth-token' });
     });
@@ -77,7 +77,7 @@ describe('MemoryService', () => {
 
         expect(created.id).toBe('mem-2');
         const [url, init] = fetchMock.mock.calls[0];
-        expect(url).toContain('/memory');
+        expect(url).toContain('/memories');
         // API keys must use X-API-Key header, not Bearer
         expect(init?.headers).toMatchObject({ 'X-API-Key': 'lano_test' });
         expect(init?.headers).not.toHaveProperty('Authorization');

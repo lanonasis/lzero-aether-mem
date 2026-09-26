@@ -6,22 +6,19 @@ import type { CreateMemoryRequest, MemoryEntry, MemorySearchResult, UpdateMemory
 const DEFAULT_TIMEOUT_MS = 30000;
 
 const buildMemoryListUrl = (apiUrl: string, limit: number): string =>
-    `${apiUrl}/memory/list?limit=${limit}&sortBy=updated_at&sortOrder=desc`;
+    `${apiUrl}/memories?limit=${limit}&sortBy=updated_at&sortOrder=desc`;
 
 const buildMemorySearchUrl = (apiUrl: string): string =>
-    `${apiUrl}/memory/search`;
+    `${apiUrl}/memories/search`;
 
 const buildMemoryCreateUrl = (apiUrl: string): string =>
-    `${apiUrl}/memory`;
+    `${apiUrl}/memories`;
 
-const buildMemoryUpdateUrl = (apiUrl: string): string =>
-    `${apiUrl}/memory/update`;
+const buildMemoryUpdateUrl = (apiUrl: string, id: string): string =>
+    `${apiUrl}/memories/${encodeURIComponent(id)}`;
 
 const buildMemoryDeleteUrl = (apiUrl: string, id: string): string =>
-    `${apiUrl}/memory/delete?id=${encodeURIComponent(id)}`;
-
-const buildMemoryGetUrl = (apiUrl: string, id: string): string =>
-    `${apiUrl}/memory/get?id=${encodeURIComponent(id)}`;
+    `${apiUrl}/memories/${encodeURIComponent(id)}`;
 
 const withCompatibleMemoryType = <T extends { memory_type?: string }>(payload: T): T & { type?: string } => ({
     ...payload,
@@ -167,11 +164,11 @@ export class MemoryService {
     async updateMemory(id: string, updates: UpdateMemoryRequest): Promise<MemoryEntry> {
         const headers = await this.getAuthHeaders();
         const response = await this.fetchWithTimeout(
-            buildMemoryUpdateUrl(this.apiUrl),
+            buildMemoryUpdateUrl(this.apiUrl, id),
             {
-                method: 'POST',
+                method: 'PUT',
                 headers,
-                body: JSON.stringify(withCompatibleMemoryType({ id, ...updates })),
+                body: JSON.stringify(withCompatibleMemoryType(updates)),
             }
         );
 
@@ -200,19 +197,4 @@ export class MemoryService {
         }
     }
 
-    async getMemory(id: string): Promise<MemoryEntry> {
-        const headers = await this.getAuthHeaders();
-        const response = await this.fetchWithTimeout(
-            buildMemoryGetUrl(this.apiUrl, id),
-            { method: 'GET', headers }
-        );
-
-        if (!response.ok) {
-            const body = await response.text();
-            throw new Error(`Get memory failed (${response.status}): ${body}`);
-        }
-
-        const data = await response.json();
-        return (data.data || data.memory || data) as MemoryEntry;
-    }
 }

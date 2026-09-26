@@ -375,7 +375,6 @@
   "dependencies": {
     "@lanonasis/memory-client": "^2.2.0",
     "@lanonasis/oauth-client": "^2.0.4",
-    "@lanonasis/security-sdk": "^1.0.5",
     "vitest": "^4.1.5"
   }
 }

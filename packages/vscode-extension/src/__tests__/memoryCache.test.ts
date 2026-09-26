@@ -29,7 +29,7 @@ describe('MemoryCache', () => {
         const created = await cache.addLocal({
             title: 'Test memory',
             content: 'Hello world',
-            memory_type: 'note',
+            memory_type: 'knowledge',
             tags: ['test'],
         });
 
@@ -48,7 +48,7 @@ describe('MemoryCache', () => {
         const created = await cache.addLocal({
             title: 'Draft memory',
             content: 'Initial',
-            memory_type: 'note',
+            memory_type: 'knowledge',
             tags: ['draft'],
         });
 
@@ -69,7 +69,7 @@ describe('MemoryCache', () => {
         const created = await cache.addLocal({
             title: 'Temp memory',
             content: 'To be deleted',
-            memory_type: 'note',
+            memory_type: 'knowledge',
             tags: ['temp'],
         });
 
@@ -89,7 +89,7 @@ describe('MemoryCache', () => {
         const created = await cache.addLocal({
             title: 'Local memory',
             content: 'Will sync',
-            memory_type: 'note',
+            memory_type: 'knowledge',
             tags: ['sync'],
         });
 
@@ -97,7 +97,7 @@ describe('MemoryCache', () => {
             id: 'server-1',
             title: 'Local memory',
             content: 'Will sync',
-            memory_type: 'note',
+            memory_type: 'knowledge',
             tags: ['sync'],
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
@@ -123,7 +123,7 @@ describe('MemoryCache', () => {
                 id: 'remote-1',
                 title: 'Remote memory',
                 content: 'Fetched',
-                memory_type: 'note',
+                memory_type: 'knowledge',
                 tags: ['remote'],
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),

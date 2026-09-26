@@ -74,7 +74,7 @@ describe('MemoryCache.updateMemory / deleteMemory', () => {
           id: 'mem_1',
           title: 'Updated title',
           content: 'Updated content',
-          memory_type: 'note',
+          memory_type: 'knowledge',
           tags: ['a', 'b'],
           created_at: '2026-01-01T00:00:00.000Z',
           updated_at: '2026-01-02T00:00:00.000Z',
@@ -115,7 +115,7 @@ describe('MemoryCache.updateMemory / deleteMemory', () => {
   });
 
   it('sends DELETE /memory/:id and removes it from the cache', async () => {
-    dbStore.set('mem_1', { id: 'mem_1', title: 'Old', content: 'Old', memory_type: 'note', tags: [], created_at: '', updated_at: '' });
+    dbStore.set('mem_1', { id: 'mem_1', title: 'Old', content: 'Old', memory_type: 'knowledge', tags: [], created_at: '', updated_at: '' });
     fetchMock.mockResolvedValue({
       ok: true,
       headers: { get: () => 'application/json' },
@@ -137,7 +137,7 @@ describe('MemoryCache.updateMemory / deleteMemory', () => {
       id: 'local_1',
       title: 'Draft',
       content: 'Draft',
-      memory_type: 'note',
+      memory_type: 'knowledge',
       tags: [],
       created_at: '',
       updated_at: '',
@@ -153,7 +153,7 @@ describe('MemoryCache.updateMemory / deleteMemory', () => {
   });
 
   it('removes the associated embedding when a synced memory is deleted', async () => {
-    dbStore.set('mem_1', { id: 'mem_1', title: 'Old', content: 'Old', memory_type: 'note', tags: [], created_at: '', updated_at: '' });
+    dbStore.set('mem_1', { id: 'mem_1', title: 'Old', content: 'Old', memory_type: 'knowledge', tags: [], created_at: '', updated_at: '' });
     fetchMock.mockResolvedValue({
       ok: true,
       headers: { get: () => 'application/json' },
@@ -183,7 +183,7 @@ describe('MemoryCache.updateMemory / deleteMemory', () => {
       id: 'local_1',
       title: 'Draft',
       content: 'Draft',
-      memory_type: 'note',
+      memory_type: 'knowledge',
       tags: [],
       created_at: '',
       updated_at: '',
@@ -193,7 +193,7 @@ describe('MemoryCache.updateMemory / deleteMemory', () => {
       id: 'mem_1',
       title: 'Synced',
       content: 'Synced',
-      memory_type: 'note',
+      memory_type: 'knowledge',
       tags: [],
       created_at: '',
       updated_at: '',

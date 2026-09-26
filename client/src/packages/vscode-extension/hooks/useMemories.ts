@@ -58,7 +58,7 @@ export const useMemories = (_isAuthenticated?: boolean) => {
       const created = await createApi({
         title: data.title || 'Untitled',
         content: data.content || '',
-        memory_type: (data.memory_type as any) || 'note',
+        memory_type: (data.memory_type as any) || 'knowledge',
         tags: data.tags || [],
       });
       return created ? mapMemoryEntry(created) : undefined;
@@ -79,7 +79,7 @@ export const useMemories = (_isAuthenticated?: boolean) => {
       const updated = await updateApi(id, {
         title: data.title,
         content: data.content,
-        memory_type: (data.memory_type as any) || 'note',
+        memory_type: (data.memory_type as any) || 'knowledge',
         tags: data.tags || [],
       });
       return updated ? mapMemoryEntry(updated) : undefined;

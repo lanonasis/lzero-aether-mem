@@ -11,8 +11,9 @@
 
 import { setupContextMenus } from './contextMenu';
 import { setupOmnibox } from './omnibox';
-import { MemoryCache } from './cache';
+import { MemoryCache, isTokenExpired } from './cache';
 import { setupSync } from './sync';
+import { startDeviceCodeFlow, storeAuthToken, getEffectiveToken } from './oauth';
 import {
   ensureOffscreenDocument,
   hasOffscreenDocument,
@@ -21,6 +22,7 @@ import {
   getOffscreenAIStatus,
 } from './offscreenManager';
 import { queryAIRouter, AiRouterRateLimitError } from './aiRouter';
+import { runDiagnostics } from './diagnostics';
 
 // Initialize cache
 const cache = new MemoryCache();
@@ -122,18 +124,97 @@ async function handleMessage(
     case 'GET_SYNC_STATUS':
       return cache.getStatus();
     
-    case 'GET_AUTH_STATUS':
-      const token = await chrome.storage.local.get('l0_auth_token');
-      return { isAuthenticated: !!token.l0_auth_token };
-
-    case 'SET_AUTH_TOKEN':
-      await chrome.storage.local.set({ l0_auth_token: message.payload?.token });
-      return { success: true };
+    case 'GET_AUTH_STATUS': {
+      const { l0_auth_token } = await chrome.storage.local.get('l0_auth_token');
+      const hasApiKey = !!l0_auth_token && !isTokenExpired(l0_auth_token);
+      const effective = await getEffectiveToken();
+      return {
+        isAuthenticated: hasApiKey || !!effective,
+        authType: effective?.authType || (hasApiKey ? 'apiKey' : null),
+      };
+    }
 
     case 'LOGOUT':
       await chrome.storage.local.remove(['l0_auth_token', 'userEmail']);
+      await chrome.storage.local.remove([
+        'l0_oauth_token',
+        'l0_oauth_credential_type',
+        'l0_code_verifier',
+        'l0_oauth_state',
+      ]);
       await cache.clear();
       return { success: true };
+
+    case 'LOGOUT_ON_EXPIRY':
+      try {
+        const stored = await chrome.storage.local.get('l0_auth_token');
+        const auth = stored.l0_auth_token;
+        if (auth && isTokenExpired(auth)) {
+          await chrome.storage.local.remove(['l0_auth_token', 'userEmail']);
+          await cache.clear();
+          return { success: true, logout: true, reason: 'token_expired' };
+        }
+      } catch (error) {
+        console.error('[L0 Memory] LOGOUT_ON_EXPIRY check failed:', error);
+      }
+      return { success: true, logout: false };
+
+    case 'START_DEVICE_CODE_FLOW':
+      try {
+        const deviceCode = await startDeviceCodeFlow();
+        console.log('[L0 Memory] Device code flow started. User code:', deviceCode.user_code);
+        // Start polling in background
+        const pollingPromise = import('./oauth').then(
+          ({ pollDeviceToken }) =>
+            new Promise<void>((resolve) => {
+              pollDeviceToken(deviceCode, {
+                onCancel: () => false, // never cancel
+                onProgress: (msg) => console.log('[L0 Memory] Device code:', msg),
+              })
+                .then(async (tokens) => {
+                  await storeAuthToken(tokens.access_token, tokens.refresh_token);
+                  console.log('[L0 Memory] Device code auth successful');
+                })
+                .catch((err) => {
+                  console.error('[L0 Memory] Device code flow failed:', err);
+                })
+                .finally(() => resolve());
+            })
+        );
+        // Store polling promise reference for later cancellation (optional)
+        return { success: true, deviceCode };
+      } catch (err) {
+        console.error('[L0 Memory] START_DEVICE_CODE_FLOW failed:', err);
+        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+      }
+
+    case 'PKCE_CALLBACK':
+      try {
+        const { code, redirect_uri } = message.payload || {};
+        if (!code || !redirect_uri) {
+          return { success: false, error: 'Missing code or redirect_uri' };
+        }
+        const result = await import('./oauth').then((m) => m.handlePkceCallback(code, redirect_uri));
+        if (result.success) {
+          console.log('[L0 Memory] PKCE auth successful');
+          // Send message to any listening tabs
+          chrome.runtime.sendMessage({ type: 'AUTH_SUCCESS' });
+        } else {
+          console.error('[L0 Memory] PKCE auth failed:', result.error);
+        }
+        return result;
+      } catch (err) {
+        console.error('[L0 Memory] PKCE_CALLBACK failed:', err);
+        return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+      }
+
+    case 'GET_AUTH_TYPE':
+      try {
+        const effective = await getEffectiveToken();
+        return { authType: effective?.authType || null };
+      } catch {
+        return { authType: null };
+      }
 
     // Offscreen AI handlers
     case 'OFFSCREEN_INIT_AI':
@@ -154,6 +235,17 @@ async function handleMessage(
       } catch (error) {
         console.error('[L0 Memory] Offscreen embed failed:', error);
         return { error: error instanceof Error ? error.message : 'Unknown error' };
+      }
+
+    case 'RUN_DIAGNOSTICS':
+      try {
+        const result = await runDiagnostics(message.payload?.apiUrl);
+        return { success: true, diagnostics: result };
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Diagnostics failed',
+        };
       }
 
     case 'OFFSCREEN_STATUS':

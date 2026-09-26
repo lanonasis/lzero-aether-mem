@@ -33,7 +33,14 @@ import {
   RefreshCw,
   ChevronRight,
   Terminal,
+  Monitor,
+  Activity,
+  X,
 } from 'lucide-react';
+
+// ---------- types ----------
+
+import type { DiagnosticCheck, DiagnosticResult } from '../background/diagnostics';
 
 // ---------- helpers ----------
 
@@ -110,6 +117,91 @@ const StatusBanner: React.FC<{ type: 'success' | 'error'; text: string }> = ({ t
       <AlertCircle className="h-5 w-5 shrink-0" />
     )}
     <span className="text-sm">{text}</span>
+  </div>
+);
+
+// ---------- diagnostics results panel ----------
+
+const statusColors: Record<DiagnosticCheck['status'], string> = {
+  healthy: 'bg-green-500',
+  degraded: 'bg-yellow-500',
+  critical: 'bg-red-500',
+};
+
+const DiagnosticResults: React.FC<{
+  result: DiagnosticResult;
+  onDismiss: () => void;
+}> = ({ result, onDismiss }) => (
+  <div className="mt-6 space-y-3 animate-in fade-in duration-300">
+    <div className="flex items-center justify-between">
+      <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+        <Activity className="h-4 w-4 text-[#007ACC]" />
+        Diagnostics
+      </h3>
+      <button onClick={onDismiss} className="text-gray-500 hover:text-gray-300 transition-colors">
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+
+    <div className="rounded-xl border border-[#2D2D2D] bg-[#1E1E1E] divide-y divide-[#2D2D2D]">
+      {/* Overall status header */}
+      <div
+        className={cn(
+          'flex items-center gap-3 p-3',
+          result.overall === 'healthy'
+            ? 'bg-green-500/10 border-b border-green-500/20'
+            : result.overall === 'degraded'
+              ? 'bg-yellow-500/10 border-b border-yellow-500/20'
+              : 'bg-red-500/10 border-b border-red-500/20',
+        )}
+      >
+        <span
+          className={cn(
+            'relative flex h-2.5 w-2.5',
+            statusColors[result.overall],
+          )}
+        >
+          <span
+            className={cn(
+              'absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping',
+              statusColors[result.overall],
+            )}
+          />
+          <span className={cn('relative inline-flex rounded-full h-2.5 w-2.5', statusColors[result.overall])} />
+        </span>
+        <span className="text-xs font-medium text-gray-300">
+          {result.overall === 'healthy'
+            ? 'All checks passed'
+            : result.overall === 'degraded'
+              ? 'Some checks degraded'
+              : 'Issues detected'}
+        </span>
+        <span className="ml-auto text-[10px] text-gray-500 font-mono">
+          {new Date(result.timestamp).toLocaleTimeString()}
+        </span>
+      </div>
+
+      {/* Individual checks */}
+      {result.checks.map((check) => (
+        <div key={check.name} className="flex items-start gap-3 p-3">
+          <span className={cn('relative flex h-2 w-2 mt-1 shrink-0', statusColors[check.status])}>
+            <span className={cn('absolute inline-flex h-full w-full rounded-full opacity-75', statusColors[check.status])} />
+            <span className={cn('relative inline-flex rounded-full h-2 w-2', statusColors[check.status])} />
+          </span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-white">{check.name}</span>
+              {check.action && (
+                <span className="text-[10px] text-[#007ACC] hover:underline cursor-pointer shrink-0">
+                  {check.action}
+                </span>
+              )}
+            </div>
+            <p className="text-[10px] text-gray-400 mt-0.5">{check.detail}</p>
+          </div>
+        </div>
+      ))}
+    </div>
   </div>
 );
 
@@ -336,20 +428,26 @@ const AuthForm: React.FC<AuthFormProps> = ({
 
 type DashboardProps = {
   apiUrl: string;
+  authType: string | null;
   aiMode: 'off' | 'auto' | 'on';
   setAiMode: (m: 'off' | 'auto' | 'on') => void;
   onResync: () => void;
   onDisconnect: () => void;
   isResyncing: boolean;
+  onRunDiagnostics: () => void;
+  isRunningDiagnostics: boolean;
 };
 
 const ConnectedDashboard: React.FC<DashboardProps> = ({
   apiUrl,
+  authType,
   aiMode,
   setAiMode,
   onResync,
   onDisconnect,
   isResyncing,
+  onRunDiagnostics,
+  isRunningDiagnostics,
 }) => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -360,7 +458,14 @@ const ConnectedDashboard: React.FC<DashboardProps> = ({
           <div className="flex items-center gap-3">
             <PulseDot color="bg-green-500" />
             <div>
-              <p className="text-sm font-semibold text-white">Connected to LanOnasis</p>
+              <p className="text-sm font-semibold text-white">
+                Connected to LanOnasis
+                {authType && (
+                  <span className="ml-2 text-[10px] bg-[#007ACC]/20 text-[#007ACC] px-2 py-0.5 rounded-full font-medium">
+                    {authType === 'oauth' ? 'OAuth' : 'API Key'}
+                  </span>
+                )}
+              </p>
               <p className="text-[10px] text-gray-400 font-mono">{apiUrl}</p>
             </div>
           </div>
@@ -459,6 +564,203 @@ const ConnectedDashboard: React.FC<DashboardProps> = ({
           <span className="text-gray-400 font-mono">{apiUrl}</span>.
         </p>
       </div>
+
+      {/* Run diagnostics */}
+      <button
+        onClick={onRunDiagnostics}
+        disabled={isRunningDiagnostics}
+        className={cn(
+          'w-full group p-3 rounded-xl border border-[#2D2D2D] bg-[#1E1E1E] hover:border-[#007ACC]/50 transition-all text-left flex items-center justify-center gap-2',
+          'disabled:opacity-50 disabled:cursor-not-allowed',
+        )}
+      >
+        {isRunningDiagnostics ? (
+          <>
+            <Loader2 className="h-4 w-4 text-[#007ACC] animate-spin" />
+            <span className="text-xs text-gray-300">Running diagnostics…</span>
+          </>
+        ) : (
+          <>
+            <Activity className="h-4 w-4 text-[#007ACC] group-hover:text-[#007ACC]/80" />
+            <span className="text-xs font-medium text-gray-300">Run Diagnostics</span>
+          </>
+        )}
+      </button>
+    </div>
+  );
+};
+
+// ---------- auth method selection (OAuth vs API key) ----------
+
+type AuthMethodViewProps = {
+  apiUrl: string;
+  onSelectApiKey: () => void;
+  onSelectOAuth: () => void;
+  onBack: () => void;
+};
+
+const AuthMethodView: React.FC<AuthMethodViewProps> = ({
+  apiUrl,
+  onSelectApiKey,
+  onSelectOAuth,
+  onBack,
+}) => (
+  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+    <div className="flex items-center gap-3">
+      <button
+        onClick={onBack}
+        className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+      >
+        ← Back
+      </button>
+    </div>
+
+    <div className="space-y-1">
+      <h2 className="text-lg font-bold text-white">Connect your account</h2>
+      <p className="text-xs text-gray-400">
+        Choose how you want to sign in to L0 Memory.
+      </p>
+    </div>
+
+    {/* OAuth option */}
+    <button
+      onClick={onSelectOAuth}
+      className="w-full group p-5 rounded-xl border border-[#2D2D2D] bg-[#1E1E1E] hover:border-[#007ACC]/50 hover:bg-[#252526] transition-all text-left"
+    >
+      <div className="flex items-center gap-3 mb-2">
+        <Monitor className="h-5 w-5 text-[#007ACC]" />
+        <div>
+          <span className="text-sm font-semibold text-white">Connect in Browser</span>
+          <span className="ml-2 text-[10px] bg-[#007ACC]/20 text-[#007ACC] px-2 py-0.5 rounded-full font-medium">
+            Recommended
+          </span>
+        </div>
+      </div>
+      <p className="text-[10px] text-gray-500 leading-relaxed">
+        Authenticate via OAuth2 with your LanOnasis account. We open a browser tab
+        and wait for your confirmation — no manual key copying.
+      </p>
+    </button>
+
+    {/* API key option */}
+    <button
+      onClick={onSelectApiKey}
+      className="w-full group p-5 rounded-xl border border-[#2D2D2D] bg-[#1E1E1E] hover:border-[#007ACC]/50 hover:bg-[#252526] transition-all text-left"
+    >
+      <div className="flex items-center gap-3 mb-2">
+        <Key className="h-5 w-5 text-[#007ACC]" />
+        <div>
+          <span className="text-sm font-semibold text-white">Enter API Key</span>
+        </div>
+      </div>
+      <p className="text-[10px] text-gray-500 leading-relaxed">
+        Paste an API key or bearer token. Useful for service accounts or self-hosted
+        setups where you manage keys manually.
+      </p>
+    </button>
+
+    <p className="text-[10px] text-center text-gray-600 leading-relaxed">
+      API endpoint: <span className="text-[#888] font-mono">{apiUrl}</span>
+    </p>
+  </div>
+);
+
+// ---------- device code flow (OAuth) ----------
+
+type DeviceCodeViewProps = {
+  userCode: string;
+  verificationUri: string;
+  onCancel: () => void;
+  onExpire: () => void;
+  onError: (msg: string) => void;
+};
+
+const DeviceCodeView: React.FC<DeviceCodeViewProps> = ({
+  userCode,
+  verificationUri,
+  onCancel,
+  onExpire,
+  onError,
+}) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(userCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      onError('Failed to copy code');
+    }
+  };
+
+  const handleOpenBrowser = () => {
+    // Open in a new tab — extension pages can't directly open arbitrary URLs
+    // in Chrome extensions without explicit permission, but verification_uri
+    // should be allowed via host_permissions.
+    chrome.tabs.create({ url: verificationUri });
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onCancel}
+          className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+        >
+          ← Cancel
+        </button>
+      </div>
+
+      <div className="space-y-1">
+        <h2 className="text-lg font-bold text-white">Authorize in browser</h2>
+        <p className="text-xs text-gray-400">
+          Open the link below in your browser and enter this code to authenticate.
+        </p>
+      </div>
+
+      {/* Code display */}
+      <div className="flex items-center gap-3 p-4 rounded-xl bg-[#1E1E1E] border border-[#3C3C3C]">
+        <code className="text-2xl font-bold tracking-[0.3em] text-[#007ACC] flex-1 text-center">
+          {userCode}
+        </code>
+        <button
+          onClick={handleCopy}
+          className="text-xs text-gray-500 hover:text-gray-300 transition-colors px-3 py-1 rounded-lg border border-[#3C3C3C]"
+        >
+          {copied ? '✓ Copied' : 'Copy'}
+        </button>
+      </div>
+
+      {/* Actions */}
+      <div className="space-y-2">
+        <button
+          onClick={handleOpenBrowser}
+          className={cn(
+            'w-full bg-gradient-to-r from-[#007ACC] to-[#0E639C] text-white font-medium',
+            'py-3 rounded-lg flex items-center justify-center gap-2',
+            'hover:shadow-lg hover:shadow-[#007ACC]/30 transition-all',
+          )}
+        >
+          <Monitor className="h-4 w-4" />
+          Open Auth Page
+        </button>
+
+        <div className="text-center space-y-1">
+          <p className="text-[10px] text-gray-500">
+            Waiting for authorization in browser…
+          </p>
+          <p className="text-[10px] text-gray-600">
+            Don't close this tab — we'll update automatically once you authorize.
+          </p>
+        </div>
+      </div>
+
+      {/* Loading indicator */}
+      <div className="flex items-center justify-center gap-2 py-2">
+        <Loader2 className="h-4 w-4 text-[#007ACC] animate-spin" />
+        <span className="text-xs text-gray-400">Polling for completion…</span>
+      </div>
     </div>
   );
 };
@@ -470,24 +772,105 @@ export const Options: React.FC = () => {
   const [apiUrl, setApiUrl] = useState('https://api.lanonasis.com');
   const [aiMode, setAiMode] = useState<'off' | 'auto' | 'on'>('auto');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authType, setAuthType] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isResyncing, setIsResyncing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [showAuthForm, setShowAuthForm] = useState(false);
+  const [showAuthMethodSelect, setShowAuthMethodSelect] = useState(false);
+  const [showDeviceCode, setShowDeviceCode] = useState(false);
+  const [deviceCode, setDeviceCode] = useState<{
+    user_code: string;
+    verification_uri: string;
+    verification_uri_complete: string;
+  } | null>(null);
+  const [deviceError, setDeviceError] = useState<string | null>(null);
+  const [deviceSuccess, setDeviceSuccess] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticResult | null>(null);
+  const [isRunningDiagnostics, setIsRunningDiagnostics] = useState(false);
 
-  // Load saved settings
+  // Load saved settings and check auth status
   useEffect(() => {
-    chrome.storage.local.get(['l0_auth_token', 'apiUrl', 'aiMode'], (result) => {
-      if (result.l0_auth_token) {
+    const loadSettings = async () => {
+      const { l0_auth_token, apiUrl: storedApiUrl, aiMode: storedAiMode } = await chrome.storage.local.get([
+        'l0_auth_token',
+        'apiUrl',
+        'aiMode',
+        'l0_oauth_token',
+        'l0_oauth_credential_type',
+      ]);
+
+      if (l0_auth_token) {
         setApiKey('••••••••••••••••');
         setIsAuthenticated(true);
+        setAuthType('apiKey');
       }
-      if (result.apiUrl) setApiUrl(result.apiUrl);
-      if (result.aiMode === 'off' || result.aiMode === 'auto' || result.aiMode === 'on') {
-        setAiMode(result.aiMode);
+      if (storedApiUrl) setApiUrl(storedApiUrl);
+      if (storedAiMode === 'off' || storedAiMode === 'auto' || storedAiMode === 'on') {
+        setAiMode(storedAiMode);
       }
-    });
+
+      // Check OAuth auth status
+      try {
+        const authStatus = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATUS' });
+        if (authStatus?.isAuthenticated && !l0_auth_token) {
+          setIsAuthenticated(true);
+          setAuthType(authStatus.authType || 'oauth');
+        }
+        if (!l0_auth_token && !authStatus?.isAuthenticated) {
+          setIsAuthenticated(false);
+          setAuthType(null);
+        }
+      } catch {
+        // Fallback: if OAuth token exists but message failed
+        if (storedApiUrl && !l0_auth_token) {
+          setIsAuthenticated(false);
+          setAuthType(null);
+        }
+      }
+    };
+    void loadSettings();
   }, []);
+
+  // Poll for device code completion
+  useEffect(() => {
+    if (!showDeviceCode || !deviceCode) return;
+
+    const checkAuth = async () => {
+      try {
+        const status = await chrome.runtime.sendMessage({ type: 'GET_AUTH_STATUS' });
+        if (status?.isAuthenticated && status.authType === 'oauth') {
+          setDeviceSuccess(true);
+          setIsAuthenticated(true);
+          setAuthType('oauth');
+          setMessage({ type: 'success', text: 'Authenticated successfully via browser!' });
+          chrome.runtime.sendMessage({ type: 'SYNC_MEMORIES' });
+
+          // Close the options page after a delay
+          setTimeout(() => {
+            window.close();
+          }, 2000);
+          return;
+        }
+        // Also check if API key was set (shouldn't happen during device flow, but be safe)
+        if (status?.isAuthenticated && status.authType === 'apiKey') {
+          setDeviceSuccess(true);
+          setIsAuthenticated(true);
+          setAuthType('apiKey');
+          setMessage({ type: 'success', text: 'Authenticated successfully!' });
+        }
+      } catch {
+        // Silently retry
+      }
+    };
+
+    // Check every 3 seconds
+    const interval = setInterval(checkAuth, 3000);
+    // Also check immediately
+    void checkAuth();
+
+    return () => clearInterval(interval);
+  }, [showDeviceCode, deviceCode]);
 
   // Persist AI mode independently of credential changes
   useEffect(() => {
@@ -561,8 +944,9 @@ export const Options: React.FC = () => {
   };
 
   const handleLogout = async () => {
-    await chrome.storage.local.remove(['l0_auth_token', 'userEmail']);
+    await chrome.storage.local.remove(['l0_auth_token', 'userEmail', 'l0_oauth_token', 'l0_oauth_credential_type']);
     setIsAuthenticated(false);
+    setAuthType(null);
     setApiKey('');
     setMessage({ type: 'success', text: 'Disconnected successfully' });
     chrome.runtime.sendMessage({ type: 'LOGOUT' });
@@ -583,12 +967,76 @@ export const Options: React.FC = () => {
     }
   };
 
+  const handleRunDiagnostics = async () => {
+    setIsRunningDiagnostics(true);
+    setDiagnostics(null);
+    try {
+      const { diagnostics: result } = await chrome.runtime.sendMessage({
+        type: 'RUN_DIAGNOSTICS',
+        payload: { apiUrl },
+      });
+      if (result) {
+        setDiagnostics(result);
+      }
+    } catch {
+      // silently ignore — user can retry
+    } finally {
+      setIsRunningDiagnostics(false);
+    }
+  };
+
+  // ── OAuth device code flow ──
+
+  const handleOAuthAuth = async () => {
+    setMessage(null);
+    setDeviceError(null);
+    setDeviceSuccess(false);
+    setShowAuthMethodSelect(false);
+    setShowDeviceCode(true);
+
+    try {
+      const result = await chrome.runtime.sendMessage({ type: 'START_DEVICE_CODE_FLOW' });
+      if (!result.success) {
+        setDeviceError(result.error || 'Failed to start authentication');
+        setShowDeviceCode(false);
+        setShowAuthMethodSelect(true);
+        return;
+      }
+      setDeviceCode({
+        user_code: result.deviceCode.user_code,
+        verification_uri: result.deviceCode.verification_uri,
+        verification_uri_complete: result.deviceCode.verification_uri_complete,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to start device code flow';
+      setDeviceError(msg);
+      setShowDeviceCode(false);
+      setShowAuthMethodSelect(true);
+    }
+  };
+
+  const handleDeviceCodeCancel = () => {
+    setShowDeviceCode(false);
+    setDeviceCode(null);
+    setDeviceError(null);
+    setDeviceSuccess(false);
+    setShowAuthMethodSelect(true);
+  };
+
+  const handleDeviceCodeExpire = () => {
+    setDeviceError('Authorization timed out. Please try again.');
+    setShowDeviceCode(false);
+    setShowAuthMethodSelect(true);
+  };
+
   // Decide which view to render
   const view = useMemo(() => {
     if (isAuthenticated) return 'dashboard';
+    if (showDeviceCode) return 'device-code';
+    if (showAuthMethodSelect) return 'auth-method';
     if (showAuthForm) return 'auth';
     return 'welcome';
-  }, [isAuthenticated, showAuthForm]);
+  }, [isAuthenticated, showDeviceCode, showAuthMethodSelect, showAuthForm]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#1E1E1E] to-[#0D0D0D] text-white">
@@ -616,8 +1064,32 @@ export const Options: React.FC = () => {
               apiUrl={apiUrl}
               onContinue={() => {
                 setMessage(null);
+                setShowAuthMethodSelect(true);
+              }}
+            />
+          )}
+          {view === 'auth-method' && (
+            <AuthMethodView
+              apiUrl={apiUrl}
+              onSelectApiKey={() => {
+                setMessage(null);
+                setShowAuthMethodSelect(false);
                 setShowAuthForm(true);
               }}
+              onSelectOAuth={handleOAuthAuth}
+              onBack={() => {
+                setMessage(null);
+                setShowAuthMethodSelect(false);
+              }}
+            />
+          )}
+          {view === 'device-code' && deviceCode && (
+            <DeviceCodeView
+              userCode={deviceCode.user_code}
+              verificationUri={deviceCode.verification_uri}
+              onCancel={handleDeviceCodeCancel}
+              onExpire={handleDeviceCodeExpire}
+              onError={(msg) => setDeviceError(msg)}
             />
           )}
           {view === 'auth' && (
@@ -637,14 +1109,25 @@ export const Options: React.FC = () => {
           {view === 'dashboard' && (
             <ConnectedDashboard
               apiUrl={apiUrl}
+              authType={authType}
               aiMode={aiMode}
               setAiMode={setAiMode}
               onResync={handleResync}
               onDisconnect={handleLogout}
               isResyncing={isResyncing}
+              onRunDiagnostics={handleRunDiagnostics}
+              isRunningDiagnostics={isRunningDiagnostics}
             />
           )}
         </div>
+
+        {/* Diagnostics results (rendered below the view switcher) */}
+        {diagnostics && (
+          <DiagnosticResults
+            result={diagnostics}
+            onDismiss={() => setDiagnostics(null)}
+          />
+        )}
 
         {/* Footer */}
         <div className="mt-8 text-center text-[10px] text-gray-600 space-y-1">

@@ -8,7 +8,7 @@ function memory(id: string, title: string): CachedMemory {
     id,
     title,
     content: `content for ${title}`,
-    memory_type: 'note',
+    memory_type: 'knowledge',
     tags: [],
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),

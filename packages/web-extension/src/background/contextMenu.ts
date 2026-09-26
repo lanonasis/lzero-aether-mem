@@ -60,7 +60,7 @@ export async function setupContextMenus(): Promise<void> {
               memory: {
                 title: selectedText.slice(0, 50) + (selectedText.length > 50 ? '...' : ''),
                 content: selectedText,
-                memory_type: 'snippet',
+                memory_type: 'context',
                 tags: ['context-menu'],
                 source_url: tab.url,
               },

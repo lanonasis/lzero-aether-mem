@@ -43,11 +43,11 @@ const getApiBaseUrl = (): string => {
 
 const VALID_API_KEY_PREFIXES = ['lano_', 'lns_'] as const;
 
-const buildCollectionUrl = (apiUrl: string): string => `${apiUrl}/memory`;
-const buildListUrl = (apiUrl: string): string => `${apiUrl}/memory/list?limit=100&sortBy=updated_at&sortOrder=desc`;
-const buildSearchUrl = (apiUrl: string): string => `${apiUrl}/memory/search`;
-const buildUpdateUrl = (apiUrl: string): string => `${apiUrl}/memory/update`;
-const buildDeleteUrl = (apiUrl: string, id: string): string => `${apiUrl}/memory/delete?id=${encodeURIComponent(id)}`;
+const buildCollectionUrl = (apiUrl: string): string => `${apiUrl}/memories`;
+const buildListUrl = (apiUrl: string): string => `${apiUrl}/memories?limit=100&sortBy=updated_at&sortOrder=desc`;
+const buildSearchUrl = (apiUrl: string): string => `${apiUrl}/memories/search`;
+const buildUpdateUrl = (apiUrl: string, id: string): string => `${apiUrl}/memories/${encodeURIComponent(id)}`;
+const buildDeleteUrl = (apiUrl: string, id: string): string => `${apiUrl}/memories/${encodeURIComponent(id)}`;
 
 function withCompatibleMemoryType<T extends { memory_type?: string }>(payload: T): T & { type?: string } {
   return {
@@ -316,15 +316,15 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  private async syncMemories(webview: vscode.Webview): Promise<void> {
+  public async syncMemories(webview: vscode.Webview | undefined): Promise<void> {
     this.cache.setSyncing(true);
-    webview.postMessage({ type: 'lanonasis:sync:start' });
+    webview?.postMessage({ type: 'lanonasis:sync:start' });
 
     // Master timeout for entire sync operation (60 seconds)
     const syncTimeout = setTimeout(() => {
       this.cache.setSyncing(false);
       this.output.appendLine('[LanOnasis] Sync timed out after 60 seconds');
-      webview.postMessage({
+      webview?.postMessage({
         type: 'lanonasis:sync:error',
         payload: { error: 'Sync timed out after 60 seconds', isNetworkError: true }
       });
@@ -335,7 +335,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       if (!headers) {
         clearTimeout(syncTimeout);
         this.cache.setSyncing(false);
-        webview.postMessage({ type: 'lanonasis:sync:error', payload: { error: 'Not authenticated' } });
+        webview?.postMessage({ type: 'lanonasis:sync:error', payload: { error: 'Not authenticated' } });
         return;
       }
 
@@ -348,7 +348,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
       for (const pending of pendingQueue) {
         try {
           if (pending._pending === 'create') {
-            // POST /memory
+            // POST /memories
             const createController = new AbortController();
             const createTimeout = setTimeout(() => createController.abort(), 30000);
 
@@ -379,17 +379,16 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
               clearTimeout(createTimeout);
             }
           } else if (pending._pending === 'update') {
-            // POST /memory/update
+            // PUT /memories/{id}
             const updateController = new AbortController();
             const updateTimeout = setTimeout(() => updateController.abort(), 30000);
 
             try {
-              const updateResponse = await fetch(buildUpdateUrl(apiUrl), {
-                method: 'POST',
+              const updateResponse = await fetch(buildUpdateUrl(apiUrl, pending.id), {
+                method: 'PUT',
                 headers,
                 signal: updateController.signal,
                 body: JSON.stringify(withCompatibleMemoryType({
-                  id: pending.id,
                   title: pending.title,
                   content: pending.content,
                   memory_type: pending.memory_type,
@@ -410,7 +409,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
               clearTimeout(updateTimeout);
             }
           } else if (pending._pending === 'delete') {
-            // DELETE /memory/delete?id=...
+            // DELETE /memories/{id}
             const deleteController = new AbortController();
             const deleteTimeout = setTimeout(() => deleteController.abort(), 30000);
 
@@ -442,7 +441,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         this.output.appendLine(`[LanOnasis] Sync results: ${syncResults.success} succeeded, ${syncResults.failed} failed`);
       }
 
-      // Step 2: Fetch fresh data from API - GET /memory/list
+      // Step 2: Fetch fresh data from API - GET /memories
       const listController = new AbortController();
       const listTimeout = setTimeout(() => listController.abort(), 30000);
 
@@ -464,7 +463,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
 
         clearTimeout(syncTimeout);
         this.cache.setSyncing(false);
-        webview.postMessage({
+        webview?.postMessage({
           type: 'lanonasis:sync:complete',
           payload: { memories, status: this.cache.getStatus(), syncResults }
         });
@@ -485,7 +484,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         this.cache.setOnline(false);
       }
       this.output.appendLine(`[LanOnasis] Sync error: ${err}`);
-      webview.postMessage({
+      webview?.postMessage({
         type: 'lanonasis:sync:error',
         payload: { error: errorStr, isNetworkError }
       });
@@ -508,7 +507,7 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
         payload: { results: localResults, query, requestId }
       });
 
-      // Then try API semantic search: POST /memory/search
+      // Then try API semantic search: POST /memories/search
       const headers = await this.getEdgeAuthHeaders();
       if (headers) {
         const apiUrl = getMemoryApiUrl();
@@ -774,6 +773,11 @@ class MemorySidebarProvider implements vscode.WebviewViewProvider {
     if (this.view) this.view.webview.postMessage(message);
   }
 
+  /** Returns the current webview (undefined before resolveWebviewView is called). */
+  public getView(): vscode.Webview | undefined {
+    return this.view?.webview;
+  }
+
   private getWebviewHtml(webview: vscode.Webview): string {
     const nonce = getNonce();
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'sidebar-react.js'));
@@ -860,6 +864,11 @@ export async function activate(context: vscode.ExtensionContext) {
   memoryCacheInstance = cache;
 
   const provider = new MemorySidebarProvider(context, output, secureApiKeyService, apiKeyService, cache);
+  // Wire auto-sync so the cache can fire the provider's sync with auth checks
+  cache.setSyncCallback((_reason: import('./memoryCache').AutoSyncReason) =>
+    provider.syncMemories(provider.getView()),
+  );
+  cache.startAutoSync();
 
   const memoryTreeProvider = new MemoryTreeProvider(memoryService);
   const apiKeyTreeProvider = new ApiKeyTreeProvider(apiKeyService, output);
@@ -951,7 +960,7 @@ export async function activate(context: vscode.ExtensionContext) {
       if (!editor) { await vscode.window.showInformationMessage('No active editor'); return; }
       const text = editor.document.getText(editor.selection);
       if (!text) { await vscode.window.showInformationMessage('No text selected'); return; }
-      provider.postMessage({ type: 'lanonasis:inject-chat', payload: { text } });
+      provider.postMessage({ type: 'lanonasis:memory:createFromSelection', payload: { text } });
       await vscode.commands.executeCommand('lzero.memorySidebar.focus');
     }),
   );
@@ -1156,8 +1165,6 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
   );
 
-  context.subscriptions.push({ dispose: () => cache.stopConnectivityCheck() });
-
   try {
     const hasStoredKey = await secureApiKeyService.hasApiKey();
     await applyAuthenticationState(hasStoredKey);
@@ -1169,6 +1176,7 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {
+  memoryCacheInstance?.disposeAutoSync();
   memoryCacheInstance?.stopConnectivityCheck();
   memoryCacheInstance = null;
 }
