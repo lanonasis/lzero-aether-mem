@@ -75,15 +75,12 @@ export async function setupContextMenus(): Promise<void> {
 
       case 'l0-memory-search':
         if (selectedText && tab?.id) {
-          // Open side panel with search query
+          // Store token so the side panel can drain the pending query on mount.
+          const token = `ctx_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+          await chrome.storage.session.set({
+            _pendingPanelQuery: { token, query: selectedText },
+          });
           await chrome.sidePanel.open({ tabId: tab.id });
-          // Send search query to side panel
-          setTimeout(() => {
-            chrome.runtime.sendMessage({
-              type: 'SEARCH_QUERY',
-              payload: { query: selectedText },
-            });
-          }, 500);
         }
         break;
 

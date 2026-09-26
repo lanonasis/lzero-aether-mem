@@ -9,6 +9,8 @@ import {
   type MemoryEntry,
 } from '@lanonasis/memory-client';
 
+import { refreshUnsyncedBadge } from './badge';
+
 export interface CachedMemory {
   id: string;
   title: string;
@@ -65,6 +67,21 @@ const DEFAULT_LIST_LIMIT = 100;
 
 type AuthType = 'apiKey' | 'oauth';
 
+/** Decode a JWT payload (base64url → JSON) without signature verification.
+ * Used only for hygiene checks (expiry, audience); callers must still
+ * validate the token's signature via the API for any security decision.
+ */
+export function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.trim().split('.');
+    if (parts.length !== 3) return null;
+    const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(payload));
+  } catch {
+    return null;
+  }
+}
+
 export function normalizeApiUrl(raw: string): string {
   // The SDK always appends `/api/v1`, so treat the configured URL as a base origin.
   // Users often paste `.../api` or `.../api/v1`; normalize those to the origin.
@@ -88,13 +105,10 @@ export function looksLikeApiKey(token: string): boolean {
 export function looksLikeJwt(token: string): boolean {
   const parts = token.trim().split('.');
   if (parts.length !== 3) return false;
-  // Basic format check + payload validation
   try {
-    // Decode the middle (payload) part to verify it's valid base64url and has JWT structure
     const payload = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
     const parsed = JSON.parse(payload);
-    // Valid JWTs should have an expiration field
-    return parsed.exp !== undefined && typeof parsed.exp === 'number';
+    return typeof parsed === 'object' && parsed !== null;
   } catch {
     return false;
   }
@@ -163,7 +177,7 @@ function unwrapListResponse(payload: unknown): unknown[] {
 export class MemoryCache {
   private db: IDBPDatabase<MemoryDB> | null = null;
   private isOnline = true;
-  private isSyncing = false;
+  private currentSync: Promise<void> | null = null;
   private lastSyncAt: number | null = null;
   private networkListenersInstalled = false;
 
@@ -229,6 +243,7 @@ export class MemoryCache {
 
   /**
    * Get auth + API url from extension storage.
+   * Uses decodeJwtPayload to log token hygiene (exp, aud) for OAuth tokens.
    */
   private async getAuthConfig(): Promise<{ token: string; apiUrl: string; authType: AuthType } | null> {
     const { l0_auth_token, apiUrl } = await chrome.storage.local.get(['l0_auth_token', 'apiUrl']);
@@ -238,7 +253,19 @@ export class MemoryCache {
     }
 
     const effectiveApiUrl = normalizeApiUrl(apiUrl || DEFAULT_API_URL);
-    return { token: l0_auth_token, apiUrl: effectiveApiUrl, authType: inferAuthType(l0_auth_token) };
+    const authType = inferAuthType(l0_auth_token);
+
+    if (authType === 'oauth') {
+      const payload = decodeJwtPayload(l0_auth_token);
+      if (payload) {
+        console.log('[MemoryCache] OAuth token hygiene:', {
+          exp: payload.exp ? new Date(Number(payload.exp) * 1000).toISOString() : 'N/A',
+          aud: payload.aud ?? 'N/A',
+        });
+      }
+    }
+
+    return { token: l0_auth_token, apiUrl: effectiveApiUrl, authType };
   }
 
   /**
@@ -279,6 +306,19 @@ export class MemoryCache {
       const body = contentType.includes('application/json') ? await res.json() : await res.text();
 
       if (!res.ok) {
+        if (res.status === 401) {
+          return { error: 'Unauthorized — please sign in again.' };
+        }
+        if (res.status === 403) {
+          const message =
+            typeof body === 'object' && body && 'error' in body
+              ? String((body as any).error)
+              : 'Forbidden — insufficient permissions.';
+          return { error: message };
+        }
+        if (res.status === 404) {
+          return { error: 'Resource not found.' };
+        }
         const message =
           typeof body === 'object' && body && 'error' in body
             ? String((body as any).error)
@@ -306,8 +346,8 @@ export class MemoryCache {
     return {
       isOnline: this.isOnline,
       lastSyncAt: this.lastSyncAt,
-      pendingCount,
-      isSyncing: this.isSyncing,
+      pendingCount: 0, // Will be calculated
+      isSyncing: this.currentSync !== null,
     };
   }
 
@@ -343,6 +383,9 @@ export class MemoryCache {
 
     await this.db!.put('memories', newMemory);
     console.log('[MemoryCache] Added local memory:', newMemory.title);
+
+    // Update badge
+    void refreshUnsyncedBadge(this);
 
     // Try to sync immediately if online
     if (this.isOnline) {
@@ -395,6 +438,9 @@ export class MemoryCache {
       _localId: undefined,
       _cachedAt: Date.now(),
     });
+
+    // Update badge (memory is no longer pending)
+    void refreshUnsyncedBadge(this);
   }
 
   async searchLocalAsync(query: string): Promise<CachedMemory[]> {
@@ -448,46 +494,53 @@ export class MemoryCache {
   }
 
   async sync(): Promise<void> {
-    if (this.isSyncing || !this.isOnline) return;
+    if (!this.isOnline) return;
 
-    this.isSyncing = true;
+    // If a sync is already in-flight, return the existing promise instead of
+    // starting a new one. This prevents concurrent syncs from double-writing.
+    if (this.currentSync !== null) return this.currentSync;
+
     console.log('[MemoryCache] Starting sync...');
+    this.currentSync = this.doSync()
+      .catch((err) => console.error('[MemoryCache] Sync error:', err))
+      .finally(() => {
+        this.currentSync = null;
+        void refreshUnsyncedBadge(this);
+      });
 
-    try {
-      const cfg = await this.getAuthConfig();
-      if (!cfg) {
-        console.log('[MemoryCache] No auth token, skipping sync');
-        return;
-      }
+    return this.currentSync;
+  }
 
-      // Sync pending memories first
-      const pending = await this.getPendingMemories();
-      for (const mem of pending) {
-        await this.syncOne(mem);
-      }
+  private async doSync(): Promise<void> {
+    const cfg = await this.getAuthConfig();
+    if (!cfg) {
+      console.log('[MemoryCache] No auth token, skipping sync');
+      return;
+    }
 
-      // Fetch latest from API (REST endpoints used across this repo)
-      const response = await this.apiRequest<unknown>(buildListMemoriesEndpoint(), { method: 'GET' });
+    // Sync pending memories first
+    const pending = await this.getPendingMemories();
+    for (const mem of pending) {
+      await this.syncOne(mem);
+    }
 
-      if (response.data) {
-        const list = unwrapListResponse(response.data) as MemoryEntry[];
-        const memories = list.map((m: MemoryEntry) => ({
-          id: m.id,
-          title: m.title,
-          content: m.content,
-          memory_type: m.memory_type ?? (m as MemoryEntry & { type?: string }).type ?? 'workflow',
-          tags: m.tags,
-          created_at: m.created_at,
-          updated_at: m.updated_at,
-        })) as CachedMemory[];
-        await this.updateFromApi(memories);
-      } else if (response.error) {
-        console.warn('[MemoryCache] Sync list failed:', response.error);
-      }
-    } catch (err) {
-      console.error('[MemoryCache] Sync error:', err);
-    } finally {
-      this.isSyncing = false;
+    // Fetch latest from API (REST endpoints used across this repo)
+    const response = await this.apiRequest<unknown>(buildListMemoriesEndpoint(), { method: 'GET' });
+
+    if (response.data) {
+      const list = unwrapListResponse(response.data) as MemoryEntry[];
+      const memories = list.map((m: MemoryEntry) => ({
+        id: m.id,
+        title: m.title,
+        content: m.content,
+        memory_type: m.memory_type ?? (m as MemoryEntry & { type?: string }).type ?? 'workflow',
+        tags: m.tags,
+        created_at: m.created_at,
+        updated_at: m.updated_at,
+      })) as CachedMemory[];
+      await this.updateFromApi(memories);
+    } else if (response.error) {
+      console.warn('[MemoryCache] Sync list failed:', response.error);
     }
   }
 
@@ -639,6 +692,7 @@ export class MemoryCache {
       await this.db!.delete('memories', id);
       await this.deleteEmbedding(id);
       console.log('[MemoryCache] Discarded pending-create memory:', id);
+      void refreshUnsyncedBadge(this);
       return { success: true };
     }
 
