@@ -177,4 +177,32 @@ describe('MemoryCache.updateMemory / deleteMemory', () => {
     expect(result.error).toMatch(/sign in/i);
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it('reports the number of pending memories in sync status', async () => {
+    dbStore.set('local_1', {
+      id: 'local_1',
+      title: 'Draft',
+      content: 'Draft',
+      memory_type: 'note',
+      tags: [],
+      created_at: '',
+      updated_at: '',
+      _pending: 'create',
+    });
+    dbStore.set('mem_1', {
+      id: 'mem_1',
+      title: 'Synced',
+      content: 'Synced',
+      memory_type: 'note',
+      tags: [],
+      created_at: '',
+      updated_at: '',
+    });
+
+    const cache = new MemoryCache();
+    await expect(cache.getStatus()).resolves.toMatchObject({
+      pendingCount: 1,
+      isSyncing: false,
+    });
+  });
 });
