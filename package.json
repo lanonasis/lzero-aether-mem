@@ -84,7 +84,7 @@
     "path-to-regexp": "8.4.0",
     "express-rate-limit": "8.2.2",
     "@hono/node-server": "1.19.15",
-    "decode-uri-component": "^0.4.2",    
+    "decode-uri-component": "0.5.0",
     "drizzle-orm": "0.45.2",
     "@xmldom/xmldom": "0.8.15",
     "minimatch": "5.1.8",
