@@ -340,7 +340,9 @@ export class MemoryCache {
     }
   }
 
-  getStatus(): SyncStatus {
+  async getStatus(): Promise<SyncStatus> {
+    const pendingCount = (await this.getPendingMemories()).length;
+
     return {
       isOnline: this.isOnline,
       lastSyncAt: this.lastSyncAt,

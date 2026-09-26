@@ -106,15 +106,17 @@ npx drizzle-kit migrate
 
 ```json
 {
-  "buildCommand": "bun run build:shared && bun run build:web",
+  "version": 2,
+  "buildCommand": "bash build.sh",
   "outputDirectory": "dist/public",
+  "framework": null,
   "installCommand": "bun install",
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
         { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
-        { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }
+        { "key": "Cross-Origin-Embedder-Policy", "value": "credentialless" }
       ]
     }
   ],

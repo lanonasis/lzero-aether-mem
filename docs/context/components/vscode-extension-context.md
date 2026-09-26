@@ -4,7 +4,7 @@
 
 VS Code sidebar panel extension that provides memory search, capture, and intelligence features directly in the IDE. Allows developers to recall context without leaving their editor. Supports both desktop VS Code and VS Code for the Web (vscode.dev, github.dev, Codespaces).
 
-**Current version**: `0.4.6` (commit `b85f930`) — all critical security fixes verified ✅
+**Current version**: `0.4.7` — all critical security fixes verified ✅
 
 ## Key Files (v0.4.6)
 

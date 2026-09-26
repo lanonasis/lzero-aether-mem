@@ -18,6 +18,14 @@ export default function LandingPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const scrollToSdk = () => {
+    document.getElementById('sdk')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const scrollToFeatures = () => {
+    document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0D0D0D] via-[#0A0A0A] to-[#050505] text-white font-sans selection:bg-[#007ACC]/30">
       
@@ -37,7 +45,7 @@ export default function LandingPage() {
             <Button variant="secondary" className="bg-white/10 hover:bg-white/20 text-white border-none h-8 rounded-lg" onClick={() => navigate("/dashboard")}>
               Sign In
             </Button>
-            <Button className="bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-lg hover:shadow-[#007ACC]/50 text-white h-8 rounded-lg group" onClick={() => window.location.href = "http://localhost:5173"}>
+            <Button className="bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-lg hover:shadow-[#007ACC]/50 text-white h-8 rounded-lg group" onClick={() => navigate("/vscode")}>
               Get Started
               <ArrowRight className="ml-2 h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
             </Button>
@@ -90,11 +98,11 @@ export default function LandingPage() {
             </div>
 
             <div className="flex flex-wrap gap-4 pt-6">
-              <Button className="h-12 px-8 bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-lg hover:shadow-[#007ACC]/40 text-white text-base rounded-lg font-medium group" onClick={() => window.location.href = "http://localhost:5173"}>
+              <Button className="h-12 px-8 bg-gradient-to-r from-[#007ACC] to-[#0E639C] hover:shadow-lg hover:shadow-[#007ACC]/40 text-white text-base rounded-lg font-medium group" onClick={() => navigate("/vscode")}>
                 Try Live Demo
                 <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
               </Button>
-              <Button variant="outline" className="h-12 px-8 border-white/10 bg-transparent hover:bg-white/5 text-white text-base rounded-lg font-medium" onClick={() => window.open("https://docs.lanonasis.com", "_blank")}>
+              <Button variant="outline" className="h-12 px-8 border-white/10 bg-transparent hover:bg-white/5 text-white text-base rounded-lg font-medium" onClick={() => window.open("https://github.com/lanonasis/aether-memory", "_blank")}>
                 View Docs
               </Button>
             </div>
@@ -211,31 +219,37 @@ export default function LandingPage() {
                     icon={Sparkles}
                     title="Semantic Memory"
                     description="Vector search powered by embeddings. Find relevant code in milliseconds, not keywords."
+                    onClick={() => navigate("/vscode")}
                 />
                 <FeatureCard 
                     icon={Shield}
                     title="Scoped Security"
                     description="Generate environment-specific keys with granular permissions. Auto-rotation every 90 days."
+                    onClick={() => navigate("/vscode")}
                 />
                 <FeatureCard 
                     icon={Lock}
                     title="End-to-End Encryption"
                     description="Your memories stay yours. Local-first architecture with optional sync."
+                    onClick={() => navigate("/vscode")}
                 />
                 <FeatureCard 
                     icon={Code2}
                     title="Context Orchestrator"
                     description="Paste meeting notes, logs, or requirements. AI organizes it into actionable memory."
+                    onClick={() => navigate("/vscode")}
                 />
                 <FeatureCard 
                     icon={Zap}
                     title="Instant Recall"
                     description="Access your team's collective knowledge directly from VS Code sidebar."
+                    onClick={() => navigate("/vscode")}
                 />
                 <FeatureCard 
                     icon={Briefcase}
                     title="Project Compartments"
                     description="Separate personal projects from client work. Auto context-switching by workspace."
+                    onClick={() => navigate("/vscode")}
                 />
             </div>
         </div>
@@ -254,16 +268,19 @@ export default function LandingPage() {
               icon={Sparkles}
               title="@lanonasis/memory-sdk"
               description="Full-featured memory operations with multi-modal support and vector search."
+              onLearnMore={scrollToSdk}
             />
             <SDKCard 
               icon={Lock}
               title="@lanonasis/security-sdk"
               description="Enterprise-grade encryption and secure key management for all services."
+              onLearnMore={scrollToSdk}
             />
             <SDKCard 
               icon={Zap}
               title="@lanonasis/cli"
               description="Command-line interface for memory operations, deployments, and diagnostics."
+              onLearnMore={scrollToSdk}
             />
           </div>
         </div>
@@ -322,9 +339,9 @@ export default function LandingPage() {
   );
 }
 
-function FeatureCard({ icon: Icon, title, description }: { icon: any, title: string, description: string }) {
+function FeatureCard({ icon: Icon, title, description, onClick }: { icon: any, title: string, description: string, onClick?: () => void }) {
     return (
-        <div className="p-6 rounded-2xl bg-gradient-to-br from-[#151515] to-[#0A0A0A] border border-white/5 hover:border-[#007ACC]/30 transition-all group cursor-pointer hover:shadow-xl hover:shadow-[#007ACC]/10">
+        <div className="p-6 rounded-2xl bg-gradient-to-br from-[#151515] to-[#0A0A0A] border border-white/5 hover:border-[#007ACC]/30 transition-all group cursor-pointer hover:shadow-xl hover:shadow-[#007ACC]/10" onClick={onClick}>
             <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-[#007ACC]/20 to-[#0E639C]/20 flex items-center justify-center mb-4 group-hover:from-[#007ACC]/30 group-hover:to-[#0E639C]/30 transition-all">
                 <Icon className="h-6 w-6 text-[#007ACC] group-hover:text-white transition-colors" />
             </div>
@@ -334,7 +351,7 @@ function FeatureCard({ icon: Icon, title, description }: { icon: any, title: str
     )
 }
 
-function SDKCard({ icon: Icon, title, description }: { icon: any, title: string, description: string }) {
+function SDKCard({ icon: Icon, title, description, onLearnMore }: { icon: any, title: string, description: string, onLearnMore?: () => void }) {
     return (
         <div className="p-6 rounded-xl bg-gradient-to-br from-[#1E1E1E] to-[#151515] border border-[#2D2D2D] hover:border-[#007ACC]/50 transition-all group">
           <div className="flex items-center gap-3 mb-4">
@@ -342,7 +359,7 @@ function SDKCard({ icon: Icon, title, description }: { icon: any, title: string,
             <code className="text-sm font-mono text-[#007ACC]">{title}</code>
           </div>
           <p className="text-sm text-gray-400 mb-4">{description}</p>
-          <Button size="sm" variant="ghost" className="text-[#007ACC] hover:text-white group gap-2">
+          <Button size="sm" variant="ghost" className="text-[#007ACC] hover:text-white group gap-2" onClick={onLearnMore}>
             Learn More
             <ArrowRight className="h-3 w-3 group-hover:translate-x-1 transition-transform" />
           </Button>
