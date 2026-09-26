@@ -231,13 +231,6 @@ export class ApiKeyService {
         });
     }
 
-    async updateApiKey(keyId: string, updates: Partial<CreateApiKeyRequest>): Promise<ApiKey> {
-        return this.makeRequest<ApiKey>(`/api/v1/api-keys/${keyId}`, {
-            method: 'PUT',
-            body: JSON.stringify(updates)
-        });
-    }
-
     async deleteApiKey(keyId: string): Promise<void> {
         await this.makeRequest<void>(`/api/v1/api-keys/${keyId}`, {
             method: 'DELETE'

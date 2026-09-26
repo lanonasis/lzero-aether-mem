@@ -16,7 +16,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           memory: {
             title: selection.slice(0, 50) + (selection.length > 50 ? '...' : ''),
             content: selection,
-            memory_type: 'snippet',
+            memory_type: 'context',
             tags: ['selection'],
             source_url: window.location.href,
           },

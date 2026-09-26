@@ -33,12 +33,26 @@ const CACHE_KEYS = {
   LAST_SYNC: 'lzero.memories.lastSync',
 } as const;
 
+/** Minimum gap between automatic syncs to avoid hammering the API. */
+const MIN_AUTO_SYNC_GAP_MS = 60_000;
+/** How often to fire an automatic sync. */
+const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+/** Key for persisting the last auto-sync attempt timestamp across extension reloads. */
+const LAST_SYNC_ATTEMPT_KEY = 'lzero.lastSyncAttemptAt';
+
+/** Reason that triggered an automatic sync. */
+export type AutoSyncReason = 'alarm' | 'startup';
+
 export class MemoryCache {
   private memories: CachedMemory[] = [];
   private pendingQueue: CachedMemory[] = [];
   private lastSyncAt: number | null = null;
   private isSyncing = false;
   private isOnline = true;
+
+  // Auto-sync
+  private autoSyncTimer: NodeJS.Timeout | null = null;
+  private autoSyncCallback?: (reason: AutoSyncReason) => Promise<void>;
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -359,5 +373,53 @@ export class MemoryCache {
 
   public setSyncing(syncing: boolean): void {
     this.isSyncing = syncing;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Auto-sync
+  // ---------------------------------------------------------------------------
+
+  /** Called by the sidebar provider to supply its sync function after construction. */
+  public setSyncCallback(callback: (reason: AutoSyncReason) => Promise<void>): void {
+    this.autoSyncCallback = callback;
+  }
+
+  /** Fire an automatic sync if enough time has elapsed since the last attempt. */
+  public triggerAutoSync(reason: AutoSyncReason): void {
+    try {
+      const lastAttempt = this.context.globalState.get<number>(LAST_SYNC_ATTEMPT_KEY, 0);
+      const now = Date.now();
+      if (lastAttempt > 0 && now - lastAttempt < MIN_AUTO_SYNC_GAP_MS) {
+        this.output.appendLine(`[MemoryCache] Auto-sync throttled (${reason})`);
+        return;
+      }
+      this.output.appendLine(`[MemoryCache] Auto-sync triggered (${reason})`);
+      this.context.globalState.update(LAST_SYNC_ATTEMPT_KEY, now);
+      void this.autoSyncCallback?.(reason);
+    } catch (err) {
+      this.output.appendLine(`[MemoryCache] Auto-sync error: ${err}`);
+    }
+  }
+
+  /** Set up the periodic auto-sync timer and fire an initial startup sync. */
+  public startAutoSync(): void {
+    if (this.autoSyncTimer) return;
+
+    this.autoSyncTimer = setInterval(() => {
+      this.triggerAutoSync('alarm');
+    }, AUTO_SYNC_INTERVAL_MS);
+
+    // Startup sync fires 5s after activation
+    setTimeout(() => {
+      this.triggerAutoSync('startup');
+    }, 5000);
+  }
+
+  /** Clear the auto-sync interval. */
+  public disposeAutoSync(): void {
+    if (this.autoSyncTimer) {
+      clearInterval(this.autoSyncTimer);
+      this.autoSyncTimer = null;
+    }
   }
 }

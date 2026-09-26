@@ -21,6 +21,8 @@ export interface CachedMemory {
   // Local-only fields
   _pending?: 'create' | 'update' | 'delete';
   _localId?: string;
+  /** Server-assigned ID for pending update/delete entries. */
+  server_id?: string;
   _cachedAt?: number;
 }
 
@@ -100,6 +102,34 @@ export function looksLikeJwt(token: string): boolean {
   }
 }
 
+/**
+ * Check whether a JWT (or any token with an `exp` claim) has expired.
+ * Mirrors the VS Code SecureApiKeyService approach: expires when
+ * Date.now() >= exp * 1000 - 60_000 (60-second buffer).
+ *
+ * Returns false for tokens without an `exp` claim (e.g. API keys),
+ * treating them as "not expired" — callers should gate on token
+ * presence for those.
+ */
+export function isTokenExpired(token: string): boolean {
+  const parts = token.trim().split('.');
+  if (parts.length !== 3) return true; // malformed → treat as expired
+
+  try {
+    const payload = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+    const parsed = JSON.parse(payload);
+    if (!parsed || typeof parsed !== 'object') return true;
+
+    const exp = (parsed as Record<string, unknown>).exp;
+    if (typeof exp !== 'number') return false; // no exp claim → not expired (e.g. API key)
+
+    // 60-second buffer matching VS Code SecureApiKeyService
+    return Date.now() >= exp * 1000 - 60_000;
+  } catch {
+    return true; // malformed → treat as expired
+  }
+}
+
 export function inferAuthType(token: string): AuthType {
   return looksLikeJwt(token) ? 'oauth' : 'apiKey';
 }
@@ -116,23 +146,23 @@ export function buildListMemoriesEndpoint(limit: number = DEFAULT_LIST_LIMIT): s
     sortBy: 'updated_at',
     sortOrder: 'desc',
   });
-  return `/memory/list?${params.toString()}`;
+  return `/memories?${params.toString()}`;
 }
 
 export function buildSearchMemoriesEndpoint(): string {
-  return '/memory/search';
+  return '/memories/search';
 }
 
 export function buildCreateMemoryEndpoint(): string {
-  return '/memory';
+  return '/memories';
 }
 
 export function buildUpdateMemoryEndpoint(id: string): string {
-  return `/memory/${encodeURIComponent(id)}`;
+  return `/memories/${encodeURIComponent(id)}`;
 }
 
 export function buildDeleteMemoryEndpoint(id: string): string {
-  return `/memory/${encodeURIComponent(id)}`;
+  return `/memories/${encodeURIComponent(id)}`;
 }
 
 type ApiResult<T> = { data?: T; error?: string };
@@ -397,6 +427,34 @@ export class MemoryCache {
     });
   }
 
+  /**
+   * Replace a pending-update local entry with the server-confirmed version.
+   * The server response carries the canonical id which may differ from the
+   * local queue id (local_<ts>_<rand>).
+   */
+  async markUpdateSynced(localId: string, serverMemory: CachedMemory): Promise<void> {
+    if (!this.db) await this.init();
+
+    // Delete local entry (by its local key)
+    await this.db!.delete('memories', localId);
+
+    // Add server-confirmed version
+    await this.db!.put('memories', {
+      ...serverMemory,
+      _pending: undefined,
+      _localId: undefined,
+      _cachedAt: Date.now(),
+    });
+  }
+
+  /**
+   * Remove a pending-delete local entry after the server confirmed deletion.
+   */
+  async markDeleteSynced(localId: string): Promise<void> {
+    if (!this.db) await this.init();
+    await this.db!.delete('memories', localId);
+  }
+
   async searchLocalAsync(query: string): Promise<CachedMemory[]> {
     if (!this.db) await this.init();
 
@@ -460,7 +518,7 @@ export class MemoryCache {
         return;
       }
 
-      // Sync pending memories first
+      // Sync pending memories first (create, update, delete)
       const pending = await this.getPendingMemories();
       for (const mem of pending) {
         await this.syncOne(mem);
@@ -471,6 +529,7 @@ export class MemoryCache {
 
       if (response.data) {
         const list = unwrapListResponse(response.data) as MemoryEntry[];
+        const serverIds = new Set(list.map((m: MemoryEntry) => m.id));
         const memories = list.map((m: MemoryEntry) => ({
           id: m.id,
           title: m.title,
@@ -481,6 +540,43 @@ export class MemoryCache {
           updated_at: m.updated_at,
         })) as CachedMemory[];
         await this.updateFromApi(memories);
+
+        // Post-replace cleanup: match pending update/delete entries
+        // against the fetched server list. syncOne handles the API call,
+        // but the full-replace above may have displaced local entries.
+        const remaining = await this.getPendingMemories();
+        for (const mem of remaining) {
+          if (mem._pending === 'update') {
+            if (mem.server_id && serverIds.has(mem.server_id)) {
+              const serverMem = list.find((m: MemoryEntry) => m.id === mem.server_id);
+              if (serverMem) {
+                await this.markSynced(mem.id, {
+                  id: serverMem.id,
+                  title: serverMem.title,
+                  content: serverMem.content,
+                  memory_type: serverMem.memory_type,
+                  tags: serverMem.tags,
+                  created_at: serverMem.created_at,
+                  updated_at: serverMem.updated_at,
+                });
+                console.log('[MemoryCache] Post-sync mapped update:', mem.title);
+              }
+            } else {
+              // Server doesn't know about this update's target — server may have lost it
+              await this.markDeleteSynced(mem.id);
+              console.log('[MemoryCache] Post-sync dropped stale update:', mem.title);
+            }
+          } else if (mem._pending === 'delete') {
+            if (mem.server_id && !serverIds.has(mem.server_id)) {
+              // Server no longer has it — delete is confirmed
+              await this.markDeleteSynced(mem.id);
+              console.log('[MemoryCache] Post-sync confirmed delete:', mem.title);
+            } else {
+              // Server still has it — delete may have failed, retry later
+              console.log('[MemoryCache] Post-sync pending delete still on server:', mem.title);
+            }
+          }
+        }
       } else if (response.error) {
         console.warn('[MemoryCache] Sync list failed:', response.error);
       }
@@ -496,33 +592,82 @@ export class MemoryCache {
       const cfg = await this.getAuthConfig();
       if (!cfg) return;
 
-      // Create memory
-      const response = await this.apiRequest<unknown>(buildCreateMemoryEndpoint(), {
-        method: 'POST',
-        body: JSON.stringify({
-          title: memory.title,
-          content: memory.content,
-          type: memory.memory_type as 'context' | 'project' | 'knowledge' | 'reference' | 'personal' | 'workflow',
-          memory_type: memory.memory_type as 'context' | 'project' | 'knowledge' | 'reference' | 'personal' | 'workflow',
-          tags: memory.tags,
-        }),
-      });
+      if (memory._pending === 'update') {
+        // Update memory — use server_id (the real server ID) as the target
+        const targetId = memory.server_id ?? memory.id;
+        const response = await this.apiRequest<unknown>(buildUpdateMemoryEndpoint(targetId), {
+          method: 'PUT',
+          body: JSON.stringify({
+            title: memory.title,
+            content: memory.content,
+            type: memory.memory_type as 'context' | 'project' | 'knowledge' | 'reference' | 'personal' | 'workflow',
+            memory_type: memory.memory_type as 'context' | 'project' | 'knowledge' | 'reference' | 'personal' | 'workflow',
+            tags: memory.tags,
+            ...(memory.source_url && { source_url: memory.source_url }),
+          }),
+        });
 
-      if (response.data) {
-        const created = (response.data as any)?.data ?? (response.data as any)?.memory ?? response.data;
-        const serverMemory: CachedMemory = {
-          id: created.id,
-          title: created.title,
-          content: created.content,
-          memory_type: created.memory_type ?? created.type ?? memory.memory_type,
-          tags: created.tags,
-          created_at: created.created_at,
-          updated_at: created.updated_at,
-        };
-        await this.markSynced(memory.id, serverMemory);
-        console.log('[MemoryCache] Synced memory:', memory.title);
-      } else if (response.error) {
-        console.warn('[MemoryCache] Create failed:', response.error);
+        if (response.data) {
+          const updated = (response.data as any)?.data ?? response.data;
+          const serverMemory: CachedMemory = {
+            id: updated?.id ?? targetId,
+            title: updated?.title ?? memory.title,
+            content: updated?.content ?? memory.content,
+            memory_type: updated?.memory_type ?? updated?.type ?? memory.memory_type,
+            tags: updated?.tags ?? memory.tags,
+            source_url: updated?.source_url ?? memory.source_url,
+            created_at: updated?.created_at ?? memory.created_at,
+            updated_at: updated?.updated_at ?? new Date().toISOString(),
+          };
+          await this.markUpdateSynced(memory.id, serverMemory);
+          console.log('[MemoryCache] Synced update:', memory.title);
+        } else if (response.error) {
+          console.warn('[MemoryCache] Update failed:', response.error);
+        }
+      } else if (memory._pending === 'delete') {
+        // Delete memory — use server_id if available, otherwise local id
+        const targetId = memory.server_id ?? memory.id;
+        const response = await this.apiRequest<unknown>(buildDeleteMemoryEndpoint(targetId), {
+          method: 'DELETE',
+        });
+
+        if (response.data || !response.error) {
+          await this.markDeleteSynced(memory.id);
+          console.log('[MemoryCache] Synced delete:', memory.title);
+        } else if (response.error) {
+          console.warn('[MemoryCache] Delete failed:', response.error);
+        }
+      } else {
+        // Create memory (original behavior)
+        const response = await this.apiRequest<unknown>(buildCreateMemoryEndpoint(), {
+          method: 'POST',
+          body: JSON.stringify({
+            title: memory.title,
+            content: memory.content,
+            type: memory.memory_type as 'context' | 'project' | 'knowledge' | 'reference' | 'personal' | 'workflow',
+            memory_type: memory.memory_type as 'context' | 'project' | 'knowledge' | 'reference' | 'personal' | 'workflow',
+            tags: memory.tags,
+            ...(memory.source_url && { source_url: memory.source_url }),
+          }),
+        });
+
+        if (response.data) {
+          const created = (response.data as any)?.data ?? (response.data as any)?.memory ?? response.data;
+          const serverMemory: CachedMemory = {
+            id: created.id,
+            title: created.title,
+            content: created.content,
+            memory_type: created.memory_type ?? created.type ?? memory.memory_type,
+            tags: created.tags,
+            source_url: created.source_url,
+            created_at: created.created_at,
+            updated_at: created.updated_at,
+          };
+          await this.markSynced(memory.id, serverMemory);
+          console.log('[MemoryCache] Synced memory:', memory.title);
+        } else if (response.error) {
+          console.warn('[MemoryCache] Create failed:', response.error);
+        }
       }
     } catch (err) {
       console.error('[MemoryCache] Failed to sync memory:', err);
@@ -547,7 +692,7 @@ export class MemoryCache {
           body: JSON.stringify({
             query,
             limit: 10,
-            threshold: 0.5,
+            threshold: 0.7,
           }),
         }
       );
@@ -579,14 +724,40 @@ export class MemoryCache {
   }
 
   /**
-   * Update a memory via the REST API (PUT /memory/:id) and reflect the
-   * result in the local cache. Requires an existing, already-synced
-   * memory id — this does not queue offline like addLocal/create does.
+   * Update a memory via the REST API (PUT /memories/:id) and reflect the
+   * result in the local cache. When offline, queues the update locally
+   * as a pending entry (same pattern as addLocal/create).
    */
   async updateMemory(
     id: string,
     updates: Partial<Pick<CachedMemory, 'title' | 'content' | 'memory_type' | 'tags'>>
   ): Promise<{ success: boolean; error?: string; memory?: CachedMemory }> {
+    if (!this.isOnline) {
+      // Queue the update locally — server_id tracks which server record to update
+      if (!this.db) await this.init();
+      const localId = `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const existing = await this.db!.get('memories', id);
+
+      const queued: CachedMemory = {
+        id: localId,
+        title: updates.title ?? existing?.title ?? '',
+        content: updates.content ?? existing?.content ?? '',
+        memory_type: updates.memory_type ?? existing?.memory_type ?? 'workflow',
+        tags: updates.tags ?? existing?.tags ?? [],
+        created_at: existing?.created_at ?? new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        source_url: existing?.source_url,
+        _pending: 'update',
+        _localId: localId,
+        server_id: id,
+        _cachedAt: Date.now(),
+      };
+
+      await this.db!.put('memories', queued);
+      console.log('[MemoryCache] Queued update:', queued.title);
+      return { success: true, memory: queued };
+    }
+
     const cfg = await this.getAuthConfig();
     if (!cfg) return { success: false, error: 'Not connected. Sign in to edit memories.' };
 
@@ -622,10 +793,40 @@ export class MemoryCache {
   }
 
   /**
-   * Delete a memory via the REST API (DELETE /memory/:id) and remove it
-   * from the local cache.
+   * Delete a memory via the REST API (DELETE /memories/:id) and remove it
+   * from the local cache. When offline, queues the delete locally as a
+   * pending entry (same pattern as addLocal/create).
    */
   async deleteMemory(id: string): Promise<{ success: boolean; error?: string }> {
+    if (!this.isOnline) {
+      // Queue the delete locally
+      if (!this.db) await this.init();
+      const localId = `local_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const existing = await this.db!.get('memories', id);
+      if (!existing) {
+        return { success: false, error: 'Memory not found.' };
+      }
+
+      const queued: CachedMemory = {
+        id: localId,
+        title: existing.title,
+        content: existing.content,
+        memory_type: existing.memory_type,
+        tags: existing.tags,
+        created_at: existing.created_at,
+        updated_at: new Date().toISOString(),
+        source_url: existing.source_url,
+        _pending: 'delete',
+        _localId: localId,
+        server_id: id,
+        _cachedAt: Date.now(),
+      };
+
+      await this.db!.put('memories', queued);
+      console.log('[MemoryCache] Queued delete:', queued.title);
+      return { success: true };
+    }
+
     const cfg = await this.getAuthConfig();
     if (!cfg) return { success: false, error: 'Not connected. Sign in to delete memories.' };
 
@@ -662,48 +863,6 @@ export class MemoryCache {
   /**
    * Get cached embedding for a memory
    */
-  async getEmbedding(memoryId: string): Promise<number[] | null> {
-    if (!this.db) await this.init();
-    const cached = await this.db!.get('embeddings', memoryId);
-    return cached?.embedding || null;
-  }
-
-  /**
-   * Store embedding for a memory
-   */
-  async storeEmbedding(memoryId: string, embedding: number[], contentHash: string): Promise<void> {
-    if (!this.db) await this.init();
-    await this.db!.put('embeddings', {
-      id: memoryId,
-      embedding,
-      contentHash,
-      createdAt: Date.now(),
-    });
-  }
-
-  /**
-   * Get all cached embeddings
-   */
-  async getAllEmbeddings(): Promise<Map<string, number[]>> {
-    if (!this.db) await this.init();
-    const all = await this.db!.getAll('embeddings');
-    const map = new Map<string, number[]>();
-    for (const item of all) {
-      map.set(item.id, item.embedding);
-    }
-    return map;
-  }
-
-  /**
-   * Check if embedding is stale (content changed)
-   */
-  async isEmbeddingStale(memoryId: string, currentContentHash: string): Promise<boolean> {
-    if (!this.db) await this.init();
-    const cached = await this.db!.get('embeddings', memoryId);
-    if (!cached) return true;
-    return cached.contentHash !== currentContentHash;
-  }
-
   /**
    * Delete embedding for a memory
    */

@@ -13132,7 +13132,7 @@ class v2 {
 function y2(a) {
   return new v2(a);
 }
-const Zs = ["context", "project", "knowledge", "reference", "personal", "workflow"], qm = ["active", "archived", "draft", "deleted"];
+const Zs = ["context", "project", "knowledge", "reference", "personal", "workflow", "conversation"], qm = ["active", "archived", "draft", "deleted"];
 nc({
   title: Ze().min(1).max(500),
   content: Ze().min(1).max(5e4),

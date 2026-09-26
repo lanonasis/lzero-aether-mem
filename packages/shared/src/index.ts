@@ -95,7 +95,6 @@ export type {
   PatternAnalysis,
   TagSuggestion,
   RelatedMemory,
-  DuplicatePair,
   Insight,
   MemoryHealth,
 } from './types/index';

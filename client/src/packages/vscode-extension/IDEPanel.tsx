@@ -48,6 +48,7 @@ const MEMORY_TYPES: MemoryType[] = [
   "snippet",
   "idea",
   "status",
+  "conversation",
 ];
 
 const formatDateShort = (dateValue?: string | Date | number | null) => {

@@ -723,7 +723,7 @@ export const SidePanel: React.FC = () => {
     setIsSavingQuickAdd(true);
     chrome.runtime.sendMessage({
       type: 'CREATE_MEMORY',
-      payload: { memory: { title, content, memory_type: 'note', tags } },
+      payload: { memory: { title, content, memory_type: 'knowledge', tags } },
     }, () => {
       setIsSavingQuickAdd(false);
       setShowQuickAdd(false);
@@ -753,7 +753,7 @@ export const SidePanel: React.FC = () => {
           memory: {
             title: memoryContent.slice(0, 50) + (memoryContent.length > 50 ? '…' : ''),
             content: memoryContent,
-            memory_type: 'note',
+            memory_type: 'knowledge',
             tags: [],
           },
         },

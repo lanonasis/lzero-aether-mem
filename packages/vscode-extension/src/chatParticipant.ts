@@ -13,8 +13,8 @@ import { MemoryCache, CachedMemory } from './memoryCache';
 import { SecureApiKeyService } from './services/SecureApiKeyService';
 
 const PARTICIPANT_ID = 'lanonasis.memory';
-const buildSearchUrl = (apiUrl: string): string => `${apiUrl}/memory/search`;
-const buildCreateUrl = (apiUrl: string): string => `${apiUrl}/memory`;
+const buildSearchUrl = (apiUrl: string): string => `${apiUrl}/memories/search`;
+const buildCreateUrl = (apiUrl: string): string => `${apiUrl}/memories`;
 
 function withCompatibleMemoryType<T extends { memory_type?: string }>(payload: T): T & { type?: string } {
   return {
@@ -178,7 +178,7 @@ export class MemoryChatParticipant {
       const headers = await this.getAuthHeaders();
       if (!headers) return [];
 
-      // POST /memory/search
+      // POST /memories/search
       const response = await fetch(buildSearchUrl(this.apiUrl), {
         method: 'POST',
         headers,
@@ -276,7 +276,7 @@ export class MemoryChatParticipant {
       const headers = await this.getAuthHeaders();
       if (!headers) return;
 
-      // POST /memory
+      // POST /memories
       const response = await fetch(buildCreateUrl(this.apiUrl), {
         method: 'POST',
         headers,
