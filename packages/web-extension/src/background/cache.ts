@@ -346,7 +346,7 @@ export class MemoryCache {
     return {
       isOnline: this.isOnline,
       lastSyncAt: this.lastSyncAt,
-      pendingCount: 0, // Will be calculated
+      pendingCount,
       isSyncing: this.currentSync !== null,
     };
   }

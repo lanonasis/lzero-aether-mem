@@ -12,10 +12,15 @@
   --card-hover: #2A2D2E;
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+/* Keep the reset inside @layer base: unlayered rules always win over
+   Tailwind's layered utilities, which silently killed every padding and
+   margin utility. */
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
 }
 
 html, body, #root {
@@ -31,11 +36,8 @@ body {
   min-width: 320px;
 }
 
-/* Ensure flex containers work properly */
-.flex-col {
-  display: flex;
-  flex-direction: column;
-}
+/* NOTE: do not add custom `.flex-col` here — an unlayered class rule
+   overrides Tailwind's layered `.flex-row`/`md:flex-row` utilities. */
 
 /* Input styling */
 input, textarea {

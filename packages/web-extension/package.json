@@ -6,10 +6,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite build --watch --mode development",
+    "dev:browser": "bash scripts/dev-chrome.sh --open",
+    "probe": "node scripts/l0-cdp.mjs probe",
     "build": "tsc && vite build",
     "build:chrome": "BROWSER=chrome vite build",
     "package": "bun run build && node scripts/package.js",
-    "package:chrome": "bun run build:chrome && cd dist && zip -r ../lzero-memory-chrome.zip .",
+    "package:chrome": "bun run build:chrome && node scripts/package.js",
     "lint": "eslint . --ext ts,tsx",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
