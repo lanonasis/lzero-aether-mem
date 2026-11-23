@@ -20,3 +20,4 @@ logs/
 attached_assets/clipboard-*
 packages/vscode-extension/out/
 packages/web-extension/dist/
+packages/web-extension/.dev-chrome/
